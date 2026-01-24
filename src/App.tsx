@@ -1718,6 +1718,28 @@ function App() {
                           <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
                             Default: /api/lm-studio (Fixes CORS issues)
                           </div>
+                          
+                          {/* Cloud-to-Local Warning */}
+                          {window.location.hostname !== 'localhost' && 
+                           window.location.hostname !== '127.0.0.1' && 
+                           settings.apiBaseUrl && 
+                           (settings.apiBaseUrl.includes('localhost') || settings.apiBaseUrl.includes('127.0.0.1')) && (
+                            <div style={{ 
+                              marginTop: '12px', 
+                              padding: '10px', 
+                              background: '#fff3cd', 
+                              color: '#856404', 
+                              borderRadius: '6px',
+                              fontSize: '0.8rem',
+                              border: '1px solid #ffeeba'
+                            }}>
+                              <strong>⚠️ Connection Warning</strong><br/>
+                              You are running this app from the cloud ({window.location.hostname}), but trying to connect to a local server ({settings.apiBaseUrl}).<br/><br/>
+                              The cloud cannot "see" your computer's localhost.<br/><br/>
+                              <strong>Fix:</strong> Use <a href="https://ngrok.com" target="_blank" rel="noreferrer">ngrok</a> to create a public URL for your local server:<br/>
+                              <code>ngrok http 1234</code>
+                            </div>
+                          )}
                         </div>
                         <div className="ai-field">
                           <label>Model Name</label>
