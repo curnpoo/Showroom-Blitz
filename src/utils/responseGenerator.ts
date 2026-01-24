@@ -1,0 +1,1054 @@
+import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
+
+// ============ VEHICLE CATEGORY LABELS ============
+const CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  suv: 'an SUV',
+  sedan: 'a sedan',
+  electric: 'an electric car',
+  hybrid: 'a hybrid',
+  affordable: 'something affordable',
+  luxury: 'something luxury',
+  any: '', // Not used directly, handled separately
+};
+
+// Helper to format what type of car they want
+function formatCarType(customer: Customer): string {
+  if (customer.desiredCategory === 'any') {
+    // Not picky - just mention features
+    return `something ${formatFeatures(customer.desiredFeatures)}`;
+  }
+  // Has specific category
+  return CATEGORY_LABELS[customer.desiredCategory];
+}
+
+// ============ GREETING RESPONSES ============
+// Customer responds with what they're looking for
+
+const GREETING_RESPONSES: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
+  friendly: (_features, customer) => {
+    const carType = formatCarType(customer);
+    if (customer.desiredCategory === 'any') {
+      // Not picky - emphasize budget and openness
+      const budgetInfo = customer.buyerType === 'payment' 
+        ? `I've got about $${customer.desiredDown.toLocaleString()} to put down and want to stay around $${customer.maxPayment}/month`
+        : `my budget is around $${customer.budget.toLocaleString()}`;
+      return [
+        `Hey! I'm pretty flexible on what kind of car, ${budgetInfo}. Show me what you think would work!`,
+        `Hi! Honestly, I'm not too picky. ${budgetInfo}. Just need something reliable!`,
+        `Hello! I'm open to options - ${budgetInfo}. What do you recommend?`,
+      ];
+    }
+    // Has specific preference
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I have $${customer.desiredDown.toLocaleString()} to put down and need payments around $${customer.maxPayment}/month`
+      : `my budget is around $${customer.budget.toLocaleString()}`;
+    return [
+      `Hey! Yeah, I'm looking for ${carType}. ${budgetInfo}. What do you have?`,
+      `Hi! Nice to meet you! I'm hoping to find ${carType}. ${budgetInfo}.`,
+      `Hello! I could use some help finding ${carType}. ${budgetInfo}.`,
+    ];
+  },
+  serious: (_features, customer) => {
+    const carType = formatCarType(customer);
+    if (customer.desiredCategory === 'any') {
+      const budgetInfo = customer.buyerType === 'payment' 
+        ? `Down: $${customer.desiredDown.toLocaleString()}. Max payment: $${customer.maxPayment}/month.`
+        : `Budget: $${customer.budget.toLocaleString()}.`;
+      return [
+        `Yes. I'm flexible on the type. ${budgetInfo} Show me what fits.`,
+        `Don't have a specific car in mind. ${budgetInfo} Make it work.`,
+        `Not picky on the model. ${budgetInfo} What do you have?`,
+      ];
+    }
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `Down: $${customer.desiredDown.toLocaleString()}. Payment: $${customer.maxPayment}/month max.`
+      : `Budget: $${customer.budget.toLocaleString()}.`;
+    return [
+      `Yes. I need ${carType}. ${budgetInfo} Show me what you have.`,
+      `I'm looking for ${carType}. ${budgetInfo} Let's see the options.`,
+      `Get me ${carType}. ${budgetInfo} No time to waste.`,
+    ];
+  },
+  skeptical: (_features, customer) => {
+    const carType = formatCarType(customer);
+    if (customer.desiredCategory === 'any') {
+      const budgetInfo = customer.buyerType === 'payment' 
+        ? `I've got $${customer.desiredDown.toLocaleString()} down and can do $${customer.maxPayment}/month, tops`
+        : `I'm spending $${customer.budget.toLocaleString()} max`;
+      return [
+        `Look, I'm not picky on the type. ${budgetInfo}. Don't try to upsell me.`,
+        `Yeah, I'm flexible. ${budgetInfo}. Just show me something honest.`,
+        `Whatever fits my budget. ${budgetInfo}. What's the catch?`,
+      ];
+    }
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I've got $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month max`
+      : `I'm spending $${customer.budget.toLocaleString()}`;
+    return [
+      `Maybe. I want ${carType}, but I'm not getting ripped off. ${budgetInfo}.`,
+      `I'm looking for ${carType}. ${budgetInfo}. Don't try to upsell me.`,
+      `Need ${carType}. ${budgetInfo}. What's the catch going to be?`,
+    ];
+  },
+  enthusiastic: (_features, customer) => {
+    const carType = formatCarType(customer);
+    if (customer.desiredCategory === 'any') {
+      const budgetInfo = customer.buyerType === 'payment' 
+        ? `I saved $${customer.desiredDown.toLocaleString()} for the down payment and can do around $${customer.maxPayment}/month!`
+        : `I have $${customer.budget.toLocaleString()} to spend!`;
+      return [
+        `Oh YES! I'm so excited! I'm open to anything really! ${budgetInfo}`,
+        `Hi! I don't have a specific car in mind but I can't wait to see what you have! ${budgetInfo}`,
+        `I'm flexible! Surprise me! ${budgetInfo}`,
+      ];
+    }
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I saved $${customer.desiredDown.toLocaleString()} for down and want to stay around $${customer.maxPayment}/month!`
+      : `I have $${customer.budget.toLocaleString()} to spend!`;
+    return [
+      `Oh absolutely! I'm SO excited! I really want ${carType}! ${budgetInfo}`,
+      `Yes! I've been dreaming about ${carType}! ${budgetInfo}`,
+      `Hi! I can't wait to see what you have! Looking for ${carType}! ${budgetInfo}`,
+    ];
+  },
+  analytical: (_features, customer) => {
+    const carType = formatCarType(customer);
+    if (customer.desiredCategory === 'any') {
+      const budgetInfo = customer.buyerType === 'payment' 
+        ? `capital: $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month ceiling`
+        : `budget cap: $${customer.budget.toLocaleString()}`;
+      return [
+        `I'm open to various categories. Parameters: ${budgetInfo}. Show me what fits.`,
+        `No specific vehicle type required. ${budgetInfo}. Recommend based on value.`,
+        `Flexible on form factor. ${budgetInfo}. What offers the best ROI?`,
+      ];
+    }
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `capital available: $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month limit`
+      : `budget cap: $${customer.budget.toLocaleString()}`;
+    return [
+      `I'm researching ${carType} options. Financials: ${budgetInfo}.`,
+      `Yes. My criteria: ${carType}. ${budgetInfo}. Show me the data.`,
+      `Looking for ${carType}. I've done my research. ${budgetInfo}.`,
+    ];
+  },
+};
+
+// ============ CAR SHOWN RESPONSES (NO PRICE) ============
+// Customer reacts to the car itself, not the price
+
+const CAR_REACTION_POSITIVE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Oh wow, I love this color! This looks really nice.",
+    "This is exactly what I had in mind! I can see my family in this.",
+    "The interior is beautiful! Tell me more about this one.",
+  ],
+  serious: [
+    "Good. This meets my requirements. Let's talk numbers.",
+    "Acceptable. What are we looking at price-wise?",
+    "This could work. What's the damage?",
+  ],
+  skeptical: [
+    "Hmm, not bad actually. What are you going to try to charge me?",
+    "Okay, I'll admit this looks decent. What's the price?",
+    "It's alright. So what kind of numbers are we talking?",
+  ],
+  enthusiastic: [
+    "OH WOW! I LOVE IT! This is PERFECT! How much?!",
+    "This is amazing! I'm in love! What's the price?!",
+    "YES! This is exactly what I wanted! Let's talk numbers!",
+  ],
+  analytical: [
+    "Good specs. Fuel economy looks acceptable. What's the pricing structure?",
+    "This matches my requirements. Show me the breakdown.",
+    "Interesting. The features align with my needs. Let's discuss price.",
+  ],
+};
+
+const CAR_REACTION_NEGATIVE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "It's nice, but not quite what I'm looking for. Got anything else?",
+    "Hmm, I'm not feeling this one. Can you show me something different?",
+    "Not exactly what I had in mind. What else do you have?",
+  ],
+  serious: [
+    "No. This doesn't work. Next.",
+    "Not what I need. Show me something else.",
+    "Wrong fit. What else do you have?",
+  ],
+  skeptical: [
+    "Nope, not buying it. Literally. Show me something better.",
+    "This isn't it. What are you hiding that's actually good?",
+    "Pass. Got anything that actually fits what I said?",
+  ],
+  enthusiastic: [
+    "Ooh, this is nice but not quite right! Show me another one!",
+    "I like it but... not THE one, you know? What else?",
+    "Almost! But can you show me something more like what I described?",
+  ],
+  analytical: [
+    "This doesn't match my criteria. Show me alternatives.",
+    "Specifications don't align. I need something different.",
+    "Negative. This fails to meet requirements. Next option please.",
+  ],
+};
+
+
+// ============ NEEDS DISCLOSURE RESPONSES ============
+// Customer reveals what they want when asked directly
+
+const NEEDS_DISCLOSURE: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
+  friendly: (features, customer) => {
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I have about $${customer.desiredDown.toLocaleString()} to put down` 
+      : `my budget is around $${customer.budget.toLocaleString()}`;
+    return [
+      `Thanks for asking! I'm really looking for something ${formatFeatures(features)}. ${budgetInfo}.`,
+      `I'm hoping to find a ${formatFeatures(features)} car today. ${budgetInfo}.`,
+      `Mainly something ${formatFeatures(features)}. ${budgetInfo}. Do you have anything like that?`,
+    ];
+  },
+  serious: (features, customer) => {
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `Down payment limit: $${customer.desiredDown.toLocaleString()}.` 
+      : `Budget cap: $${customer.budget.toLocaleString()}.`;
+    return [
+      `I need a vehicle that is ${formatFeatures(features)}. ${budgetInfo}`,
+      `My requirements are simple: ${formatFeatures(features)}. ${budgetInfo} Show me what fits.`,
+      `Looking for ${formatFeatures(features)}. ${budgetInfo} Don't waste my time with anything else.`,
+    ];
+  },
+  skeptical: (features, customer) => {
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I'm only putting $${customer.desiredDown.toLocaleString()} down` 
+      : `I'm not spending more than $${customer.budget.toLocaleString()}`;
+    return [
+      `Look, I just want something ${formatFeatures(features)}. ${budgetInfo}. nothing fancy.`,
+      `If you must know, I need a ${formatFeatures(features)} car. ${budgetInfo}.`,
+      `I'm looking for ${formatFeatures(features)}. ${budgetInfo}. And I know what these things stickering for.`,
+    ];
+  },
+  enthusiastic: (features, customer) => {
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `I've saved up $${customer.desiredDown.toLocaleString()}! ` 
+      : `I can spend up to $${customer.budget.toLocaleString()}!`;
+    return [
+      `Ooh! I really really want something ${formatFeatures(features)}! ${budgetInfo}`,
+      `I'm looking for my dream car! Something ${formatFeatures(features)}! ${budgetInfo}`,
+      `I'm so glad you asked! I need a ${formatFeatures(features)} ride! ${budgetInfo}`,
+    ];
+  },
+  analytical: (features, customer) => {
+    const budgetInfo = customer.buyerType === 'payment' 
+      ? `Capital allocation: $${customer.desiredDown.toLocaleString()}` 
+      : `Maximum expenditure: $${customer.budget.toLocaleString()}`;
+    return [
+      `My analysis points to a ${formatFeatures(features)} vehicle. ${budgetInfo}.`,
+      `Primary criteria: ${formatFeatures(features)}. ${budgetInfo}.`,
+      `I am in the market for a ${formatFeatures(features)} automobile. ${budgetInfo}.`,
+    ];
+  },
+};
+
+// ============ NEGOTIATION RESPONSES ============
+
+const OFFER_TOO_HIGH: Record<PersonalityType, (counterOffer: number, isPayment: boolean, desiredDown?: number) => string[]> = {
+  friendly: (counter, isPayment, desiredDown) => [
+    isPayment && desiredDown 
+      ? `That's a bit steep for me. I'm putting $${desiredDown.toLocaleString()} down and I need to be at $${counter}/month.`
+      : `That's a bit steep for me. I was thinking more like $${counter.toLocaleString()} out the door.`,
+    isPayment && desiredDown
+      ? `Ooh, that's higher than I hoped. With $${desiredDown.toLocaleString()} down, I can only do $${counter}/month.`
+      : `Ooh, that's higher than I hoped. Could you do $${counter.toLocaleString()}?`,
+    isPayment && desiredDown
+      ? `I appreciate it, but that's too high. I have $${desiredDown.toLocaleString()} for down payment and max $${counter}/month.`
+      : `I appreciate it, but that's too high. What about $${counter.toLocaleString()} total?`,
+  ],
+  serious: (counter, isPayment, desiredDown) => [
+    isPayment && desiredDown
+      ? `No. $${desiredDown.toLocaleString()} down, $${counter}/month. That's my number.`
+      : `No. $${counter.toLocaleString()} out the door. That's my number.`,
+    isPayment && desiredDown
+      ? `Too high. I'm putting $${desiredDown.toLocaleString()} down. Get me to $${counter}/month.`
+      : `Too high. I'll do $${counter.toLocaleString()}.`,
+    isPayment && desiredDown
+      ? `My offer: $${desiredDown.toLocaleString()} down, $${counter} monthly. Take it or leave it.`
+      : `My offer: $${counter.toLocaleString()} OTD. Final.`,
+  ],
+  skeptical: (counter, isPayment, desiredDown) => [
+    isPayment && desiredDown
+      ? `I knew it. That's ridiculous. I have $${desiredDown.toLocaleString()} to put down and cap of $${counter}/month.`
+      : `I knew it. That's ridiculous. I'll do $${counter.toLocaleString()}, max.`,
+    isPayment && desiredDown
+      ? `Way too much. I've done my research. $${desiredDown.toLocaleString()} down, $${counter}/month.`
+      : `Way too much. I've done my research. $${counter.toLocaleString()} out the door.`,
+    isPayment && desiredDown
+      ? `Yeah, no. With my $${desiredDown.toLocaleString()} down, fair payment is $${counter}/month.`
+      : `Yeah, no. Try $${counter.toLocaleString()}. That's fair market value.`,
+  ],
+  enthusiastic: (counter, isPayment, desiredDown) => [
+    isPayment && desiredDown
+      ? `Oh no! That's more than I can do! I have $${desiredDown.toLocaleString()} for down! Can we get to $${counter}/month? Please?`
+      : `Oh no! That's more than I can do! Can we try $${counter.toLocaleString()}? Please?`,
+    isPayment && desiredDown
+      ? `Aww man! I really want this but I can only put $${desiredDown.toLocaleString()} down and afford $${counter}/month!`
+      : `Aww man! I really want this but I can only do $${counter.toLocaleString()}!`,
+    isPayment && desiredDown
+      ? `That's tough! Help me out! $${desiredDown.toLocaleString()} down and $${counter}/month is my max!`
+      : `That's tough! Help me out! I can swing $${counter.toLocaleString()} total!`,
+  ],
+  analytical: (counter, isPayment, desiredDown) => [
+    isPayment && desiredDown
+      ? `That exceeds my budget. Parameters: $${desiredDown.toLocaleString()} down, max $${counter}/month.`
+      : `That exceeds market value by 12%. My counter: $${counter.toLocaleString()}.`,
+    isPayment && desiredDown
+      ? `Based on my finances: $${desiredDown.toLocaleString()} down payment available, $${counter}/month maximum.`
+      : `Based on depreciation data, fair value is $${counter.toLocaleString()} OTD.`,
+    isPayment && desiredDown
+      ? `Offer parameters: $${desiredDown.toLocaleString()} capital, $${counter} monthly installment. Final.`
+      : `Overpriced. Comparable vehicles average $${counter.toLocaleString()}. That's my offer.`,
+  ],
+};
+
+const DOWN_PAYMENT_REJECTION: Record<PersonalityType, (offeredDown: number, desiredDown: number) => string[]> = {
+  friendly: (offered, desired) => [
+    `Oh, I can't put $${offered.toLocaleString()} down! I only have $${desired.toLocaleString()} saved up.`,
+    `That down payment is too high for me. I can only do $${desired.toLocaleString()}.`,
+    `I wish I could put $${offered.toLocaleString()} down, but I'm limited to $${desired.toLocaleString()}.`
+  ],
+  serious: (offered, desired) => [
+    `No. The down payment is $${desired.toLocaleString()}. Not $${offered.toLocaleString()}.`,
+    `I told you, I have $${desired.toLocaleString()} to put down. Fix it.`,
+    `That's too much cash upfront. MAX down payment is $${desired.toLocaleString()}.`
+  ],
+  skeptical: (offered, desired) => [
+    `Trying to drain my bank account? I said I have $${desired.toLocaleString()} down.`,
+    `I'm not putting $${offered.toLocaleString()} down. $${desired.toLocaleString()} is my limit.`,
+    `Are you listening? $${desired.toLocaleString()} is all I'm putting down.`
+  ],
+  enthusiastic: (_offered, desired) => [
+    `Oh no! I don't have that much cash! I only have $${desired.toLocaleString()}!`,
+    `That's way too much for me to put down! I can only do $${desired.toLocaleString()}!`,
+    `Aww, I can't afford that down payment! I have $${desired.toLocaleString()} ready!`
+  ],
+  analytical: (offered, desired) => [
+    `Negative. Liquid capital limited to $${desired.toLocaleString()}.`,
+    `Down payment of $${offered.toLocaleString()} is not feasible. Limit: $${desired.toLocaleString()}.`,
+    `Adjust parameters. Maximum down payment avaliable: $${desired.toLocaleString()}.`
+  ],
+};
+
+const OFFER_CLOSE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "We're getting close! Can you come down just a little more?",
+    "Almost there! Just a bit more and we have a deal!",
+    "That's better! One more small adjustment?",
+  ],
+  serious: [
+    "Getting warmer. One more adjustment.",
+    "Close. A little more.",
+    "Almost acceptable. Tweak it.",
+  ],
+  skeptical: [
+    "Alright, we're in the ballpark now. Little bit more.",
+    "Okay, that's more reasonable. Just a touch lower.",
+    "Now we're talking. Sharpen the pencil one more time.",
+  ],
+  enthusiastic: [
+    "Ooh so close! Just a tiny bit more! Come on!",
+    "We're almost there! I can feel it! A little more!",
+    "YES! Getting there! One more push!",
+  ],
+  analytical: [
+    "Within acceptable range. Minor adjustment needed.",
+    "Approaching optimal. 3-5% reduction required.",
+    "Close to agreement. Fine-tune the numbers.",
+  ],
+};
+
+const DEAL_ACCEPTED: Record<PersonalityType, string[]> = {
+  friendly: [
+    "You know what? That works! Let's do it! 🤝",
+    "Deal! I'm excited! Where do I sign?",
+    "Alright, you got me! That's fair! Deal!",
+  ],
+  serious: [
+    "Acceptable. We have a deal.",
+    "Done. Let's proceed with paperwork.",
+    "Deal. Final answer.",
+  ],
+  skeptical: [
+    "Fine. That's actually fair. Deal.",
+    "Alright, you earned it. I'll take it.",
+    "Okay, I admit it - that's reasonable. Deal.",
+  ],
+  enthusiastic: [
+    "YES! DEAL! This is the best day ever! 🎉",
+    "I'LL TAKE IT! Let's sign! I'm so happy!",
+    "DONE! SOLD! Let's go! I can't wait!",
+  ],
+  analytical: [
+    "The numbers work. I accept your offer.",
+    "This aligns with my calculations. Deal.",
+    "Optimal price point achieved. Transaction approved.",
+  ],
+};
+
+const FRUSTRATED_WALKING: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Look, I really wanted to work something out, but this isn't going anywhere...",
+    "I'm trying here, but I just can't make these numbers work. I might have to look elsewhere.",
+  ],
+  serious: [
+    "We're done here. This is a waste of time.",
+    "I'm walking. Don't bother calling me.",
+  ],
+  skeptical: [
+    "I knew coming here was a mistake. You're just like all the others.",
+    "Forget it. I'll find an honest dealer somewhere else.",
+  ],
+  enthusiastic: [
+    "Aww, I was so excited but... I just can't do these prices. I'm sorry!",
+    "This is making me so sad! I really wanted this to work! Maybe another time?",
+  ],
+  analytical: [
+    "Calculation suggests a net negative outcome. Terminating negotiation.",
+    "Cost-benefit analysis: negative. Proceeding to alternative vendor.",
+  ],
+};
+
+const WILD_INPUT_RESPONSES: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Whoa, that's uncalled for. I think I'll just head out.",
+    "I don't appreciate that kind of talk. Goodbye.",
+    "I'm looking for a car, not an argument or... whatever that was. I'm leaving.",
+  ],
+  serious: [
+    "I don't have time for this nonsense. We're done.",
+    "Inappropriate. I'm taking my business elsewhere.",
+    "That is highly unprofessional. Goodbye.",
+  ],
+  skeptical: [
+    "I knew this place was weird. I'm out of here.",
+    "Are you serious? You're crazy. I'm leaving.",
+    "Typical. I'm not dealing with someone like you. Bye.",
+  ],
+  enthusiastic: [
+    "Oh my gosh! That's so mean! I'm leaving!",
+    "Wait, what?! Why would you say that? I don't want to be here anymore!",
+    "That's not nice at all! I'm going to another dealership!",
+  ],
+  analytical: [
+    "Communication detected as hostile or irrational. Terminating interaction immediately.",
+    "Interaction parameters have exceeded acceptable social boundaries. Goodbye.",
+    "Nonsensical or offensive input received. Transaction aborted.",
+  ],
+};
+
+const WRONG_PAYMENT_TYPE: Record<string, string[]> = {
+  cash: [
+    "Hold on - I'm paying cash. I don't want monthly payments. What's the total?",
+    "No financing for me. Give me the out-the-door number.",
+    "Cash buyer here. Skip the payment stuff and give me the OTD price.",
+  ],
+  payment: [
+    "Wait, what's that monthly? Break it down for me.",
+    "I need to know the monthly payment, not the total.",
+    "How much per month? That's what matters to me.",
+  ],
+};
+
+// ============ HELPER FUNCTIONS ============
+
+const FEATURE_LABELS: Record<DesiredFeature, string> = {
+  sporty: 'sporty',
+  fuel_efficient: 'fuel efficient',
+  luxury: 'luxurious',
+  family: 'family-friendly',
+  affordable: 'affordable',
+  tech: 'high-tech',
+  spacious: 'spacious',
+  reliable: 'reliable',
+};
+
+function formatFeatures(features: DesiredFeature[]): string {
+  const labels = features.map(f => FEATURE_LABELS[f]);
+  if (labels.length === 1) return labels[0];
+  return labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export function isWildInput(text: string): boolean {
+  const wildKeywords = [
+    /\b(stupid|idiot|dumb|shut up|hate you|you suck|garbage|trash|moron|loser)\b/i,
+    /\b(kill|die|hurt|punch|hit)\b/i,
+    /\b(fucking|fuck you|shit)\b/i, // Only extreme profanity, not mild words
+    /\$(0|1)(?![0-9,])|\bfree\b|\bzero dollars\b/i, // Only explicit $0, $1, or "free" - not just "0" (matches $1 but not $1,000)
+    /^[asdfghjkl\s]{15,}$/i, // Keyboard mashing (increased threshold)
+    /(.)\1{10,}/, // Repeats like aaaaaaaaaaa
+  ];
+
+  return wildKeywords.some(regex => regex.test(text));
+}
+
+export function isNeedsInquiry(text: string): boolean {
+  const needsKeywords = [
+    /\b(what|which)\b.*\b(looking|want|need|shopping|search|find|desire|hoping|market)\b/i, // "What are you looking for?"
+    /\b(budget|spend|cost|price|afford)\b/i, // "What's your budget?"
+    /\b(help)\b.*\b(you)\b/i, // "How can I help you?"
+    /\b(type|kind|sort)\b.*\b(car|vehicle)\b/i, // "What type of car?"
+  ];
+  return needsKeywords.some(regex => regex.test(text));
+}
+
+// Unused but kept for reference
+// @ts-ignore
+function _calculatePayment(price: number, downPayment: number, apr: number, months: number): number {
+  const principal = price - downPayment;
+  const monthlyRate = apr / 100 / 12;
+  const payment = principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+  return Math.round(payment);
+}
+
+// Check if a car matches the customer's desired vehicle category
+function carMatchesCategory(car: Car, customer: Customer): boolean {
+  const model = car.model.toLowerCase();
+  const category = customer.desiredCategory;
+  
+  // If customer is not picky, any car matches
+  if (category === 'any') return true;
+  
+  // SUV models
+  const isSedan = model.includes('elantra') || model.includes('sonata') || model.includes('ioniq 6');
+  const isSuv = model.includes('venue') || model.includes('kona') || model.includes('tucson') || 
+                model.includes('santa fe') || model.includes('palisade') || model.includes('ioniq 5');
+  const isElectric = model.includes('ioniq');
+  const isAffordable = model.includes('venue') || model.includes('elantra') || model.includes('kona');
+  const isLuxury = car.trim.toLowerCase().includes('limited') || car.trim.toLowerCase().includes('calligraphy');
+  
+  switch (category) {
+    case 'suv':
+      return isSuv;
+    case 'sedan':
+      return isSedan;
+    case 'electric':
+      return isElectric;
+    case 'hybrid':
+      // Hyundai has hybrid options in Tucson, Santa Fe, Sonata - simplified for game
+      return model.includes('tucson') || model.includes('santa fe') || model.includes('sonata');
+    case 'affordable':
+      return isAffordable;
+    case 'luxury':
+      return isLuxury;
+    default:
+      return true;
+  }
+}
+
+function carMatchesFeatures(car: Car, features: DesiredFeature[]): boolean {
+  // Simple matching logic based on car model and trim
+  const model = car.model.toLowerCase();
+  const trim = car.trim.toLowerCase();
+  
+  for (const feature of features) {
+    switch (feature) {
+      case 'sporty':
+        if (model.includes('ioniq') || trim.includes('n line')) return true;
+        break;
+      case 'luxury':
+        if (trim.includes('limited') || trim.includes('calligraphy') || trim.includes('ultimate')) return true;
+        break;
+      case 'family':
+        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) return true;
+        break;
+      case 'fuel_efficient':
+        if (model.includes('ioniq') || model.includes('elantra') || model.includes('kona')) return true;
+        break;
+      case 'spacious':
+        if (model.includes('palisade') || model.includes('santa fe')) return true;
+        break;
+      case 'affordable':
+        if (model.includes('venue') || model.includes('kona') || model.includes('elantra')) return true;
+        if (trim === 'se' || trim === 'sel') return true;
+        break;
+      case 'tech':
+        if (model.includes('ioniq') || trim.includes('ultimate') || trim.includes('calligraphy')) return true;
+        break;
+      case 'reliable':
+        return true; // All Hyundais are reliable! ;)
+    }
+  }
+  return false;
+}
+
+export function detectSentiment(text: string): Sentiment {
+  const happy = /\b(yes|deal|love|great|happy|good|perfect|appreciate|thanks|thank|awesome|excited)\b/i;
+  const mad = /\b(no|wait|stop|unacceptable|wrong|bad|ignore|angry|mad|insult|stupid|idiot|hate|suck|trash|worst)\b/i;
+  const disinterested = /\b(maybe|think|consider|later|else|walking|leave|leaving|whatever|boring|slow)\b/i;
+
+  if (mad.test(text)) return 'mad';
+  if (happy.test(text)) return 'happy';
+  if (disinterested.test(text)) return 'disinterested';
+  
+  return 'neutral';
+}
+
+// ============ MAIN RESPONSE GENERATOR ============
+
+export interface ResponseContext {
+  customer: Customer;
+  currentCar: Car | null;
+  messageType: 'greeting' | 'car_shown' | 'offer' | 'general';
+  offerPrice?: number;
+  offerType?: 'selling' | 'otd' | 'payment';
+  offerDownPayment?: number;
+}
+
+export interface ResponseResult {
+  response: string;
+  interestChange: number;
+  dealAccepted: boolean;
+  newPhase?: ConversationPhase;
+  isLost?: boolean;
+  customerSentiment: Sentiment;
+  playerSentiment: Sentiment;
+}
+
+export function generateResponse(context: ResponseContext): ResponseResult {
+  const { customer, currentCar, messageType, offerPrice, offerType } = context;
+  const { personality, buyerType, interest, temper, budget, maxPayment, desiredDown, desiredFeatures } = customer;
+
+  let playerSentiment: Sentiment = 'neutral';
+  // We don't have the player's text here in generateResponse context usually, 
+  // but we can infer it if it's an offer or car_shown.
+  if (messageType === 'offer') playerSentiment = 'neutral'; 
+
+  let response = '';
+  let interestChange = 0;
+  let dealAccepted = false;
+  let isLost = false;
+  let newPhase: ConversationPhase | undefined;
+
+  switch (messageType) {
+    case 'greeting': {
+      // Customer tells what they're looking for
+      response = pickRandom(GREETING_RESPONSES[personality](desiredFeatures, customer));
+      interestChange = 5; // Slight interest bump for engagement
+      newPhase = 'needs_discovery';
+      break;
+    }
+
+    case 'car_shown': {
+      if (!currentCar) {
+        response = "What car are you showing me?";
+        break;
+      }
+
+      // Check if car matches what they want (both category AND features)
+      const matchesCategory = carMatchesCategory(currentCar, customer);
+      const matchesFeatures = carMatchesFeatures(currentCar, desiredFeatures);
+      const matchesNeeds = matchesCategory && matchesFeatures;
+      
+      if (matchesNeeds) {
+        response = pickRandom(CAR_REACTION_POSITIVE[personality]);
+        interestChange = 15;
+        // Recovery: if they like the car, it can clear a strike
+        if (customer.strikes > 0) customer.strikes--;
+        newPhase = 'asking_numbers'; // They like it, ready for pricing
+      } else {
+        response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
+        interestChange = -8; // Reduced from -15, less severe
+        customer.strikes++;
+        
+        // Only leave if they have 3+ strikes AND interest is very low, OR if interest hits rock bottom
+        if ((customer.strikes >= 3 && interest + interestChange < 20) || interest + interestChange <= 0) {
+          isLost = true;
+          response = pickRandom(FRUSTRATED_WALKING[personality]);
+        } else {
+          newPhase = 'needs_discovery'; // Suggest they show them something else
+        }
+      }
+      break;
+    }
+
+    case 'offer': {
+      if (!offerPrice || !offerType) {
+        response = "What's the offer?";
+        break;
+      }
+
+      // Check if offer type matches buyer type
+      if (buyerType === 'cash' && offerType === 'payment') {
+        response = pickRandom(WRONG_PAYMENT_TYPE.cash);
+        interestChange = -10;
+        break;
+      }
+      if (buyerType === 'payment' && offerType !== 'payment') {
+        response = pickRandom(WRONG_PAYMENT_TYPE.payment);
+        interestChange = -5;
+        break;
+      }
+
+      // Check for down payment mismatch
+      if (offerType === 'payment' && context.offerDownPayment !== undefined) {
+         if (context.offerDownPayment > desiredDown * 1.05) { // 5% buffer
+            response = pickRandom(DOWN_PAYMENT_REJECTION[personality](context.offerDownPayment, desiredDown));
+            interestChange = -15; // Significant drop for ignoring their constraints
+            newPhase = 'negotiation';
+            break;
+         }
+      }
+
+      // Calculate budget with mood modifier (high interest = up to 10% more)
+      const moodMultiplier = 1 + (interest / 1000); // 0-10% bonus based on interest
+      const effectiveBudget = buyerType === 'cash' 
+        ? Math.round(budget * moodMultiplier)
+        : Math.round(maxPayment * moodMultiplier);
+
+      const targetPrice = effectiveBudget;
+      const isPayment = offerType === 'payment';
+
+      if (offerPrice <= targetPrice) {
+        // Deal accepted!
+        response = pickRandom(DEAL_ACCEPTED[personality]);
+        interestChange = 25;
+        customer.strikes = 0; // Huge recovery on good offer
+        dealAccepted = true;
+        newPhase = 'closed';
+      } else if (offerPrice <= targetPrice * 1.05) {
+        // Very close - one more push
+        response = pickRandom(OFFER_CLOSE[personality]);
+        interestChange = 5;
+        newPhase = 'negotiation';
+      } else if (offerPrice <= targetPrice * 1.15) {
+        // Counteroffer needed
+        const counter = buyerType === 'cash' ? budget : maxPayment;
+        response = pickRandom(OFFER_TOO_HIGH[personality](counter, isPayment, isPayment ? desiredDown : undefined));
+        interestChange = -5;
+        newPhase = 'negotiation';
+      } else {
+        // Way too high
+        customer.strikes++;
+        // Only walk if they have multiple strikes AND are very frustrated, or if patience is completely gone
+        if ((customer.strikes >= 3 && interest < 30) || (interest - 10 < 5) || (temper < 10)) {
+          // They're walking
+          response = pickRandom(FRUSTRATED_WALKING[personality]);
+          interestChange = -30;
+          isLost = true;
+        } else {
+          // Frustrated but still engaged
+          const counter = buyerType === 'cash' 
+            ? Math.round(budget * 0.95) 
+            : Math.round(maxPayment * 0.95);
+          response = pickRandom(OFFER_TOO_HIGH[personality](counter, isPayment, isPayment ? desiredDown : undefined));
+          interestChange = -12; // Reduced from -15
+        }
+        newPhase = 'negotiation';
+      }
+      break;
+    }
+
+    case 'general':
+    default: {
+      // Check for needs inquiry first
+      // @ts-ignore - inference issue with context.message which isn't in ResponseContext but we can pass it or check logic differently
+      // Actually we don't have the message here in non-AI path usually?
+      // For the non-AI path, we might rely on the calling code to detect this phase or just fallback to generic.
+      // BUT for this specific refactor, let's just use the generic list for now, 
+      // as the AI path will handle the actual detection with `isNeedsInquiry` in getAIResponse.
+      // If we want to support this in pure-scripted mode, we'd need the input text.
+      
+      const generalResponses = [
+        "Hmm, tell me more.",
+        "I see. What else can you show me?",
+        "Interesting...",
+        "Go on.",
+        "Let me think about that.",
+      ];
+      response = pickRandom(generalResponses);
+      break;
+    }
+  }
+
+  const customerSentiment = detectSentiment(response);
+
+  return { response, interestChange, dealAccepted, newPhase, isLost, customerSentiment, playerSentiment };
+}
+
+// ============ AI API INTEGRATION ============
+
+export async function getAIResponse(
+  customer: Customer,
+  message: string,
+  currentCar: Car | null,
+  settings: GameSettings,
+  contextOverrides?: Partial<ResponseContext>
+): Promise<ResponseResult> {
+  const playerSentiment = detectSentiment(message);
+  // Check for wild input first
+  if (isWildInput(message)) {
+    return {
+      response: pickRandom(WILD_INPUT_RESPONSES[customer.personality]),
+      interestChange: -100,
+      dealAccepted: false,
+      newPhase: 'closed',
+      isLost: true,
+      customerSentiment: 'mad',
+      playerSentiment: playerSentiment
+    };
+  }
+
+  // Check for needs/budget inquiry
+  if (isNeedsInquiry(message)) {
+    return {
+      response: pickRandom(NEEDS_DISCLOSURE[customer.personality](customer.desiredFeatures, customer)),
+      interestChange: 5,
+      dealAccepted: false,
+      newPhase: 'needs_discovery',
+      isLost: false,
+      customerSentiment: 'happy', // They are happy to be heard
+      playerSentiment: playerSentiment
+    };
+  }
+
+  // Calculate deal quality for offers (game logic does the math!)
+  let dealQuality: string | undefined;
+  let interestChange = 0;
+  let dealAccepted = false;
+  let isLost = false;
+  let newPhase: ConversationPhase | undefined;
+
+  if (contextOverrides?.messageType === 'offer' && contextOverrides.offerPrice && contextOverrides.offerType) {
+    const { offerPrice, offerType, offerDownPayment } = contextOverrides;
+    const { buyerType, budget, maxPayment, desiredDown, interest } = customer;
+    
+    // Check payment type mismatch
+    if (buyerType === 'cash' && offerType === 'payment') {
+      dealQuality = 'wrong_type';
+      interestChange = -10;
+    } else if (buyerType === 'payment' && offerType !== 'payment') {
+      dealQuality = 'wrong_type';
+      interestChange = -5;
+    } else if (offerType === 'payment' && offerDownPayment && offerDownPayment > desiredDown * 1.05) {
+      // Down payment too high
+      dealQuality = 'too_high';
+      interestChange = -15;
+    } else {
+      // Calculate if price is good (with mood bonus)
+      const moodMultiplier = 1 + (interest / 1000); // 0-10% bonus
+      const effectiveBudget = buyerType === 'cash' 
+        ? Math.round(budget * moodMultiplier)
+        : Math.round(maxPayment * moodMultiplier);
+
+      if (offerPrice <= effectiveBudget) {
+        dealQuality = 'perfect';
+        interestChange = 25;
+        dealAccepted = true;
+        newPhase = 'closed';
+        customer.strikes = 0;
+      } else if (offerPrice <= effectiveBudget * 1.05) {
+        dealQuality = 'close';
+        interestChange = 5;
+        newPhase = 'negotiation';
+      } else if (offerPrice <= effectiveBudget * 1.15) {
+        dealQuality = 'too_high';
+        interestChange = -5;
+        newPhase = 'negotiation';
+      } else {
+        dealQuality = 'way_too_high';
+        customer.strikes++;
+        if ((customer.strikes >= 3 && interest < 30) || (interest - 10 < 5)) {
+          isLost = true;
+          interestChange = -30;
+        } else {
+          interestChange = -12;
+        }
+        newPhase = 'negotiation';
+      }
+    }
+  }
+
+  const systemPrompt = buildSystemPrompt(customer, currentCar, dealQuality);
+
+  try {
+    let aiResponse = '';
+
+    if (settings.provider === 'anthropic') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': settings.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-3-sonnet-20240229',
+          max_tokens: 80,
+          system: systemPrompt,
+          messages: [
+            ...customer.conversationHistory.map((msg: AIConversationMessage) => ({
+              role: msg.role,
+              content: msg.content,
+            })),
+            { role: 'user', content: message },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      aiResponse = data.content?.[0]?.text || '';
+    } else {
+      // Local / OpenAI Compatible
+      let baseUrl = settings.apiBaseUrl || 'http://localhost:1234/v1';
+      // Ensure specific endpoint is targeted if just base URL is provided
+      if (!baseUrl.includes('/chat/completions')) {
+         baseUrl = baseUrl.replace(/\/+$/, '') + '/chat/completions';
+      }
+
+      const response = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
+        },
+        body: JSON.stringify({
+          model: settings.modelName || 'local-model',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...customer.conversationHistory.map((msg: AIConversationMessage) => ({
+              role: msg.role,
+              content: msg.content,
+            })),
+            { role: 'user', content: message },
+          ],
+          max_tokens: 80,
+          temperature: 0.7,
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      aiResponse = data.choices?.[0]?.message?.content || '';
+    }
+
+    // Clean potential chain-of-thought tokens from reasoning models (DeepSeek R1 etc)
+    aiResponse = aiResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    // If we pre-calculated deal quality (for offers), use those values
+    // Otherwise analyze the AI response for general conversation
+    if (!dealQuality) {
+      // Analyze response for deal acceptance - be VERY careful of "unacceptable" etc
+      const hasNegativeWords = /\b(not|never|no|nope|won't|can't|cannot|too|unacceptable)\b/i.test(aiResponse);
+      const hasDealWords = /\b(deal|i'll take it|i'll take|sold|yes|accept it)\b/i.test(aiResponse);
+      // Only accept if they explicitly say deal/accept AND they didn't say anything negative
+      dealAccepted = hasDealWords && !hasNegativeWords;
+      
+      // Estimate interest change based on sentiment
+      if (/love|perfect|amazing|great|wonderful|deal/i.test(aiResponse)) {
+        interestChange = 15;
+        if (customer.strikes > 0) customer.strikes--; // Recovery
+      } else if (/good|nice|interested|close/i.test(aiResponse)) {
+        interestChange = 10;
+      } else if (/too much|expensive|high|budget|lower/i.test(aiResponse)) {
+        interestChange = -10;
+        // Don't add strike for simple negotiation, only for severe rejection
+      } else if (/leaving|waste|forget it|walking|done here|goodbye|not interested/i.test(aiResponse)) {
+        interestChange = -20; // Reduced severity
+        customer.strikes++;
+        
+        // Only actually leave if they have multiple strikes AND low interest
+        if ((customer.strikes >= 3 && customer.interest + interestChange < 15) || customer.interest + interestChange <= 0) {
+          isLost = true;
+        } else {
+          // "Push back" - they are mad but not walking yet
+          // Don't modify the AI response, let it speak for itself
+        }
+      }
+
+      // Determine new phase
+      if (isLost) {
+        newPhase = 'closed'; // Mark as closed since they left
+      } else if (dealAccepted) {
+        newPhase = 'closed';
+      } else if (/price|cost|numbers|how much|\$/i.test(aiResponse)) {
+        newPhase = 'negotiation';
+      }
+    }
+
+    const customerSentiment = detectSentiment(aiResponse);
+
+    return { response: aiResponse, interestChange, dealAccepted, newPhase, isLost, customerSentiment, playerSentiment };
+  } catch (e) {
+    console.error('AI Request failed:', e);
+    // Fallback to scripted response on API error
+    const fallback = generateResponse({
+      customer,
+      currentCar,
+      messageType: 'general',
+      ...contextOverrides
+    });
+    return { ...fallback, playerSentiment };
+  }
+} // End function
+
+
+function buildSystemPrompt(customer: Customer, currentCar: Car | null, dealQuality?: string): string {
+  const featureList = customer.desiredFeatures.map(f => FEATURE_LABELS[f]).join(', ');
+  
+  const carInfo = currentCar
+    ? `Car shown: ${currentCar.model} ${currentCar.trim} (${currentCar.color})`
+    : 'No car shown yet';
+
+  // If we have deal quality feedback, use super simple prompt for offers
+  if (dealQuality) {
+    const budgetText = customer.buyerType === 'cash' 
+      ? `$${customer.budget.toLocaleString()}`
+      : `$${customer.maxPayment}/month with $${customer.desiredDown.toLocaleString()} down`;
+    
+    const instruction = {
+      'perfect': 'The salesperson just made you an offer. This price is PERFECT and within your budget. Say "DEAL! I accept!"',
+      'good': 'The salesperson just made you an offer. This price is good and acceptable. Say "DEAL! I accept!"',
+      'close': 'The salesperson just made you an offer. This price is close but slightly high. Ask them to come down a bit more.',
+      'too_high': `The salesperson just made you an offer. This price is too high for your budget. Your budget is ${budgetText}. Tell them politely.`,
+      'way_too_high': `The salesperson just made you an offer. This price is WAY over your budget. Your budget is ${budgetText}. Reject it firmly.`,
+      'wrong_type': customer.buyerType === 'cash' 
+        ? 'The salesperson mentioned monthly payments but you are a CASH buyer. Remind them you want the total cash price.'
+        : 'The salesperson gave you a total price but you are a PAYMENT buyer. Ask them what the monthly payment would be.'
+    }[dealQuality] || 'Respond naturally.';
+
+    return `You are ${customer.name}, a ${customer.personality} car buyer.
+Instruction: ${instruction}
+
+Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in character but be brief.`;
+  }
+
+  // For general conversation (no offer)
+  if (customer.buyerType === 'cash') {
+    return `You are ${customer.name}, a ${customer.personality} car buyer.
+Budget: $${customer.budget.toLocaleString()} cash (out-the-door)
+Want: ${featureList}
+${carInfo}
+
+RULES:
+- You pay CASH. Never mention payments or financing.
+- Respond in 1 short sentence only.
+- Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.
+- Don't ask endless questions. If you like the car, ask for the price.`;
+  } else {
+    return `You are ${customer.name}, a ${customer.personality} car buyer.
+Budget: $${customer.maxPayment}/month with $${customer.desiredDown.toLocaleString()} down
+Want: ${featureList}
+${carInfo}
+
+RULES:
+- You want monthly payments. If they say total price, ask for monthly.
+- Respond in 1 short sentence only.
+- Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.
+- Don't ask endless questions. If you like the car, ask for the price.`;
+  }
+}
