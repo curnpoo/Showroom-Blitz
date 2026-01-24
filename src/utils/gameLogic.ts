@@ -51,18 +51,47 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function pickRandomFeatures(): DesiredFeature[] {
-  const count = 1 + Math.floor(Math.random() * 2); // 1-2 features
-  const shuffled = [...DESIRED_FEATURES].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-// 40% chance they're "not picky" about vehicle type, otherwise they want a specific category
 function pickRandomCategory(): VehicleCategory {
   if (Math.random() < 0.4) {
     return 'any'; // Not picky
   }
   return pickRandom(VEHICLE_CATEGORIES);
+}
+
+// Helper to get features that actually exist for a given model or category
+function getCompatibleFeatures(model?: string, category?: VehicleCategory): DesiredFeature[] {
+  let validFeatures = [...DESIRED_FEATURES];
+  
+  if (model) {
+    // Filter features based on model reality
+    if (model === 'Palisade' || model === 'Santa Fe') {
+      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' && f !== 'sporty' && f !== 'affordable');
+      validFeatures.push('family', 'spacious', 'luxury', 'tech'); // Bias towards these
+    } else if (model === 'Venue' || model === 'Elantra') {
+      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family');
+      validFeatures.push('affordable', 'reliable', 'fuel_efficient');
+    } else if (model.includes('Ioniq')) {
+      validFeatures = validFeatures.filter(f => f !== 'affordable');
+      validFeatures.push('tech', 'fuel_efficient', 'sporty');
+    }
+  } else if (category) {
+    if (category === 'suv') {
+      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' || Math.random() > 0.7); // Rare to want fuel efficient SUV unless hybrid
+    } else if (category === 'sedan') {
+      validFeatures = validFeatures.filter(f => f !== 'spacious');
+    } else if (category === 'affordable') {
+      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'sporty');
+    }
+  }
+  
+  return [...new Set(validFeatures)];
+}
+
+function pickRandomFeatures(model?: string, category?: VehicleCategory): DesiredFeature[] {
+  const possible = getCompatibleFeatures(model, category);
+  const count = 1 + Math.floor(Math.random() * 2); // 1-2 features
+  const shuffled = possible.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
 }
 
 // Helper to determine vehicle category based on model
@@ -95,19 +124,21 @@ function getVehicleFeatures(model: string, trim: string): DesiredFeature[] {
   }
 
   if (model === 'Ioniq 5' || model === 'Ioniq 6') {
-    features.push('fuel_efficient', 'tech');
+    features.push('fuel_efficient', 'tech', 'sporty');
+    if (model === 'Ioniq 5') features.push('spacious', 'family');
   }
 
   if (model === 'Santa Fe' || model === 'Palisade') {
-    features.push('family', 'spacious');
+    features.push('family', 'spacious', 'luxury', 'tech');
   }
 
   if (model === 'Kona' || model === 'Tucson') {
-    features.push('reliable', 'fuel_efficient');
+    features.push('reliable', 'fuel_efficient', 'family');
+    if (model === 'Tucson') features.push('spacious');
   }
 
   if (model === 'Sonata') {
-    features.push('reliable', 'tech');
+    features.push('reliable', 'tech', 'family');
   }
 
   // Trim-based features
@@ -180,6 +211,15 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   // Generate specific desires (50% chance for a specific model/color)
   const hasSpecificModel = Math.random() > 0.5;
   const desiredModel = hasSpecificModel ? pickRandom(MODELS) : undefined;
+  
+  // If they have a model, their category MUST match that model
+  let desiredCategory: VehicleCategory = 'any';
+  if (desiredModel) {
+    desiredCategory = getVehicleCategory(desiredModel, MODEL_BASE_PRICES[desiredModel]);
+  } else {
+    desiredCategory = pickRandomCategory();
+  }
+
   const hasSpecificColor = Math.random() > 0.6;
   const desiredColor = hasSpecificColor ? pickRandom(COLORS) : undefined;
 
@@ -217,9 +257,9 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     desiredDown: buyerType === 'payment' ? Math.floor(Math.random() * 10001) : 0,
     conversationHistory: [],
     conversationPhase: 'greeting',
-    desiredFeatures: pickRandomFeatures(),
-    desiredCategory: pickRandomCategory(),
+    desiredCategory,
     desiredModel,
+    desiredFeatures: pickRandomFeatures(desiredModel, desiredCategory),
     desiredColor,
     dealBreakers,
     stubbornness: Math.min(5, stubbornness),

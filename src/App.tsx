@@ -25,7 +25,7 @@ import {
 } from './utils/gameLogic';
 import { generateResponse, getAIResponse } from './utils/responseGenerator';
 import { NumbersPanel } from './components/NumbersPanel';
-
+import { CustomerNotes } from './components/CustomerNotes';
 import { ChatInterface } from './components/ChatInterface';
 
 const CANVAS_WIDTH = 800;
@@ -717,10 +717,39 @@ function App() {
                   const speed = 2.5;
                   coworker.x += (dx / dist) * speed;
                   coworker.y += (dy / dist) * speed;
+
+                  // CHECK FOR INTERCEPTION: If player talks to this customer while walking
+                  // Using specific customer reference since 'customer' variable in this scope is valid
+                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                  
+                  if (isIntercepted || !customer.active || customer.isLost) {
+                     // Abort steal!
+                     coworker.stealPhase = 'returning';
+                     coworker.workingWithCustomerId = undefined;
+                     coworker.nextStealTime = 5; // Try again soon
+                  }
+
                 } else {
-                  // Arrived at customer! Switch to greeting phase
-                  coworker.stealPhase = 'greeting';
-                  coworker.workingTimer = 0; // Use workingTimer for greeting duration
+                  // Arrived at customer! 
+                  // Final check - is player talking to them?
+                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                  
+                  if (isIntercepted) {
+                     // Abort steal!
+                     coworker.stealPhase = 'returning';
+                     coworker.workingWithCustomerId = undefined;
+                     coworker.nextStealTime = 5; 
+                  } else {
+                    // SUCCESSFUL STEAL
+                    customer.isStolen = true;
+                    customer.stolenByCoworkerId = coworker.id;
+                    // Set these now, not at start
+                    customer.stolenDealTimer = 0;
+                    customer.stolenDealDuration = 15 + Math.random() * 15;
+
+                    coworker.stealPhase = 'greeting';
+                    coworker.workingTimer = 0; // Use workingTimer for greeting duration
+                  }
                 }
               }
               
@@ -863,11 +892,11 @@ function App() {
               // Pick a random customer to steal
               const victim = availableCustomers[Math.floor(Math.random() * availableCustomers.length)];
               
-              // Mark customer as stolen
-              victim.isStolen = true;
-              victim.stolenByCoworkerId = coworker.id;
-              victim.stolenDealTimer = 0;
-              victim.stolenDealDuration = 15 + Math.random() * 15; // 15-30 seconds to close
+              // Mark customer as target (but NOT stolen yet)
+              // victim.isStolen = true; // CHANGED: Don't set this yet
+              // victim.stolenByCoworkerId = coworker.id; // CHANGED: Don't set this yet
+              // victim.stolenDealTimer = 0; // CHANGED: Don't set this yet
+              // victim.stolenDealDuration = 15 + Math.random() * 15; // CHANGED: Don't set this yet
               
               // Coworker starts walking to customer
               coworker.workingWithCustomerId = victim.id;
@@ -1696,6 +1725,11 @@ function App() {
           <>
             {/* Desktop container */}
             <div className="panels-container">
+              {/* Desktop: Notes Panel (Left side) */}
+              <div className="notes-panel in-container">
+                <CustomerNotes customer={selectedPerson} />
+              </div>
+
               <div className="chat-panel in-container">
                 <ChatInterface 
                   selectedPerson={selectedPerson}
@@ -1715,6 +1749,7 @@ function App() {
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={false}
                   onDiscoveryAction={handleDiscoveryAction}
+                  showNotes={false}
                 />
               </div>
 

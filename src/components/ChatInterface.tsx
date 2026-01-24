@@ -1,7 +1,6 @@
 import React from 'react';
 import { Send, Package, Calculator, TrendingUp } from 'lucide-react';
 import { Customer, ConversationMessage, Car } from '../types/game';
-import { OfferPaper } from './OfferPaper';
 import { CustomerNotes } from './CustomerNotes';
 
 interface ChatInterfaceProps {
@@ -22,6 +21,7 @@ interface ChatInterfaceProps {
   attemptCloseDeal: () => void;
   isMobile: boolean;
   onDiscoveryAction: (type: 'budget' | 'type' | 'features' | 'model') => void;
+  showNotes?: boolean;
 }
 
 export function ChatInterface({
@@ -42,6 +42,7 @@ export function ChatInterface({
   attemptCloseDeal,
   isMobile,
   onDiscoveryAction,
+  showNotes = true,
 }: ChatInterfaceProps) {
   
   const getInterestColor = (interest: number) => {
@@ -52,53 +53,76 @@ export function ChatInterface({
 
   return (
     <>
-      {/* Desk Scene Visualization */}
-      <div className="desk-scene">
-        <div className="desk-scene-characters">
-          {/* Customer avatar - across the desk */}
-          <div className="desk-character customer-side">
-            <div 
-              className="character-avatar" 
-              style={{ background: selectedPerson.buyerType === 'cash' ? '#2ecc71' : '#3498db' }}
-            >
-              {selectedPerson.name.charAt(0)}
-            </div>
-            <div className="character-label">{selectedPerson.name}</div>
-            <div className="buyer-badge" style={{ background: selectedPerson.buyerType === 'cash' ? '#2ecc71' : '#3498db' }}>
-              {selectedPerson.buyerType === 'cash' ? '💵 Cash' : '💳 Payment'}
-            </div>
-          </div>
-          
-          {/* The desk with optional paper */}
-          <div className="desk-surface">
-            <div className="desk-top">
-              <OfferPaper conversation={conversation} currentCar={currentCar} />
-            </div>
-          </div>
-          
-          {/* Player avatar - your side */}
-          <div className="desk-character player-side">
-            <div className="character-avatar player-avatar">
-              YOU
-            </div>
-            <div className="character-label">Salesperson</div>
-          </div>
-        </div>
-      </div>
-
       <div className="chat-header">
-        <div className="chat-header-info">
-          <h3>{selectedPerson.name}</h3>
-          <div className="personality">
-            {selectedPerson.personality} • Patience: {selectedPerson.temper}/100
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Avatar in header */}
+          <div 
+            style={{ 
+              width: '42px', 
+              height: '42px', 
+              borderRadius: '50%', 
+              background: selectedPerson.buyerType === 'cash' ? '#2ecc71' : '#3498db',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '1.2rem',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+            }}
+          >
+            {selectedPerson.name.charAt(0)}
+          </div>
+          
+          <div className="chat-header-info">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{selectedPerson.name}</h3>
+              <span style={{ 
+                fontSize: '0.7rem', 
+                padding: '2px 6px', 
+                borderRadius: '8px', 
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white'
+              }}>
+                {selectedPerson.buyerType === 'cash' ? '💵 Cash' : '💳 Finance'}
+              </span>
+            </div>
+            <div className="personality" style={{ marginTop: '2px' }}>
+              {selectedPerson.personality} • Patience: {selectedPerson.temper}/100
+            </div>
           </div>
         </div>
         <button className="chat-close" onClick={onClose}>×</button>
       </div>
       
-      <div style={{ padding: '0 15px' }}>
-        <CustomerNotes customer={selectedPerson} />
-      </div>
+      {showNotes && (
+        <div style={{ padding: '0 15px' }}>
+          <CustomerNotes customer={selectedPerson} />
+        </div>
+      )}
+
+      {/* Compact Offer Status - Only show if current car exists */}
+      {currentCar && (
+        <div style={{ 
+          margin: '0 15px 8px 15px', 
+          padding: '8px 12px', 
+          background: 'rgba(0,0,0,0.2)', 
+          border: '1px solid rgba(255,255,255,0.1)', 
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.8rem'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: '600', color: '#fff' }}>{currentCar.model} {currentCar.trim}</span>
+            <span style={{ color: '#aaa', fontSize: '0.7rem' }}>{currentCar.color}</span>
+          </div>
+          <div style={{ fontWeight: '700', color: '#2ecc71' }}>
+            ${currentCar.price.toLocaleString()}
+          </div>
+        </div>
+      )}
 
       <div className="interest-bar-container">
         <div className="interest-bar-label">

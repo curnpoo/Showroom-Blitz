@@ -485,40 +485,58 @@ function carMatchesCategory(car: Car, customer: Customer): boolean {
   }
 }
 
-function carMatchesFeatures(car: Car, features: DesiredFeature[]): boolean {
-  // Simple matching logic based on car model and trim
+interface MatchResult {
+  matched: DesiredFeature[];
+  missing: DesiredFeature[];
+  score: number; // 0 to 1
+}
+
+function carMatchesFeatures(car: Car, features: DesiredFeature[]): MatchResult {
   const model = car.model.toLowerCase();
   const trim = car.trim.toLowerCase();
   
+  const matched: DesiredFeature[] = [];
+  const missing: DesiredFeature[] = [];
+  
   for (const feature of features) {
+    let isMatch = false;
     switch (feature) {
       case 'sporty':
-        if (model.includes('ioniq') || trim.includes('n line')) return true;
+        if (model.includes('ioniq') || trim.includes('n line')) isMatch = true;
         break;
       case 'luxury':
-        if (trim.includes('limited') || trim.includes('calligraphy') || trim.includes('ultimate')) return true;
+        if (trim.includes('limited') || trim.includes('calligraphy') || trim.includes('ultimate') || model === 'palisade') isMatch = true;
         break;
       case 'family':
-        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) return true;
+        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) isMatch = true;
         break;
       case 'fuel_efficient':
-        if (model.includes('ioniq') || model.includes('elantra') || model.includes('kona')) return true;
+        if (model.includes('ioniq') || model.includes('elantra') || model.includes('kona') || model.includes('sonata')) isMatch = true;
         break;
       case 'spacious':
-        if (model.includes('palisade') || model.includes('santa fe')) return true;
+        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) isMatch = true;
         break;
       case 'affordable':
-        if (model.includes('venue') || model.includes('kona') || model.includes('elantra')) return true;
-        if (trim === 'se' || trim === 'sel') return true;
+        if (model.includes('venue') || model.includes('kona') || model.includes('elantra')) isMatch = true;
+        if (trim === 'se' || trim === 'sel') isMatch = true;
         break;
       case 'tech':
-        if (model.includes('ioniq') || trim.includes('ultimate') || trim.includes('calligraphy')) return true;
+        if (model.includes('ioniq') || trim.includes('ultimate') || trim.includes('calligraphy') || trim.includes('limited')) isMatch = true;
         break;
       case 'reliable':
-        return true; // All Hyundais are reliable! ;)
+        isMatch = true; // All Hyundais are reliable! ;)
+        break;
+    }
+    
+    if (isMatch) {
+      matched.push(feature);
+    } else {
+      missing.push(feature);
     }
   }
-  return false;
+  
+  const score = features.length > 0 ? matched.length / features.length : 1;
+  return { matched, missing, score };
 }
 
 export function detectSentiment(text: string): Sentiment {
@@ -614,19 +632,36 @@ export function generateResponse(context: ResponseContext): ResponseResult {
 
       // Check if car matches what they want (both category AND features)
       const matchesCategory = carMatchesCategory(currentCar, customer);
-      const matchesFeatures = carMatchesFeatures(currentCar, desiredFeatures);
-      const matchesNeeds = matchesCategory && matchesFeatures;
+      const featureMatch = carMatchesFeatures(currentCar, desiredFeatures);
+      const isPerfectMatch = matchesCategory && featureMatch.score === 1;
+      const isGoodMatch = matchesCategory && featureMatch.score >= 0.5;
       
-      if (matchesNeeds) {
+      if (isPerfectMatch) {
         response = pickRandom(CAR_REACTION_POSITIVE[personality]);
         interestChange = 15;
         // Recovery: if they like the car, it can clear a strike
         if (customer.strikes > 0) customer.strikes--;
         newPhase = 'asking_numbers'; // They like it, ready for pricing
       } else {
-        response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
-        interestChange = -8; // Reduced from -15, less severe
-        customer.strikes++;
+        // Handle partial matches or total mismatches
+        if (matchesCategory && featureMatch.missing.length > 0) {
+          // Category matches but misses specific features
+          const missingText = featureMatch.missing.map(f => FEATURE_LABELS[f]).join(' or ');
+          response = `It is ${CATEGORY_LABELS[customer.desiredCategory]}, but I really wanted something ${missingText}.`;
+          interestChange = -5;
+        } else if (!matchesCategory) {
+          // Wrong category entirely
+          response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
+          interestChange = -10;
+        } else {
+          // Generic fallback
+          response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
+          interestChange = -8;
+        }
+        
+        if (!isGoodMatch) {
+          customer.strikes++;
+        }
         
         // Only leave if they have 3+ strikes AND interest is very low, OR if interest hits rock bottom
         if ((customer.strikes >= 3 && interest + interestChange < 20) || interest + interestChange <= 0) {
@@ -799,7 +834,7 @@ export async function getAIResponse(
 
   if (contextOverrides?.messageType === 'offer' && contextOverrides.offerPrice && contextOverrides.offerType) {
     const { offerPrice, offerType, offerDownPayment } = contextOverrides;
-    const { buyerType, budget, maxPayment, desiredDown, interest } = customer;
+    const { buyerType, budget, maxPayment, desiredDown, interest, personality, desiredFeatures } = customer;
     
     // Check payment type mismatch
     if (buyerType === 'cash' && offerType === 'payment') {
@@ -833,9 +868,43 @@ export async function getAIResponse(
         dealQuality = 'too_high';
         interestChange = -5;
         newPhase = 'negotiation';
+
+        // REALITY CHECK: If it's a perfect car but just too expensive
+        if (currentCar) {
+          const categoryMatch = carMatchesCategory(currentCar, customer);
+          const featureMatch = carMatchesFeatures(currentCar, desiredFeatures);
+          
+          if (categoryMatch && featureMatch.score >= 0.8) {
+           // It's the right car... can they afford it?
+           if (interest > 70 || personality === 'enthusiastic' || personality === 'friendly') {
+              // BUDGET STRETCH: They love it enough to pay more
+              dealQuality = 'budget_stretch';
+              interestChange = 15;
+              if (customer.buyerType === 'cash') {
+                 customer.budget = offerPrice; // Update their budget!
+              } else {
+                 customer.maxPayment = Math.round(offerPrice / 60); // Roughly update payment cap
+              }
+           } else if (interest < 40 || personality === 'serious' || personality === 'analytical') {
+              // DOWNGRADE REQUEST: They like it but won't pay. They want a cheaper model.
+              dealQuality = 'downgrade_request';
+              interestChange = -5;
+           }
+        }
       } else {
         dealQuality = 'way_too_high';
         customer.strikes++;
+        
+        // REALITY CHECK for WAY too high
+        if (currentCar) {
+          const categoryMatch = carMatchesCategory(currentCar, customer);
+          const featureMatch = carMatchesFeatures(currentCar, desiredFeatures);
+           if (categoryMatch && featureMatch.score >= 0.8) {
+             // It's the right car... but way out of league
+             dealQuality = 'downgrade_request'; // Almost always a downgrade request if WAY too high
+           }
+        }
+
         if ((customer.strikes >= 3 && interest < 30) || (interest - 10 < 5)) {
           isLost = true;
           interestChange = -30;
@@ -844,6 +913,7 @@ export async function getAIResponse(
         }
         newPhase = 'negotiation';
       }
+    }
     }
   }
 
@@ -976,8 +1046,25 @@ export async function getAIResponse(
 function buildSystemPrompt(customer: Customer, currentCar: Car | null, dealQuality?: string): string {
   const featureList = customer.desiredFeatures.map(f => FEATURE_LABELS[f]).join(', ');
   
+  let matchAnalysis = '';
+  if (currentCar) {
+    const categoryMatch = carMatchesCategory(currentCar, customer);
+    const featureMatch = carMatchesFeatures(currentCar, customer.desiredFeatures);
+    
+    if (categoryMatch && featureMatch.score === 1) {
+      matchAnalysis = 'MATCH_QUALITY: PERFECT. The car matches ALL requests (Category + Features). Be excited.';
+    } else if (categoryMatch && featureMatch.score > 0) {
+        const missing = featureMatch.missing.map(f => FEATURE_LABELS[f]).join(', ');
+        matchAnalysis = `MATCH_QUALITY: PARTIAL. The Category is correct (${CATEGORY_LABELS[customer.desiredCategory]}), BUT it is missing these features: ${missing}. Acknowledge the correct type but Complain about the missing features.`;
+    } else if (categoryMatch) {
+       matchAnalysis = `MATCH_QUALITY: CATEGORY_ONLY. The Category is correct, but it misses ALL desired features (${featureList}). Complain about missing features.`;
+    } else {
+       matchAnalysis = `MATCH_QUALITY: BAD. The car is the WRONG CATEGORY entirely. wanted ${CATEGORY_LABELS[customer.desiredCategory]}, got ${currentCar.model}. Reject it.`;
+    }
+  }
+
   const carInfo = currentCar
-    ? `Car shown: ${currentCar.model} ${currentCar.trim} (${currentCar.color})`
+    ? `Car shown: ${currentCar.model} ${currentCar.trim} (${currentCar.color})\n${matchAnalysis}`
     : 'No car shown yet';
 
   // If we have deal quality feedback, use super simple prompt for offers
@@ -994,7 +1081,9 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, dealQuali
       'way_too_high': `The salesperson just made you an offer. This price is WAY over your budget. Your budget is ${budgetText}. Reject it firmly.`,
       'wrong_type': customer.buyerType === 'cash' 
         ? 'The salesperson mentioned monthly payments but you are a CASH buyer. Remind them you want the total cash price.'
-        : 'The salesperson gave you a total price but you are a PAYMENT buyer. Ask them what the monthly payment would be.'
+        : 'The salesperson gave you a total price but you are a PAYMENT buyer. Ask them what the monthly payment would be.',
+      'budget_stretch': `The offer is over your original budget (${budgetText}), BUT you love the car so much you decide to STRETCH your budget. Say something like "It's more than I wanted to spend, but I love it. Let's do it."`,
+      'downgrade_request': `The car is perfect but the price is just too high for you (${budgetText}). Ask if they have a CHEAPER MODEL or a lower trim level.`
     }[dealQuality] || 'Respond naturally.';
 
     return `You are ${customer.name}, a ${customer.personality} car buyer.
@@ -1006,22 +1095,7 @@ Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in cha
   // For general conversation (no offer)
   const isCash = customer.buyerType === 'cash';
   
-  // Format info based on what is revealed
-  const budgetInfo = customer.revealedPreferences.budget
-    ? (isCash ? `$${customer.budget.toLocaleString()} cash` : `$${customer.maxPayment}/mo with $${customer.desiredDown.toLocaleString()} down`)
-    : "HIDDEN (Do not reveal unless asked)";
-    
-  const typeInfo = customer.revealedPreferences.type
-    ? CATEGORY_LABELS[customer.desiredCategory] || "Any"
-    : "HIDDEN (Do not reveal unless asked)";
-    
-  const featuresInfo = customer.revealedPreferences.features
-    ? featureList
-    : "HIDDEN (Do not reveal unless asked)";
 
-  const modelInfo = customer.revealedPreferences.model
-    ? (customer.desiredModel || "None")
-    : "HIDDEN (Do not reveal unless asked)";
 
   return `You are ${customer.name}, a ${customer.personality} car buyer.
 TRUE INFO (Use only if revealed or asked):

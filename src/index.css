@@ -310,6 +310,18 @@ body {
         max-height: 80vh;
     }
     
+    .notes-panel {
+        width: 280px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .notes-panel .customer-notes {
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+        border: 4px solid #e6dbb9 !important;
+    }
+
     /* When not in container (fallback) */
     .chat-panel:not(.in-container) {
         position: absolute;
