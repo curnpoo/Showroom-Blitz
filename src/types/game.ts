@@ -51,6 +51,13 @@ export interface Customer {
   stolenByCoworkerId?: number; // ID of coworker who stole this customer
   stolenDealTimer?: number; // Timer for the stolen deal resolution (15-30 seconds)
   stolenDealDuration?: number; // How long the stolen deal should take
+  revealedPreferences: {
+    budget: boolean;
+    type: boolean;
+    features: boolean;
+    model: boolean;
+    timeline?: boolean;
+  };
 }
 
 export interface Coworker {

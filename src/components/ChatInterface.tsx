@@ -2,6 +2,7 @@ import React from 'react';
 import { Send, Package, Calculator, TrendingUp } from 'lucide-react';
 import { Customer, ConversationMessage, Car } from '../types/game';
 import { OfferPaper } from './OfferPaper';
+import { CustomerNotes } from './CustomerNotes';
 
 interface ChatInterfaceProps {
   selectedPerson: Customer;
@@ -20,6 +21,7 @@ interface ChatInterfaceProps {
   currentCar: Car | null;
   attemptCloseDeal: () => void;
   isMobile: boolean;
+  onDiscoveryAction: (type: 'budget' | 'type' | 'features' | 'model') => void;
 }
 
 export function ChatInterface({
@@ -39,6 +41,7 @@ export function ChatInterface({
   currentCar,
   attemptCloseDeal,
   isMobile,
+  onDiscoveryAction,
 }: ChatInterfaceProps) {
   
   const getInterestColor = (interest: number) => {
@@ -86,17 +89,15 @@ export function ChatInterface({
       <div className="chat-header">
         <div className="chat-header-info">
           <h3>{selectedPerson.name}</h3>
-          <div className="buyer-info">
-            {selectedPerson.buyerType === 'cash' ? '💵' : '💳'}
-            {selectedPerson.buyerType === 'cash'
-              ? ` Cash • Budget: $${selectedPerson.budget.toLocaleString()}`
-              : ` Payment • Max: $${selectedPerson.maxPayment}/mo`}
-          </div>
           <div className="personality">
             {selectedPerson.personality} • Patience: {selectedPerson.temper}/100
           </div>
         </div>
         <button className="chat-close" onClick={onClose}>×</button>
+      </div>
+      
+      <div style={{ padding: '0 15px' }}>
+        <CustomerNotes customer={selectedPerson} />
       </div>
 
       <div className="interest-bar-container">
@@ -125,7 +126,84 @@ export function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-container">
+      <div className="chat-input-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* Discovery Action Bar */}
+        {(selectedPerson.conversationPhase === 'greeting' || selectedPerson.conversationPhase === 'needs_discovery') && (
+          <div className="discovery-actions" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', width: '100%' }}>
+            {!selectedPerson.revealedPreferences.budget && (
+              <button 
+                onClick={() => onDiscoveryAction('budget')}
+                style={{ 
+                  flex: 1, 
+                  whiteSpace: 'nowrap', 
+                  fontSize: '0.75rem', 
+                  padding: '6px 8px', 
+                  background: '#e0f2fe', 
+                  color: '#0284c7', 
+                  border: '1px solid #bae6fd', 
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ask Budget
+              </button>
+            )}
+            {!selectedPerson.revealedPreferences.type && (
+              <button 
+                onClick={() => onDiscoveryAction('type')}
+                style={{ 
+                  flex: 1, 
+                  whiteSpace: 'nowrap', 
+                  fontSize: '0.75rem', 
+                  padding: '6px 8px', 
+                  background: '#f0fdf4', 
+                  color: '#16a34a', 
+                  border: '1px solid #bbf7d0', 
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ask Type
+              </button>
+            )}
+            {!selectedPerson.revealedPreferences.features && (
+              <button 
+                onClick={() => onDiscoveryAction('features')}
+                style={{ 
+                  flex: 1, 
+                  whiteSpace: 'nowrap', 
+                  fontSize: '0.75rem', 
+                  padding: '6px 8px', 
+                  background: '#fdf4ff', 
+                  color: '#c026d3', 
+                  border: '1px solid #f5d0fe', 
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ask Needs
+              </button>
+            )}
+            {!selectedPerson.revealedPreferences.model && (
+              <button 
+                onClick={() => onDiscoveryAction('model')}
+                style={{ 
+                  flex: 1, 
+                  whiteSpace: 'nowrap', 
+                  fontSize: '0.75rem', 
+                  padding: '6px 8px', 
+                  background: '#fff7ed', 
+                  color: '#ea580c', 
+                  border: '1px solid #fed7aa', 
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ask Model
+              </button>
+            )}
+          </div>
+        )}
         {conversation.length === 0 ? (
           <button 
             onClick={() => sendMessage('Hello!')}

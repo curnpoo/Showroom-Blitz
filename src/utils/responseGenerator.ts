@@ -25,113 +25,31 @@ function formatCarType(customer: Customer): string {
 // Customer responds with what they're looking for
 
 const GREETING_RESPONSES: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
-  friendly: (_features, customer) => {
-    const carType = formatCarType(customer);
-    if (customer.desiredCategory === 'any') {
-      // Not picky - emphasize budget and openness
-      const budgetInfo = customer.buyerType === 'payment' 
-        ? `I've got about $${customer.desiredDown.toLocaleString()} to put down and want to stay around $${customer.maxPayment}/month`
-        : `my budget is around $${customer.budget.toLocaleString()}`;
-      return [
-        `Hey! I'm pretty flexible on what kind of car, ${budgetInfo}. Show me what you think would work!`,
-        `Hi! Honestly, I'm not too picky. ${budgetInfo}. Just need something reliable!`,
-        `Hello! I'm open to options - ${budgetInfo}. What do you recommend?`,
-      ];
-    }
-    // Has specific preference
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I have $${customer.desiredDown.toLocaleString()} to put down and need payments around $${customer.maxPayment}/month`
-      : `my budget is around $${customer.budget.toLocaleString()}`;
-    return [
-      `Hey! Yeah, I'm looking for ${carType}. ${budgetInfo}. What do you have?`,
-      `Hi! Nice to meet you! I'm hoping to find ${carType}. ${budgetInfo}.`,
-      `Hello! I could use some help finding ${carType}. ${budgetInfo}.`,
-    ];
-  },
-  serious: (_features, customer) => {
-    const carType = formatCarType(customer);
-    if (customer.desiredCategory === 'any') {
-      const budgetInfo = customer.buyerType === 'payment' 
-        ? `Down: $${customer.desiredDown.toLocaleString()}. Max payment: $${customer.maxPayment}/month.`
-        : `Budget: $${customer.budget.toLocaleString()}.`;
-      return [
-        `Yes. I'm flexible on the type. ${budgetInfo} Show me what fits.`,
-        `Don't have a specific car in mind. ${budgetInfo} Make it work.`,
-        `Not picky on the model. ${budgetInfo} What do you have?`,
-      ];
-    }
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `Down: $${customer.desiredDown.toLocaleString()}. Payment: $${customer.maxPayment}/month max.`
-      : `Budget: $${customer.budget.toLocaleString()}.`;
-    return [
-      `Yes. I need ${carType}. ${budgetInfo} Show me what you have.`,
-      `I'm looking for ${carType}. ${budgetInfo} Let's see the options.`,
-      `Get me ${carType}. ${budgetInfo} No time to waste.`,
-    ];
-  },
-  skeptical: (_features, customer) => {
-    const carType = formatCarType(customer);
-    if (customer.desiredCategory === 'any') {
-      const budgetInfo = customer.buyerType === 'payment' 
-        ? `I've got $${customer.desiredDown.toLocaleString()} down and can do $${customer.maxPayment}/month, tops`
-        : `I'm spending $${customer.budget.toLocaleString()} max`;
-      return [
-        `Look, I'm not picky on the type. ${budgetInfo}. Don't try to upsell me.`,
-        `Yeah, I'm flexible. ${budgetInfo}. Just show me something honest.`,
-        `Whatever fits my budget. ${budgetInfo}. What's the catch?`,
-      ];
-    }
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I've got $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month max`
-      : `I'm spending $${customer.budget.toLocaleString()}`;
-    return [
-      `Maybe. I want ${carType}, but I'm not getting ripped off. ${budgetInfo}.`,
-      `I'm looking for ${carType}. ${budgetInfo}. Don't try to upsell me.`,
-      `Need ${carType}. ${budgetInfo}. What's the catch going to be?`,
-    ];
-  },
-  enthusiastic: (_features, customer) => {
-    const carType = formatCarType(customer);
-    if (customer.desiredCategory === 'any') {
-      const budgetInfo = customer.buyerType === 'payment' 
-        ? `I saved $${customer.desiredDown.toLocaleString()} for the down payment and can do around $${customer.maxPayment}/month!`
-        : `I have $${customer.budget.toLocaleString()} to spend!`;
-      return [
-        `Oh YES! I'm so excited! I'm open to anything really! ${budgetInfo}`,
-        `Hi! I don't have a specific car in mind but I can't wait to see what you have! ${budgetInfo}`,
-        `I'm flexible! Surprise me! ${budgetInfo}`,
-      ];
-    }
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I saved $${customer.desiredDown.toLocaleString()} for down and want to stay around $${customer.maxPayment}/month!`
-      : `I have $${customer.budget.toLocaleString()} to spend!`;
-    return [
-      `Oh absolutely! I'm SO excited! I really want ${carType}! ${budgetInfo}`,
-      `Yes! I've been dreaming about ${carType}! ${budgetInfo}`,
-      `Hi! I can't wait to see what you have! Looking for ${carType}! ${budgetInfo}`,
-    ];
-  },
-  analytical: (_features, customer) => {
-    const carType = formatCarType(customer);
-    if (customer.desiredCategory === 'any') {
-      const budgetInfo = customer.buyerType === 'payment' 
-        ? `capital: $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month ceiling`
-        : `budget cap: $${customer.budget.toLocaleString()}`;
-      return [
-        `I'm open to various categories. Parameters: ${budgetInfo}. Show me what fits.`,
-        `No specific vehicle type required. ${budgetInfo}. Recommend based on value.`,
-        `Flexible on form factor. ${budgetInfo}. What offers the best ROI?`,
-      ];
-    }
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `capital available: $${customer.desiredDown.toLocaleString()} down, $${customer.maxPayment}/month limit`
-      : `budget cap: $${customer.budget.toLocaleString()}`;
-    return [
-      `I'm researching ${carType} options. Financials: ${budgetInfo}.`,
-      `Yes. My criteria: ${carType}. ${budgetInfo}. Show me the data.`,
-      `Looking for ${carType}. I've done my research. ${budgetInfo}.`,
-    ];
-  },
+  friendly: (_features, _customer) => [
+    "Hi there! Just looking around for a new car today.",
+    "Hello! I'm hoping to find something nice.",
+    "Hi! Do you have a moment to help me find a car?",
+  ],
+  serious: (_features, _customer) => [
+    "I'm in the market for a vehicle. Show me what you have.",
+    "Hello. I need to buy a car today if the numbers work.",
+    "Hi. I'm looking for a specific kind of vehicle.",
+  ],
+  skeptical: (_features, _customer) => [
+    "Just looking. Don't hassle me.",
+    "I'm lookin' for a car, but I'm not playing games.",
+    "Yeah, I need a car. Just something reliable.",
+  ],
+  enthusiastic: (_features, _customer) => [
+    "Hi!! I'm so excited to get a new car today!",
+    "Hello! I can't wait to see what you have on the lot!",
+    "Hey! I'm ready to drive home in something awesome!",
+  ],
+  analytical: (_features, _customer) => [
+    "I am conducting market research for a vehicle purchase.",
+    "Hello. I have specific requirements for my next vehicle.",
+    "Hi. I'm looking for a car that meets my criteria.",
+  ],
 };
 
 // ============ CAR SHOWN RESPONSES (NO PRICE) ============
@@ -199,55 +117,74 @@ const CAR_REACTION_NEGATIVE: Record<PersonalityType, string[]> = {
 
 const NEEDS_DISCLOSURE: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
   friendly: (features, customer) => {
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I have about $${customer.desiredDown.toLocaleString()} to put down` 
-      : `my budget is around $${customer.budget.toLocaleString()}`;
-    return [
-      `Thanks for asking! I'm really looking for something ${formatFeatures(features)}. ${budgetInfo}.`,
-      `I'm hoping to find a ${formatFeatures(features)} car today. ${budgetInfo}.`,
-      `Mainly something ${formatFeatures(features)}. ${budgetInfo}. Do you have anything like that?`,
-    ];
+    // Legacy fallback for general "what do you need"
+    return DISCOVERY_RESPONSES.type.friendly(customer);
   },
-  serious: (features, customer) => {
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `Down payment limit: $${customer.desiredDown.toLocaleString()}.` 
-      : `Budget cap: $${customer.budget.toLocaleString()}.`;
-    return [
-      `I need a vehicle that is ${formatFeatures(features)}. ${budgetInfo}`,
-      `My requirements are simple: ${formatFeatures(features)}. ${budgetInfo} Show me what fits.`,
-      `Looking for ${formatFeatures(features)}. ${budgetInfo} Don't waste my time with anything else.`,
-    ];
+  serious: (features, customer) => DISCOVERY_RESPONSES.type.serious(customer),
+  skeptical: (features, customer) => DISCOVERY_RESPONSES.type.skeptical(customer),
+  enthusiastic: (features, customer) => DISCOVERY_RESPONSES.type.enthusiastic(customer),
+  analytical: (features, customer) => DISCOVERY_RESPONSES.type.analytical(customer),
+};
+
+const DISCOVERY_RESPONSES = {
+  budget: {
+    friendly: (c: Customer) => c.buyerType === 'cash' 
+      ? [`I'm hoping to stay around $${c.budget.toLocaleString()}.`, `My budget is somewhere around $${c.budget.toLocaleString()}.`]
+      : [`I have about $${c.desiredDown.toLocaleString()} down and want to pay around $${c.maxPayment}/mo.`, `Looking for payments around $${c.maxPayment}/mo with $${c.desiredDown.toLocaleString()} down.`],
+    serious: (c: Customer) => c.buyerType === 'cash'
+      ? [`My budget cap is $${c.budget.toLocaleString()}.`, `I will not exceed $${c.budget.toLocaleString()}.`]
+      : [`Max payment: $${c.maxPayment}/mo. Down payment: $${c.desiredDown.toLocaleString()}.`, `Detailed financials: $${c.desiredDown.toLocaleString()} down, $${c.maxPayment}/mo max.`],
+    skeptical: (c: Customer) => c.buyerType === 'cash'
+      ? [`I'm not spending a dime over $${c.budget.toLocaleString()}.`, `Under $${c.budget.toLocaleString()}. That's it.`]
+      : [`I've got $${c.desiredDown.toLocaleString()} down. Don't try to go over $${c.maxPayment}/mo.`, `$${c.maxPayment}/mo is my hard limit.`],
+    enthusiastic: (c: Customer) => c.buyerType === 'cash'
+      ? [`I have $${c.budget.toLocaleString()} to spend today!`, `I'm ready to buy if it's under $${c.budget.toLocaleString()}!`]
+      : [`I saved up $${c.desiredDown.toLocaleString()} for a down payment! Ideally $${c.maxPayment}/mo!`, `I can do about $${c.maxPayment}/mo!`],
+    analytical: (c: Customer) => c.buyerType === 'cash'
+      ? [`Calculated budget ceiling: $${c.budget.toLocaleString()}.`, `Financial limit set at $${c.budget.toLocaleString()}.`]
+      : [`Cash flow allows for $${c.maxPayment}/mo with initial capital of $${c.desiredDown.toLocaleString()}.`, `Financial parameters: $${c.desiredDown.toLocaleString()} down, $${c.maxPayment}/mo max.`],
   },
-  skeptical: (features, customer) => {
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I'm only putting $${customer.desiredDown.toLocaleString()} down` 
-      : `I'm not spending more than $${customer.budget.toLocaleString()}`;
-    return [
-      `Look, I just want something ${formatFeatures(features)}. ${budgetInfo}. nothing fancy.`,
-      `If you must know, I need a ${formatFeatures(features)} car. ${budgetInfo}.`,
-      `I'm looking for ${formatFeatures(features)}. ${budgetInfo}. And I know what these things stickering for.`,
-    ];
+  type: {
+    friendly: (c: Customer) => c.desiredCategory === 'any' 
+      ? ["I'm honestly open to anything reliable!", "I'm not sure, maybe you can recommend something?"]
+      : [`I'm really looking for ${CATEGORY_LABELS[c.desiredCategory]}.`, `I'd love to see ${CATEGORY_LABELS[c.desiredCategory]}.`],
+    serious: (c: Customer) => c.desiredCategory === 'any'
+      ? ["I need a reliable vehicle. The type matters less than the value.", "Show me your best options. I'm flexible."]
+      : [`I need ${CATEGORY_LABELS[c.desiredCategory]}.`, `Show me ${CATEGORY_LABELS[c.desiredCategory]}s only.`],
+    skeptical: (c: Customer) => c.desiredCategory === 'any'
+      ? ["Just show me something that runs well.", "I don't care about the type, just the price."]
+      : [`I'm only interested in ${CATEGORY_LABELS[c.desiredCategory]}.`, `Don't show me anything that isn't ${CATEGORY_LABELS[c.desiredCategory]}.`],
+    enthusiastic: (c: Customer) => c.desiredCategory === 'any'
+      ? ["I'm open to anything! Surprise me!", "I just want a cool new car! What do you have?"]
+      : [`I've always wanted ${CATEGORY_LABELS[c.desiredCategory]}!`, `Show me your coolest ${CATEGORY_LABELS[c.desiredCategory]}!`],
+    analytical: (c: Customer) => c.desiredCategory === 'any'
+      ? ["Vehicle category is secondary to performance metrics.", "I am evaluating all vehicle segments."]
+      : [`My analysis points to ${CATEGORY_LABELS[c.desiredCategory]} as the optimal form factor.`, `Requirement: ${CATEGORY_LABELS[c.desiredCategory]}.`],
   },
-  enthusiastic: (features, customer) => {
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `I've saved up $${customer.desiredDown.toLocaleString()}! ` 
-      : `I can spend up to $${customer.budget.toLocaleString()}!`;
-    return [
-      `Ooh! I really really want something ${formatFeatures(features)}! ${budgetInfo}`,
-      `I'm looking for my dream car! Something ${formatFeatures(features)}! ${budgetInfo}`,
-      `I'm so glad you asked! I need a ${formatFeatures(features)} ride! ${budgetInfo}`,
-    ];
+  features: {
+    friendly: (c: Customer) => [`I'd really like something ${formatFeatures(c.desiredFeatures)}.`, `Ideally it would be ${formatFeatures(c.desiredFeatures)}.`],
+    serious: (c: Customer) => [`Must have: ${formatFeatures(c.desiredFeatures)}.`, `Requirements: ${formatFeatures(c.desiredFeatures)}.`],
+    skeptical: (c: Customer) => [`It better be ${formatFeatures(c.desiredFeatures)}.`, `I just need it to be ${formatFeatures(c.desiredFeatures)}.`],
+    enthusiastic: (c: Customer) => [`I want something ${formatFeatures(c.desiredFeatures)}!`, `It has to be ${formatFeatures(c.desiredFeatures)}!`],
+    analytical: (c: Customer) => [`Required specifications: ${formatFeatures(c.desiredFeatures)}.`, `Feature set must include: ${formatFeatures(c.desiredFeatures)}.`],
   },
-  analytical: (features, customer) => {
-    const budgetInfo = customer.buyerType === 'payment' 
-      ? `Capital allocation: $${customer.desiredDown.toLocaleString()}` 
-      : `Maximum expenditure: $${customer.budget.toLocaleString()}`;
-    return [
-      `My analysis points to a ${formatFeatures(features)} vehicle. ${budgetInfo}.`,
-      `Primary criteria: ${formatFeatures(features)}. ${budgetInfo}.`,
-      `I am in the market for a ${formatFeatures(features)} automobile. ${budgetInfo}.`,
-    ];
-  },
+  model: {
+    friendly: (c: Customer) => c.desiredModel 
+      ? [`I saw the ${c.desiredModel} online and liked it!`, `Do you have any ${c.desiredModel}s?`] 
+      : ["I don't have a specific model in mind.", "I'm open to suggestions on the model."],
+    serious: (c: Customer) => c.desiredModel
+      ? [`I am here for the ${c.desiredModel}.`, `Show me the ${c.desiredModel}.`]
+      : ["No specific model preference. Quality is key.", "I'll evaluate the models you have."],
+    skeptical: (c: Customer) => c.desiredModel
+      ? [`I'm looking for a ${c.desiredModel}. Do you actually have any?`, `I want a ${c.desiredModel}.`]
+      : ["I don't care about the nameplate.", "Just show me what you got."],
+    enthusiastic: (c: Customer) => c.desiredModel
+      ? [`I LOVE the ${c.desiredModel}! Do you have one?!`, `Is there a ${c.desiredModel} here?!`]
+      : ["I don't know specifically! Show me everything!", "I'm just excited to see what's new!"],
+    analytical: (c: Customer) => c.desiredModel
+      ? [`The ${c.desiredModel} rates highly in my research.`, `I am targeting the ${c.desiredModel}.`]
+      : ["Model selection will be based on comparative data.", "No specific model bias."],
+  }
 };
 
 // ============ NEGOTIATION RESPONSES ============
@@ -601,7 +538,7 @@ export function detectSentiment(text: string): Sentiment {
 export interface ResponseContext {
   customer: Customer;
   currentCar: Car | null;
-  messageType: 'greeting' | 'car_shown' | 'offer' | 'general';
+  messageType: 'greeting' | 'car_shown' | 'offer' | 'general' | 'ask_budget' | 'ask_type' | 'ask_features' | 'ask_model';
   offerPrice?: number;
   offerType?: 'selling' | 'otd' | 'payment';
   offerDownPayment?: number;
@@ -638,6 +575,34 @@ export function generateResponse(context: ResponseContext): ResponseResult {
       response = pickRandom(GREETING_RESPONSES[personality](desiredFeatures, customer));
       interestChange = 5; // Slight interest bump for engagement
       newPhase = 'needs_discovery';
+      break;
+    }
+
+    case 'ask_budget': {
+      response = pickRandom(DISCOVERY_RESPONSES.budget[personality](customer));
+      customer.revealedPreferences.budget = true;
+      interestChange = 5;
+      break;
+    }
+
+    case 'ask_type': {
+      response = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
+      customer.revealedPreferences.type = true;
+      interestChange = 5;
+      break;
+    }
+
+    case 'ask_features': {
+      response = pickRandom(DISCOVERY_RESPONSES.features[personality](customer));
+      customer.revealedPreferences.features = true;
+      interestChange = 5;
+      break;
+    }
+
+    case 'ask_model': {
+      response = pickRandom(DISCOVERY_RESPONSES.model[personality](customer));
+      customer.revealedPreferences.model = true;
+      interestChange = 5;
       break;
     }
 
@@ -801,17 +766,28 @@ export async function getAIResponse(
     };
   }
 
-  // Check for needs/budget inquiry
+  // Check for specific discovery questions and reveal info automatically
+  // This allows the AI to answer naturally while we update the game state
+  // We use the same regex patterns or check if contextOverrides passed a specific messageType
+  
+  if (contextOverrides?.messageType === 'ask_budget') customer.revealedPreferences.budget = true;
+  if (contextOverrides?.messageType === 'ask_type') customer.revealedPreferences.type = true;
+  if (contextOverrides?.messageType === 'ask_features') customer.revealedPreferences.features = true;
+  if (contextOverrides?.messageType === 'ask_model') customer.revealedPreferences.model = true;
+
+  // Also check natural language questions if no explicit type passed
+  if (!contextOverrides?.messageType) {
+    if (/\b(budget|spend|cost|price|money)\b/i.test(message)) customer.revealedPreferences.budget = true;
+    if (/\b(type|kind|style|suv|sedan)\b/i.test(message)) customer.revealedPreferences.type = true;
+    if (/\b(feature|looking for|need|want|prefer)\b/i.test(message)) customer.revealedPreferences.features = true;
+    if (/\b(model|specific|mind)\b/i.test(message)) customer.revealedPreferences.model = true;
+  }
+
+  // Check for needs/budget inquiry (legacy check - can remove or keep as fallback)
   if (isNeedsInquiry(message)) {
-    return {
-      response: pickRandom(NEEDS_DISCLOSURE[customer.personality](customer.desiredFeatures, customer)),
-      interestChange: 5,
-      dealAccepted: false,
-      newPhase: 'needs_discovery',
-      isLost: false,
-      customerSentiment: 'happy', // They are happy to be heard
-      playerSentiment: playerSentiment
-    };
+     // If matches general needs, reveal basic info
+     customer.revealedPreferences.type = true;
+     customer.revealedPreferences.features = true;
   }
 
   // Calculate deal quality for offers (game logic does the math!)
@@ -1028,27 +1004,46 @@ Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in cha
   }
 
   // For general conversation (no offer)
-  if (customer.buyerType === 'cash') {
-    return `You are ${customer.name}, a ${customer.personality} car buyer.
-Budget: $${customer.budget.toLocaleString()} cash (out-the-door)
-Want: ${featureList}
+  const isCash = customer.buyerType === 'cash';
+  
+  // Format info based on what is revealed
+  const budgetInfo = customer.revealedPreferences.budget
+    ? (isCash ? `$${customer.budget.toLocaleString()} cash` : `$${customer.maxPayment}/mo with $${customer.desiredDown.toLocaleString()} down`)
+    : "HIDDEN (Do not reveal unless asked)";
+    
+  const typeInfo = customer.revealedPreferences.type
+    ? CATEGORY_LABELS[customer.desiredCategory] || "Any"
+    : "HIDDEN (Do not reveal unless asked)";
+    
+  const featuresInfo = customer.revealedPreferences.features
+    ? featureList
+    : "HIDDEN (Do not reveal unless asked)";
+
+  const modelInfo = customer.revealedPreferences.model
+    ? (customer.desiredModel || "None")
+    : "HIDDEN (Do not reveal unless asked)";
+
+  return `You are ${customer.name}, a ${customer.personality} car buyer.
+TRUE INFO (Use only if revealed or asked):
+- Budget: ${isCash ? `$${customer.budget.toLocaleString()} cash` : `$${customer.maxPayment}/mo with $${customer.desiredDown.toLocaleString()} down`}
+- Type: ${CATEGORY_LABELS[customer.desiredCategory] || "Any"}
+- Features: ${featureList}
+- Model Preference: ${customer.desiredModel || "None"}
+
+CURRENTLY REVEALED TO PLAYER:
+- Budget: ${customer.revealedPreferences.budget ? 'REVEALED' : 'HIDDEN'}
+- Type: ${customer.revealedPreferences.type ? 'REVEALED' : 'HIDDEN'}
+- Features: ${customer.revealedPreferences.features ? 'REVEALED' : 'HIDDEN'}
+- Model: ${customer.revealedPreferences.model ? 'REVEALED' : 'HIDDEN'}
+
 ${carInfo}
 
 RULES:
-- You pay CASH. Never mention payments or financing.
 - Respond in 1 short sentence only.
 - Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.
-- Don't ask endless questions. If you like the car, ask for the price.`;
-  } else {
-    return `You are ${customer.name}, a ${customer.personality} car buyer.
-Budget: $${customer.maxPayment}/month with $${customer.desiredDown.toLocaleString()} down
-Want: ${featureList}
-${carInfo}
-
-RULES:
-- You want monthly payments. If they say total price, ask for monthly.
-- Respond in 1 short sentence only.
-- Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.
-- Don't ask endless questions. If you like the car, ask for the price.`;
-  }
+- If a piece of info is HIDDEN, be vague about it unless the user explicitly asks for it.
+- If asked "What is your budget?", reveal the budget and answer clearly.
+- If asked "What do you want?", you can reveal Type and Features.
+- If user asks for something specific (e.g., "Do you have a trade-in?"), answer creatively (No trade-in).
+`;
 }

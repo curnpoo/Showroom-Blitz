@@ -229,6 +229,12 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     buttonBounds: null,
     strikes: 0,
     unattendedTimer: 0,
+    revealedPreferences: {
+      budget: false,
+      type: false,
+      features: false,
+      model: false,
+    },
   };
 }
 

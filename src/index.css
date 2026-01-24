@@ -424,8 +424,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    min-height: 200px;
-    max-height: 300px;
+    min-height: 0; /* Allow shrinking */
 }
 
 .message {
@@ -1392,47 +1391,48 @@ body {
 /* Mobile adjustments for desk scene */
 @media (max-width: 768px) {
     .desk-scene {
-        padding: 16px 12px 12px 12px;
+        padding: 8px 12px 6px 12px;
+        min-height: 100px;
     }
     
     .character-avatar {
-        width: 48px;
-        height: 48px;
-        font-size: 1.2rem;
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
     }
     
     .character-avatar.player-avatar {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
     }
     
     .character-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
     }
     
     .desk-surface {
-        max-width: 200px;
-        margin: 10px 0;
+        max-width: 160px;
+        margin: 6px 0;
     }
     
     .desk-top {
-        height: 60px;
+        height: 45px;
     }
     
     .offer-paper {
-        width: 85px;
-        height: 58px;
-        padding: 6px;
+        width: 70px;
+        height: 50px;
+        padding: 4px;
     }
     
     .paper-header {
-        font-size: 0.55rem;
-    }
-    
-    .paper-car {
         font-size: 0.5rem;
     }
     
+    .paper-car {
+        font-size: 0.45rem;
+    }
+    
     .paper-price {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
     }
 }

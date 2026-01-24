@@ -898,6 +898,77 @@ function App() {
     };
   }, [gameState, showInput, getCanvasScale, isMobile]);
 
+  const handleDiscoveryAction = async (type: 'budget' | 'type' | 'features' | 'model') => {
+    if (!selectedPerson) return;
+    
+    // Find real customer object to ensure stats sync with game loop
+    const realCustomer = customersRef.current.find(c => c.id === selectedPerson.id);
+    if (!realCustomer) return;
+
+    let question = "";
+    let messageType: any = "";
+
+    switch (type) {
+      case 'budget':
+        question = "What is your budget for this purchase?";
+        messageType = 'ask_budget';
+        break;
+      case 'type':
+        question = "What type of vehicle are you looking for?";
+        messageType = 'ask_type';
+        break;
+      case 'features':
+        question = "Are there any specific features you need?";
+        messageType = 'ask_features';
+        break;
+      case 'model':
+        question = "Do you have a specific model in mind?";
+        messageType = 'ask_model';
+        break;
+    }
+
+    setConversation(prev => [...prev, { sender: 'player', text: question }]);
+    setIsTyping(true);
+
+    let response: string;
+    let interestChange: number;
+    let newPhase;
+    let isLost = false;
+
+    if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
+      // Pass the specific message type to override context
+      // Use realCustomer here
+      const result = await getAIResponse(realCustomer, question, currentCar, settings, { messageType });
+      response = result.response;
+      interestChange = result.interestChange;
+      newPhase = result.newPhase;
+      isLost = !!result.isLost;
+      
+      realCustomer.conversationHistory.push(
+        { role: 'user', content: question },
+        { role: 'assistant', content: response }
+      );
+    } else {
+      const result = generateResponse({
+        customer: realCustomer, // Use realCustomer
+        currentCar, 
+        messageType: messageType,
+      });
+      response = result.response;
+      interestChange = result.interestChange;
+      newPhase = result.newPhase;
+    }
+
+    realCustomer.interest = Math.max(0, Math.min(100, realCustomer.interest + interestChange));
+    if (newPhase) realCustomer.conversationPhase = newPhase;
+    
+    // Force state update by creating a shallow clone of the updated real customer
+    setSelectedPerson({ ...realCustomer });
+    
+    setConversation(prev => [...prev, { sender: 'customer', text: response }]);
+    setIsTyping(false);
+  };
+
   const showCarToCustomer = async (car: CarType) => {
     if (!selectedPerson) return;
     
@@ -1643,6 +1714,7 @@ function App() {
                   currentCar={currentCar}
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={false}
+                  onDiscoveryAction={handleDiscoveryAction}
                 />
               </div>
 
@@ -1731,6 +1803,7 @@ function App() {
                   currentCar={currentCar}
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={true}
+                  onDiscoveryAction={handleDiscoveryAction}
                 />
               </div>
             )}
