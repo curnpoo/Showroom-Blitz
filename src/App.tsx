@@ -101,6 +101,61 @@ function App() {
     salesCount: 0,
   });
 
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+
+  const testConnection = async () => {
+    if (!settings.apiBaseUrl) return;
+    
+    setTestStatus('testing');
+    setTestMessage('');
+    
+    try {
+      // LM Studio / OpenAI compatible check
+      // We try to fetch the /models endpoint which is standard
+      let baseUrl = settings.apiBaseUrl;
+      
+      // Clean up URL if it has /chat/completions at the end
+      if (baseUrl.endsWith('/chat/completions')) {
+        baseUrl = baseUrl.replace('/chat/completions', '');
+      }
+      // Remove trailing slash
+      baseUrl = baseUrl.replace(/\/+$/, '');
+      
+      const url = `${baseUrl}/models`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+           // Some CORS setups need minimal headers
+        }
+      });
+      
+      if (response.ok) {
+        setTestStatus('success');
+        setTestMessage('Successfully connected to API!');
+        
+        // Try to auto-detect model if possible (bonus)
+        try {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+             const modelId = data.data[0].id;
+             setTestMessage(`Connected! Found model: ${modelId}`);
+             // Optional: auto-set model? Maybe too aggressive.
+          }
+        } catch (e) {
+          // Ignore JSON parse error, connection was still OK
+        }
+      } else {
+        setTestStatus('error');
+        setTestMessage(`Server reachable but returned error: ${response.status}`);
+      }
+    } catch (e: any) {
+      setTestStatus('error');
+      setTestMessage(e.message || 'Connection failed. Check URL or CORS.');
+    }
+  };
+
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
@@ -1741,6 +1796,49 @@ function App() {
                             </div>
                           )}
                         </div>
+                        <div className="ai-field">
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                             <label style={{ margin: 0 }}>Connection Test</label>
+                             {testStatus !== 'idle' && (
+                               <span style={{ 
+                                 fontSize: '0.75rem', 
+                                 color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12' 
+                               }}>
+                                 {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
+                               </span>
+                             )}
+                           </div>
+                           <button
+                             onClick={testConnection}
+                             disabled={testStatus === 'testing' || !settings.apiBaseUrl}
+                             style={{
+                               width: '100%',
+                               padding: '8px',
+                               background: testStatus === 'success' ? '#2ecc71' : '#3498db',
+                               color: 'white',
+                               border: 'none',
+                               borderRadius: '6px',
+                               cursor: testStatus === 'testing' || !settings.apiBaseUrl ? 'not-allowed' : 'pointer',
+                               opacity: testStatus === 'testing' || !settings.apiBaseUrl ? 0.7 : 1,
+                               marginBottom: '8px'
+                             }}
+                           >
+                             {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
+                           </button>
+                           {testMessage && (
+                             <div style={{ 
+                               fontSize: '0.75rem', 
+                               padding: '8px', 
+                               borderRadius: '4px',
+                               background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                               color: testStatus === 'success' ? '#27ae60' : '#c0392b',
+                               border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`
+                             }}>
+                               {testMessage}
+                             </div>
+                           )}
+                        </div>
+
                         <div className="ai-field">
                           <label>Model Name</label>
                           <input
