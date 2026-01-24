@@ -792,7 +792,8 @@ function App() {
                   customer.active = false;
                   customer.conversationPhase = 'closed';
                   
-                  // Remove car from inventory in volume mode (but don't add to player's stats)
+                  // Simulation only: inventory remains untouched for the player
+                  /* 
                   if (settings.gameMode === 'volume') {
                     const randomCar = inventoryRef.current[Math.floor(Math.random() * inventoryRef.current.length)];
                     if (randomCar) {
@@ -802,6 +803,7 @@ function App() {
                       }
                     }
                   }
+                  */
                 } else {
                   // Customer leaves (deal lost)
                   customer.active = false;
