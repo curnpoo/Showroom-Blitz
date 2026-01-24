@@ -1036,7 +1036,7 @@ function App() {
   };
 
   // Validation: Check if customer likes the price
-  const customerLikesThePrice = (customer: Customer, car: CarType, agreedPrice: number): boolean => {
+  const customerLikesThePrice = (customer: Customer, agreedPrice: number): boolean => {
     if (!agreedPrice || agreedPrice === 0) return false; // No price agreed yet
 
     const moodMultiplier = 1 + (customer.interest / 1000); // 0-10% bonus based on interest
@@ -1053,7 +1053,7 @@ function App() {
 
     // FIRST: Check if customer likes the car AND the price
     const likesTheCar = customerLikesTheCar(selectedPerson, currentCar);
-    const likesThePrice = customerLikesThePrice(selectedPerson, currentCar, agreedPrice);
+    const likesThePrice = customerLikesThePrice(selectedPerson, agreedPrice);
 
     // If either condition fails, provide specific feedback
     if (!likesTheCar || !likesThePrice) {
