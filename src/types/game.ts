@@ -84,6 +84,8 @@ export interface Car {
   otd: number;
   mileage: number;
   vin: string;
+  features: DesiredFeature[];
+  category: VehicleCategory;
 }
 
 export interface Desk {

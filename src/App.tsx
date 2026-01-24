@@ -1019,48 +1019,138 @@ function App() {
     }
   };
   
+  // Validation: Check if customer likes the car (features/category match)
+  const customerLikesTheCar = (customer: Customer, car: CarType): boolean => {
+    // Check category match (if they have a preference)
+    const categoryMatch = customer.desiredCategory === 'any' || customer.desiredCategory === car.category;
+
+    // Check feature matches
+    const featureMatches = customer.desiredFeatures.filter(feature =>
+      car.features.includes(feature)
+    ).length;
+
+    // Likes the car if:
+    // - Category matches AND has at least 1 desired feature, OR
+    // - Has 2+ desired features (even if category doesn't match)
+    return (categoryMatch && featureMatches >= 1) || featureMatches >= 2;
+  };
+
+  // Validation: Check if customer likes the price
+  const customerLikesThePrice = (customer: Customer, car: CarType, agreedPrice: number): boolean => {
+    if (!agreedPrice || agreedPrice === 0) return false; // No price agreed yet
+
+    const moodMultiplier = 1 + (customer.interest / 1000); // 0-10% bonus based on interest
+    const effectiveBudget = customer.buyerType === 'cash'
+      ? Math.round(customer.budget * moodMultiplier)
+      : Math.round(customer.maxPayment * moodMultiplier);
+
+    // Price is acceptable if within effective budget (with mood bonus)
+    return agreedPrice <= effectiveBudget;
+  };
+
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
-    
+
+    // FIRST: Check if customer likes the car AND the price
+    const likesTheCar = customerLikesTheCar(selectedPerson, currentCar);
+    const likesThePrice = customerLikesThePrice(selectedPerson, currentCar, agreedPrice);
+
+    // If either condition fails, provide specific feedback
+    if (!likesTheCar || !likesThePrice) {
+      const playerMessage = "Are you ready to sign the paperwork and drive this home today?";
+      setConversation(prev => [...prev, { sender: 'player', text: playerMessage }]);
+      setIsTyping(true);
+
+      setTimeout(() => {
+        let objection = "";
+
+        if (!likesTheCar && !likesThePrice) {
+          // Both issues
+          const responses = {
+            friendly: "Honestly, I'm not sure this car is the right fit for me, and the price is a bit high...",
+            serious: "Neither the vehicle nor the pricing meets my requirements.",
+            skeptical: "I don't think this car is what I'm looking for, and the numbers don't work either.",
+            enthusiastic: "I really want to love it, but it's not quite what I need and it's stretching my budget...",
+            analytical: "The vehicle specifications don't align with my criteria, and the price exceeds my parameters."
+          };
+          objection = responses[selectedPerson.personality];
+        } else if (!likesTheCar) {
+          // Car doesn't match preferences
+          const responses = {
+            friendly: "I appreciate you showing me this, but I'm not sure it's the right car for me...",
+            serious: "This vehicle doesn't meet my requirements.",
+            skeptical: "I don't think this is what I'm looking for.",
+            enthusiastic: "It's nice, but I was hoping for something a bit different...",
+            analytical: "The vehicle specifications don't align with my desired features."
+          };
+          objection = responses[selectedPerson.personality];
+        } else {
+          // Price too high
+          const responses = {
+            friendly: "I like the car, but I'm still not comfortable with the price...",
+            serious: "The vehicle is acceptable, but the price is not.",
+            skeptical: "The car is fine, but I think the price is too high.",
+            enthusiastic: "I love it! But my budget is telling me to wait...",
+            analytical: "The vehicle meets my criteria, but the price exceeds my acceptable range."
+          };
+          objection = responses[selectedPerson.personality];
+        }
+
+        setConversation(prev => [...prev, {
+          sender: 'customer',
+          text: objection,
+          sentiment: 'mad'
+        }]);
+
+        // Small penalty for pushing when they're not ready
+        selectedPerson.interest = Math.max(0, selectedPerson.interest - 5);
+        selectedPerson.conversationPhase = 'negotiation';
+        setIsTyping(false);
+      }, 1500);
+
+      return; // Stop here - don't proceed to deal closing logic
+    }
+
+    // If we get here, customer likes both the car AND the price
     // Analyze context BEFORE adding player message
     let contextBonus = 0;
     const reversedConv = [...conversation].reverse();
     const lastCustomerMsg = reversedConv.find(m => m.sender === 'customer');
-    
+
     if (lastCustomerMsg) {
       const text = lastCustomerMsg.text.toLowerCase();
       // If they literally just said they want to buy, guarantee success
       // Check for buy keywords AND ensure they aren't negated closely (e.g. "not ready", "won't buy")
       const hasBuyWord = /\b(buy|purchase|deal|take it|sign|ready|prepared|accept)\b/.test(text);
       const hasNegation = /\b(not|n't|won't|can't)\s+(ready|buy|purchase|deal|sign|take|accept)\b/.test(text);
-      
+
       if (hasBuyWord && !hasNegation) {
         contextBonus = 2.0; // Guaranteed
       }
     }
-    
+
     // Add player message
     const playerMessage = "Are you ready to sign the paperwork and drive this home today?";
     setConversation(prev => [...prev, { sender: 'player', text: playerMessage }]);
     setIsTyping(true);
-    
+
     setTimeout(() => {
       let successChance = 0;
-      
+
       // Base chance on interest (allow starting at 30%)
       if (selectedPerson.interest >= 30) {
         // Linear interpolation: 30% interest = 20% chance, 100% interest = 95% chance
         const slope = (0.95 - 0.20) / (100 - 30);
         successChance = 0.20 + (slope * (selectedPerson.interest - 30));
       }
-      
+
       // Apply context bonus (e.g. if they said "I'm ready")
       successChance += contextBonus;
-      
+
       const roll = Math.random();
       const isSuccess = roll < successChance;
       let response = "";
-      
+
       if (isSuccess) {
         // Success!
         const responses = {
@@ -1071,29 +1161,29 @@ function App() {
           analytical: "The numbers align with my targeted metrics. I accept."
         };
         response = responses[selectedPerson.personality];
-        setConversation(prev => [...prev, { 
-          sender: 'customer', 
+        setConversation(prev => [...prev, {
+          sender: 'customer',
           text: response,
           sentiment: 'happy'
         }]);
-        
+
         selectedPerson.conversationPhase = 'closed';
         // Set agreed price/type if not set (default to current offer or list price)
         if (agreedPrice === 0) {
            setAgreedPrice(customSellingPrice);
-           setAgreedType('selling'); 
+           setAgreedType('selling');
         }
         setShowDealClosed(true);
-        
+
       } else {
         // Fail - determine if it's "thinking" or "objection"
         const isObjection = Math.random() > 0.5;
-        
+
         if (isObjection) {
           // Harder rejection but REDUCED penalty (was 10) to avoid tanking too hard
           const penalty = 5;
           selectedPerson.interest = Math.max(0, selectedPerson.interest - penalty);
-          
+
           const responses = {
             friendly: "I'm still not 100% sure about the price... it's a bit of a stretch.",
             serious: "The terms are not yet where I need them to be.",
@@ -1102,11 +1192,11 @@ function App() {
             analytical: "The value proposition does not yet justify the expenditure."
           };
           response = responses[selectedPerson.personality];
-          
-          setConversation(prev => [...prev, { 
-             sender: 'customer', 
-             text: response, 
-             sentiment: 'mad' 
+
+          setConversation(prev => [...prev, {
+             sender: 'customer',
+             text: response,
+             sentiment: 'mad'
           }]);
         } else {
           // Soft "thinking about it" - no penalty
@@ -1118,16 +1208,16 @@ function App() {
             analytical: "I need to run the calculations once more to be certain."
           };
           response = responses[selectedPerson.personality];
-          
-          setConversation(prev => [...prev, { 
-             sender: 'customer', 
-             text: response, 
-             sentiment: 'neutral' 
+
+          setConversation(prev => [...prev, {
+             sender: 'customer',
+             text: response,
+             sentiment: 'neutral'
           }]);
         }
         selectedPerson.conversationPhase = 'negotiation';
       }
-      
+
       setIsTyping(false);
     }, 1500);
   };

@@ -65,24 +65,87 @@ function pickRandomCategory(): VehicleCategory {
   return pickRandom(VEHICLE_CATEGORIES);
 }
 
+// Helper to determine vehicle category based on model
+function getVehicleCategory(model: string, price: number): VehicleCategory {
+  // Electric models
+  if (model.includes('Ioniq')) return 'electric';
+
+  // Luxury (high-end models)
+  if (model === 'Palisade' || price > 45000) return 'luxury';
+
+  // Affordable (entry-level)
+  if (model === 'Venue' || model === 'Elantra' || price < 25000) return 'affordable';
+
+  // SUVs
+  if (['Venue', 'Kona', 'Tucson', 'Santa Fe', 'Palisade', 'Ioniq 5'].includes(model)) return 'suv';
+
+  // Sedans
+  if (['Elantra', 'Sonata', 'Ioniq 6'].includes(model)) return 'sedan';
+
+  return 'any';
+}
+
+// Helper to assign features based on model and trim
+function getVehicleFeatures(model: string, trim: string): DesiredFeature[] {
+  const features: DesiredFeature[] = [];
+
+  // Base features by model type
+  if (model === 'Venue' || model === 'Elantra') {
+    features.push('affordable', 'reliable');
+  }
+
+  if (model === 'Ioniq 5' || model === 'Ioniq 6') {
+    features.push('fuel_efficient', 'tech');
+  }
+
+  if (model === 'Santa Fe' || model === 'Palisade') {
+    features.push('family', 'spacious');
+  }
+
+  if (model === 'Kona' || model === 'Tucson') {
+    features.push('reliable', 'fuel_efficient');
+  }
+
+  if (model === 'Sonata') {
+    features.push('reliable', 'tech');
+  }
+
+  // Trim-based features
+  if (trim === 'N Line') {
+    features.push('sporty');
+  }
+
+  if (trim === 'Limited' || trim === 'Ultimate' || trim === 'Calligraphy') {
+    features.push('luxury', 'tech');
+  }
+
+  // Ensure we have at least 2 features
+  if (features.length < 2) {
+    features.push('reliable');
+  }
+
+  // Remove duplicates
+  return [...new Set(features)];
+}
+
 export function generateInventory(count: number = 100): Car[] {
   const inventory: Car[] = [];
-  
+
   for (let i = 0; i < count; i++) {
     const model = pickRandom(MODELS);
     const availableTrims = MODEL_TRIMS[model];
     const trim = pickRandom(availableTrims);
     const color = pickRandom(COLORS);
-    
+
     // Calculate price based on model + trim
     const basePrice = MODEL_BASE_PRICES[model];
     const trimMultiplier = TRIM_MULTIPLIERS[trim];
     const msrp = Math.round(basePrice * trimMultiplier);
-    
+
     // Invoice is typically 92-95% of MSRP
     const invoice = Math.round(msrp * (0.92 + Math.random() * 0.03));
     const tax = Math.round(msrp * 0.07);
-    
+
     inventory.push({
       id: `CAR${i + 1}`,
       model: `2026 Hyundai ${model}`,
@@ -95,9 +158,11 @@ export function generateInventory(count: number = 100): Car[] {
       otd: msrp + 1000 + tax,
       mileage: 0,
       vin: `KM8${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
+      features: getVehicleFeatures(model, trim),
+      category: getVehicleCategory(model, msrp),
     });
   }
-  
+
   return inventory;
 }
 
