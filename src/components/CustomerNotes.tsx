@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Customer, VehicleCategory } from '../types/game';
 import { Search, DollarSign, List, Car } from 'lucide-react';
 

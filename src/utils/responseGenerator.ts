@@ -11,15 +11,7 @@ const CATEGORY_LABELS: Record<VehicleCategory, string> = {
   any: '', // Not used directly, handled separately
 };
 
-// Helper to format what type of car they want
-function formatCarType(customer: Customer): string {
-  if (customer.desiredCategory === 'any') {
-    // Not picky - just mention features
-    return `something ${formatFeatures(customer.desiredFeatures)}`;
-  }
-  // Has specific category
-  return CATEGORY_LABELS[customer.desiredCategory];
-}
+
 
 // ============ GREETING RESPONSES ============
 // Customer responds with what they're looking for
@@ -112,19 +104,7 @@ const CAR_REACTION_NEGATIVE: Record<PersonalityType, string[]> = {
 };
 
 
-// ============ NEEDS DISCLOSURE RESPONSES ============
-// Customer reveals what they want when asked directly
 
-const NEEDS_DISCLOSURE: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
-  friendly: (features, customer) => {
-    // Legacy fallback for general "what do you need"
-    return DISCOVERY_RESPONSES.type.friendly(customer);
-  },
-  serious: (features, customer) => DISCOVERY_RESPONSES.type.serious(customer),
-  skeptical: (features, customer) => DISCOVERY_RESPONSES.type.skeptical(customer),
-  enthusiastic: (features, customer) => DISCOVERY_RESPONSES.type.enthusiastic(customer),
-  analytical: (features, customer) => DISCOVERY_RESPONSES.type.analytical(customer),
-};
 
 const DISCOVERY_RESPONSES = {
   budget: {

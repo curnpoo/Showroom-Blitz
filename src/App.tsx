@@ -962,7 +962,7 @@ function App() {
     let response: string;
     let interestChange: number;
     let newPhase;
-    let isLost = false;
+
 
     if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
       // Pass the specific message type to override context
@@ -971,7 +971,7 @@ function App() {
       response = result.response;
       interestChange = result.interestChange;
       newPhase = result.newPhase;
-      isLost = !!result.isLost;
+
       
       realCustomer.conversationHistory.push(
         { role: 'user', content: question },
