@@ -51,6 +51,25 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+export interface CreditTier {
+  tier: number;
+  minAPR: number;
+  minDown?: number;
+  label: string;
+  color: string;
+}
+
+export function getCreditTier(score: number): CreditTier | null {
+  if (score >= 800) return { tier: 1, minAPR: 0, label: 'Tier 1 (Excellent)', color: '#2ecc71' };
+  if (score >= 750) return { tier: 2, minAPR: 2.5, label: 'Tier 2 (Very Good)', color: '#27ae60' };
+  if (score >= 700) return { tier: 3, minAPR: 4.0, label: 'Tier 3 (Good)', color: '#f1c40f' };
+  if (score >= 640) return { tier: 4, minAPR: 6.5, label: 'Tier 4 (Fair)', color: '#f39c12' };
+  if (score >= 570) return { tier: 5, minAPR: 8.9, label: 'Tier 5 (Subprime)', color: '#e67e22' };
+  if (score >= 500) return { tier: 6, minAPR: 10.0, minDown: 2000, label: 'Tier 6 (Deep Subprime)', color: '#d35400' };
+  if (score >= 450) return { tier: 7, minAPR: 13.0, minDown: 4000, label: 'Tier 7 (High Risk)', color: '#e74c3c' };
+  return null; // Does not qualify
+}
+
 function pickRandomCategory(): VehicleCategory {
   if (Math.random() < 0.4) {
     return 'any'; // Not picky
@@ -256,6 +275,8 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
 
   // ~20% chance for a difficult customer who won't reveal preferences
   const isDifficult = Math.random() < 0.2;
+  // ~30% chance for a guarded customer who reveals info slowly
+  const isGuarded = !isDifficult && Math.random() < 0.3;
   
   // Difficult customers have very low temper (10-30) and higher stubbornness
   const finalTemper = isDifficult ? Math.floor(10 + Math.random() * 20) : temper;
@@ -298,6 +319,9 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     creditScore: Math.floor(450 + Math.random() * 400), // Range: 450-850
     creditRevealed: false,
     isDifficult,
+    isGuarded,
+    offerCount: 0,
+    closeAttempts: 0,
   };
 }
 

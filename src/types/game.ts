@@ -62,6 +62,9 @@ export interface Customer {
   creditScore: number;
   creditRevealed: boolean;
   isDifficult: boolean; // Difficult customers won't reveal preferences and have short tempers
+  isGuarded: boolean; // Guarded customers initially say "just looking" and reveal info slowly
+  offerCount: number; // For "attrition" logic (repeatedly offering same deal)
+  closeAttempts: number; // Tracks how many times the player has tried to close the deal
 }
 
 export interface Coworker {

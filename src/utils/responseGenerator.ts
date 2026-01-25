@@ -260,6 +260,63 @@ const OFFER_TOO_HIGH: Record<PersonalityType, (counterOffer: number, isPayment: 
   ],
 };
 
+const CAVE_RESPONSES: Record<PersonalityType, string[]> = {
+  friendly: [
+      "You know what? You've been so patient with me. I'll do it.",
+      "Alright, alright. I really want this car. Let's make it work.",
+      "Okay, I'm tired of arguing. That's a deal."
+  ],
+  serious: [
+      "Fine. Market research suggests this is as good as it gets. Agreed.",
+      "I've analyzed the situation. Your offer is acceptable. Proceed.",
+      "Understood. I will accept these terms to conclude the transaction."
+  ],
+  skeptical: [
+      "Ugh, fine. I guess you're not budging. I'll take it.",
+      "Whatever. I'm over it. I'll sign the papers.",
+      "You win. I need a car and this one works. Fine."
+  ],
+  enthusiastic: [
+      "OMG OKAY! I just want to drive it home so bad! DEAL!",
+      "YAY! I'm so excited! Let's just do it! I want the car!!",
+      "I CAN'T WAIT! Okay, you got me! Let's sign!!"
+  ],
+  analytical: [
+      "Incremental gains are decreasing. Accepting current offer state.",
+      "Decision: Accept. Opportunity cost of further negotiation exceeds potential savings.",
+      "Terms acknowledged. Moving to execution phase."
+  ],
+};
+
+const PERSISTENCE_PUSHBACK: Record<PersonalityType, string[]> = {
+  friendly: [
+      "I'm sorry, I already said I can't quite do that yet.",
+      "We're still stuck on the same numbers. Is there anything else you can do?",
+      "I'd really love to buy from you, but you need to meet me somewhere."
+  ],
+  serious: [
+      "We are repeating ourselves. This is not productive.",
+      "You haven't changed your position. Neither will I.",
+      "State a new offer or this interaction is over."
+  ],
+  skeptical: [
+      "Are you even listening? I'm not doing that deal.",
+      "You're just repeating the same thing. Stop wasting my time.",
+      "Don't play games. Give me a better number or I'm out."
+  ],
+  enthusiastic: [
+      "Aww, but I already told you that doesn't work! Please help me out!",
+      "Why are we still here? Can't we just find a better way?",
+      "This is starting to be not fun! Let's get to a deal!"
+  ],
+  analytical: [
+      "Redundancy detected. No new data provided in offer.",
+      "Current iteration cycle is producing zero variance. Terminate or adjust.",
+      "Inefficient process. Move to new parameters immediately."
+  ],
+};
+
+
 const DOWN_PAYMENT_REJECTION: Record<PersonalityType, (offeredDown: number, desiredDown: number) => string[]> = {
   friendly: (offered, desired) => [
     `Oh, I can't put $${offered.toLocaleString()} down! I only have $${desired.toLocaleString()} saved up.`,
@@ -817,6 +874,8 @@ export interface ResponseContext {
   offerPrice?: number;
   offerType?: 'selling' | 'otd' | 'payment';
   offerDownPayment?: number;
+  offerAPR?: number;
+  offerTerm?: number;
 }
 
 export interface ResponseResult {
@@ -847,18 +906,22 @@ export function generateResponse(context: ResponseContext): ResponseResult {
   switch (messageType) {
     case 'greeting': {
       // Customer tells what they're looking for
-      response = pickRandom(GREETING_RESPONSES[personality](desiredFeatures, customer));
-      interestChange = 5; // Slight interest bump for engagement
+      if (customer.isGuarded) {
+         response = "Hello. I'm just looking today, I don't really want to answer any questions.";
+         interestChange = 2; // Neutral
+      } else {
+         response = pickRandom(GREETING_RESPONSES[personality](desiredFeatures, customer));
+         interestChange = 5; // Slight interest bump for engagement
+      }
       newPhase = 'needs_discovery';
       break;
     }
 
     case 'ask_budget': {
-      // Difficult customers refuse to reveal their budget
-      if (customer.isDifficult) {
+      // Difficult/Guarded customers refuse to reveal their budget
+      if (customer.isDifficult || customer.isGuarded) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.budget[personality]());
         interestChange = -5; // They're annoyed you asked
-        // DON'T reveal preferences - player must guess
       } else {
         response = pickRandom(DISCOVERY_RESPONSES.budget[personality](customer));
         customer.revealedPreferences.budget = true;
@@ -868,11 +931,10 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_type': {
-      // Difficult customers refuse to reveal their type preference
-      if (customer.isDifficult) {
+      // Difficult/Guarded customers refuse to reveal their type preference
+      if (customer.isDifficult || customer.isGuarded) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.type[personality]());
         interestChange = -5; // They're annoyed you asked
-        // DON'T reveal preferences - player must guess
       } else {
         response = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
         customer.revealedPreferences.type = true;
@@ -882,11 +944,10 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_features': {
-      // Difficult customers refuse to reveal their feature preferences
-      if (customer.isDifficult) {
+      // Difficult/Guarded customers refuse to reveal their feature preferences
+      if (customer.isDifficult || customer.isGuarded) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.features[personality]());
         interestChange = -5; // They're annoyed you asked
-        // DON'T reveal preferences - player must guess
       } else {
         response = pickRandom(DISCOVERY_RESPONSES.features[personality](customer));
         customer.revealedPreferences.features = true;
@@ -896,11 +957,10 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_model': {
-      // Difficult customers refuse to reveal their model preference
-      if (customer.isDifficult) {
+      // Difficult/Guarded customers refuse to reveal their model preference
+      if (customer.isDifficult || customer.isGuarded) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.model[personality]());
         interestChange = -5; // They're annoyed you asked
-        // DON'T reveal preferences - player must guess
       } else {
         response = pickRandom(DISCOVERY_RESPONSES.model[personality](customer));
         customer.revealedPreferences.model = true;
@@ -939,6 +999,14 @@ export function generateResponse(context: ResponseContext): ResponseResult {
         interestChange = 15;
         // Recovery: if they like the car, it can clear a strike
         if (customer.strikes > 0) customer.strikes--;
+        
+        // REVEAL: If they find a perfect match, reveal what they wanted anyway
+        if (customer.isGuarded) {
+          customer.revealedPreferences.features = true;
+          customer.revealedPreferences.type = true;
+          customer.revealedPreferences.model = true;
+        }
+
         newPhase = 'asking_numbers'; // They like it, ready for pricing
       } else {
         // Handle partial matches or total mismatches
@@ -957,12 +1025,26 @@ export function generateResponse(context: ResponseContext): ResponseResult {
           interestChange = -8;
         }
         
-        if (!isGoodMatch) {
-          customer.strikes++;
+        customer.strikes++;
+        
+        // GUARDED REVEAL LOGIC
+        if (customer.isGuarded) {
+           if (customer.strikes === 1) {
+              customer.revealedPreferences.features = true;
+              customer.revealedPreferences.type = true; // Revealed together
+              response += " Actually, I'm really looking for something " + formatFeatures(customer.desiredFeatures) + ".";
+           } else if (customer.strikes === 2) {
+              customer.revealedPreferences.model = true;
+              if (customer.desiredModel) {
+                 response += " Honestly, I really had my heart set on a " + customer.desiredModel + ".";
+              } else {
+                 response += " I just want " + CATEGORY_LABELS[customer.desiredCategory] + " that fits my needs.";
+              }
+           }
         }
         
         // Only leave if they have 3+ strikes AND interest is very low, OR if interest hits rock bottom
-        if ((customer.strikes >= 3 && interest + interestChange < 20) || interest + interestChange <= 0) {
+        if ((customer.strikes >= 3 && interest + interestChange < 20) || interest + interestChange <= 0 || (customer.strikes >= 3 && !isGoodMatch)) {
           isLost = true;
           response = pickRandom(FRUSTRATED_WALKING[personality]);
         } else {
@@ -990,14 +1072,49 @@ export function generateResponse(context: ResponseContext): ResponseResult {
         break;
       }
 
-      // Check for down payment mismatch
+      // Check for down payment mismatch (Finance specifically)
       if (offerType === 'payment' && context.offerDownPayment !== undefined) {
-         if (context.offerDownPayment > desiredDown * 1.05) { // 5% buffer
+          // If offer down > desired down, reject unless they are VERY happy
+          const diff = context.offerDownPayment - desiredDown;
+          if (diff > 500 && interest < 80) {
             response = pickRandom(DOWN_PAYMENT_REJECTION[personality](context.offerDownPayment, desiredDown));
-            interestChange = -15; // Significant drop for ignoring their constraints
+            interestChange = -10;
             newPhase = 'negotiation';
             break;
-         }
+          }
+      }
+
+      // GUARDED REVEAL: If they were guarded, reveal budget when an offer is made
+      if (customer.isGuarded) {
+         customer.revealedPreferences.budget = true;
+      }
+
+      // Increment offer count for attrition/persistence logic
+      customer.offerCount = (customer.offerCount || 0) + 1;
+
+      // ATTRITION LOGIC: Repeated offers
+      if (customer.offerCount > 4) {
+          const caveChance = (interest / 200) + (temper / 200); // Max 1.0 combined
+          if (Math.random() < caveChance) {
+              response = pickRandom(CAVE_RESPONSES[personality]);
+              interestChange = 10;
+              dealAccepted = true;
+              newPhase = 'closed';
+              break;
+          } else if (Math.random() < 0.3) {
+              // They leave!
+              response = pickRandom(FRUSTRATED_WALKING[personality]);
+              interestChange = -50;
+              isLost = true;
+              newPhase = 'closed';
+              break;
+          } else {
+              // Keep resisting
+              response = pickRandom(PERSISTENCE_PUSHBACK[personality]);
+              interestChange = -5;
+              newPhase = 'negotiation';
+              break;
+          }
       }
 
       // Calculate budget with mood modifier (high interest = up to 10% more)
@@ -1010,8 +1127,6 @@ export function generateResponse(context: ResponseContext): ResponseResult {
       const isPayment = offerType === 'payment';
 
       // Check for 'Great Deal' override (20% off MSRP)
-      // We need to know MSRP. In game logic, price on car object is usually MSRP.
-      // If offerPrice is significantly lower than currentCar.price, it overrides preferences.
       if (currentCar && offerPrice <= currentCar.price * 0.8) {
          response = pickRandom(DEAL_ACCEPTED_GREAT_VALUE[personality]);
          interestChange = 30;
@@ -1025,6 +1140,7 @@ export function generateResponse(context: ResponseContext): ResponseResult {
         // Deal accepted!
         response = pickRandom(DEAL_ACCEPTED[personality]);
         interestChange = 25;
+
         customer.strikes = 0; // Huge recovery on good offer
         dealAccepted = true;
         newPhase = 'closed';
@@ -1098,6 +1214,8 @@ export async function getAIResponse(
   contextOverrides?: Partial<ResponseContext>
 ): Promise<ResponseResult> {
   const playerSentiment = detectSentiment(message);
+  const messageType = contextOverrides?.messageType;
+  
   // Check for wild input first
   if (isWildInput(message)) {
     return {
@@ -1115,10 +1233,42 @@ export async function getAIResponse(
   // This allows the AI to answer naturally while we update the game state
   // We use the same regex patterns or check if contextOverrides passed a specific messageType
   
-  if (contextOverrides?.messageType === 'ask_budget') customer.revealedPreferences.budget = true;
-  if (contextOverrides?.messageType === 'ask_type') customer.revealedPreferences.type = true;
-  if (contextOverrides?.messageType === 'ask_features') customer.revealedPreferences.features = true;
-  if (contextOverrides?.messageType === 'ask_model') customer.revealedPreferences.model = true;
+  // Discovery questions only reveal for non-guarded/non-difficult customers
+  // Unless we decide guarded customers can be "cracked" via direct questioning (currently they refuse)
+  if (!customer.isGuarded && !customer.isDifficult) {
+    if (contextOverrides?.messageType === 'ask_budget') customer.revealedPreferences.budget = true;
+    if (contextOverrides?.messageType === 'ask_type') customer.revealedPreferences.type = true;
+    if (contextOverrides?.messageType === 'ask_features') customer.revealedPreferences.features = true;
+    if (contextOverrides?.messageType === 'ask_model') customer.revealedPreferences.model = true;
+  }
+
+  // Handle GUARDED progressive reveal for car_shown in AI path
+  if (customer.isGuarded && messageType === 'car_shown') {
+    // Check if the car is a match (mimic scripted logic for reveal triggers)
+    const categoryMatch = currentCar ? carMatchesCategory(currentCar, customer) : false;
+    const featureMatch = currentCar ? carMatchesFeatures(currentCar, customer.desiredFeatures) : { score: 0 };
+    const isPerfect = categoryMatch && featureMatch.score === 1;
+
+    if (!isPerfect) {
+      customer.strikes++;
+      if (customer.strikes === 1) {
+        customer.revealedPreferences.features = true;
+        customer.revealedPreferences.type = true; // Usually revealed together
+      } else if (customer.strikes === 2) {
+        customer.revealedPreferences.model = true;
+      }
+    } else {
+      // If it's a perfect match, reveal everything except maybe budget
+      customer.revealedPreferences.features = true;
+      customer.revealedPreferences.type = true;
+      customer.revealedPreferences.model = true;
+    }
+  }
+
+  // Also reveal budget if an offer is made while guarded
+  if (customer.isGuarded && messageType === 'offer') {
+    customer.revealedPreferences.budget = true;
+  }
 
   // Check for "Take it or leave it" ultimatum
   if (isTakeItOrLeaveIt(message)) {
@@ -1233,15 +1383,17 @@ export async function getAIResponse(
 
   // Also check natural language questions if no explicit type passed
 
-  if (!contextOverrides?.messageType) {
+  // ONLY auto-reveal from natural language if NOT guarded (or enough strikes passed)
+  if (!customer.isGuarded && !messageType) {
     if (/\b(budget|spend|cost|price|money)\b/i.test(message)) customer.revealedPreferences.budget = true;
     if (/\b(type|kind|style|suv|sedan)\b/i.test(message)) customer.revealedPreferences.type = true;
     if (/\b(feature|looking for|need|want|prefer)\b/i.test(message)) customer.revealedPreferences.features = true;
-    if (/\b(model|specific|mind)\b/i.test(message)) customer.revealedPreferences.model = true;
+    // Tighten model regex to avoid matching "2026 model" in sales talk
+    if (/\b(what|specific|which)\b.*\b(model|brand|make)\b/i.test(message)) customer.revealedPreferences.model = true;
   }
 
   // Check for needs/budget inquiry (legacy check - can remove or keep as fallback)
-  if (isNeedsInquiry(message)) {
+  if (!customer.isGuarded && isNeedsInquiry(message)) {
      // If matches general needs, reveal basic info
      customer.revealedPreferences.type = true;
      customer.revealedPreferences.features = true;
@@ -1258,6 +1410,11 @@ export async function getAIResponse(
     const { offerPrice, offerType, offerDownPayment } = contextOverrides;
     const { buyerType, budget, maxPayment, desiredDown, interest, personality, desiredFeatures } = customer;
     
+    // GUARDED REVEAL: Reveal budget when an offer is made
+    if (customer.isGuarded) {
+       customer.revealedPreferences.budget = true;
+    }
+
     // Check payment type mismatch
     if (buyerType === 'cash' && offerType === 'payment') {
       dealQuality = 'wrong_type';
@@ -1509,14 +1666,15 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, dealQuali
     }[dealQuality] || 'Respond naturally.';
 
     return `You are ${customer.name}, a ${customer.personality} car buyer.
+${customer.isGuarded ? 'Note: You are initially GUARDED and don\'t want to answer questions. You just want to "look". Only reveal your true needs if the salesperson shows you cars you don\'t like, or makes a specific offer.' : ''}
 Instruction: ${instruction}
 
-Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in character but be brief.`;
+Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in character but be brief.` + (customer.isGuarded && customer.strikes === 0 ? ' IMPORTANT: Since you are guarded and just started, if the player asks questions, politely decline to answer for now and say you are just looking.' : '');
   }
 
   // For general conversation (no offer)
   const isCash = customer.buyerType === 'cash';
-  
+
   // Special handling for difficult customers who refuse to share info
   const difficultInstructions = customer.isDifficult ? `
 IMPORTANT - DIFFICULT CUSTOMER MODE:
@@ -1528,7 +1686,19 @@ IMPORTANT - DIFFICULT CUSTOMER MODE:
 - You will NOT reveal your true preferences no matter what.
 ` : '';
 
+  // Special handling for guarded customers
+  const guardedInstructions = customer.isGuarded ? `
+IMPORTANT - GUARDED CUSTOMER MODE:
+- You are a GUARDED customer who initially says "just looking".
+- You don't want to answer questions right now.
+- If they ask for your budget or what you want, say you are just looking for now.
+- Only reveal information if they show you a car or make an offer (handled by the game state).
+- Since you haven't revealed much yet, stay in character as someone who wants to walk the lot alone.
+` : '';
+
   return `You are ${customer.name}, a ${customer.personality} car buyer.
+${guardedInstructions}
+${difficultInstructions}
 TRUE INFO (Use only if revealed or asked):
 - Budget: ${isCash ? `$${customer.budget.toLocaleString()} cash` : `$${customer.maxPayment}/mo with $${customer.desiredDown.toLocaleString()} down`}
 - Type: ${CATEGORY_LABELS[customer.desiredCategory] || "Any"}

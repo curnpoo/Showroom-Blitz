@@ -1023,6 +1023,25 @@ function App() {
     realCustomer.interest = Math.max(0, Math.min(100, realCustomer.interest + interestChange));
     if (newPhase) realCustomer.conversationPhase = newPhase;
     
+    // ZERO INTEREST = AUTO FAIL: Customer leaves immediately if interest hits 0
+    if (realCustomer.interest === 0) {
+      realCustomer.isLost = true;
+      realCustomer.conversationPhase = 'closed';
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I've completely lost interest. Good luck!",
+        serious: "I've had enough. I'm done here.",
+        skeptical: "This is a complete waste of my time. I'm out.",
+        enthusiastic: "I was really hopeful but... this isn't working at all. Goodbye.",
+        analytical: "Interest level has reached zero. Interaction terminated."
+      };
+      response = frustrationResponses[realCustomer.personality];
+      setConversation(prev => [...prev, { sender: 'customer', text: response }]);
+      setIsTyping(false);
+      setSelectedPerson({ ...realCustomer });
+      setTimeout(() => setShowLostDeal(true), 1000);
+      return; // Exit early
+    }
+    
     // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
     if (realCustomer.interest < 5 && Math.random() < 0.8) {
       realCustomer.isLost = true;
@@ -1069,7 +1088,7 @@ function App() {
     let isLost = false;
 
     if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
-      const result = await getAIResponse(selectedPerson, showText, car, settings);
+      const result = await getAIResponse(selectedPerson, showText, car, settings, { messageType: 'car_shown' });
       response = result.response;
       interestChange = result.interestChange;
       newPhase = result.newPhase;
@@ -1091,6 +1110,19 @@ function App() {
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
     if (newPhase) selectedPerson.conversationPhase = newPhase;
+    
+    // ZERO INTEREST = AUTO FAIL: Customer leaves immediately if interest hits 0
+    if (!isLost && selectedPerson.interest === 0) {
+      isLost = true;
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I've completely lost interest. Good luck!",
+        serious: "I've had enough. I'm done here.",
+        skeptical: "This is a complete waste of my time. I'm out.",
+        enthusiastic: "I was really hopeful but... this isn't working at all. Goodbye.",
+        analytical: "Interest level has reached zero. Interaction terminated."
+      };
+      response = frustrationResponses[selectedPerson.personality];
+    }
     
     // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
     if (!isLost && selectedPerson.interest < 5 && Math.random() < 0.8) {
@@ -1119,9 +1151,10 @@ function App() {
 
     let offerText = '';
     if (type === 'payment') {
-      offerText = `I can get you into this ${currentCar.model} for $${price}/month over ${paymentTerm} months.`;
+      offerText = `I can get you into this ${currentCar.model} for $${price}/month with $${downPayment.toLocaleString()} down at ${paymentAPR}% APR for ${paymentTerm} months.`;
     } else if (type === 'otd') {
-      offerText = `I can do $${price.toLocaleString()} out-the-door on the ${currentCar.model}.`;
+      const tax = Math.round(customSellingPrice * 0.07);
+      offerText = `I've got a total out-the-door price of $${price.toLocaleString()} for you. That's $${customSellingPrice.toLocaleString()} plus $${tax.toLocaleString()} tax and $${currentCar.fees.toLocaleString()} in fees.`;
     } else {
       offerText = `I can offer $${price.toLocaleString()} for the ${currentCar.model}.`;
     }
@@ -1129,7 +1162,7 @@ function App() {
     setConversation(prev => [...prev, { 
       sender: 'player', 
       text: offerText,
-      offerDetails: { price, type }
+      offerDetails: { price, type, downPayment, paymentAPR, paymentTerm }
     }]);
     setIsTyping(true);
 
@@ -1138,8 +1171,19 @@ function App() {
     let dealAccepted: boolean;
     let isLost = false;
 
+    const offerContext = {
+      customer: selectedPerson,
+      currentCar,
+      messageType: 'offer' as const,
+      offerPrice: price,
+      offerType: type,
+      offerDownPayment: downPayment,
+      offerAPR: paymentAPR,
+      offerTerm: paymentTerm
+    };
+
     if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
-      const result = await getAIResponse(selectedPerson, offerText, currentCar, settings);
+      const result = await getAIResponse(selectedPerson, offerText, currentCar, settings, offerContext);
       response = result.response;
       interestChange = result.interestChange;
       dealAccepted = result.dealAccepted;
@@ -1149,19 +1193,28 @@ function App() {
         { role: 'assistant', content: response }
       );
     } else {
-      const result = generateResponse({
-        customer: selectedPerson,
-        currentCar,
-        messageType: 'offer',
-        offerPrice: price,
-        offerType: type,
-      });
+      const result = generateResponse(offerContext);
       response = result.response;
       interestChange = result.interestChange;
       dealAccepted = result.dealAccepted;
+      isLost = !!result.isLost;
     }
 
+
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
+
+    // ZERO INTEREST = AUTO FAIL: Customer leaves immediately if interest hits 0
+    if (!isLost && !dealAccepted && selectedPerson.interest === 0) {
+      isLost = true;
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I've completely lost interest. Good luck!",
+        serious: "I've had enough. I'm done here.",
+        skeptical: "This is a complete waste of my time. I'm out.",
+        enthusiastic: "I was really hopeful but... this isn't working at all. Goodbye.",
+        analytical: "Interest level has reached zero. Interaction terminated."
+      };
+      response = frustrationResponses[selectedPerson.personality];
+    }
 
     // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
     if (!isLost && !dealAccepted && selectedPerson.interest < 5 && Math.random() < 0.8) {
@@ -1231,6 +1284,9 @@ function App() {
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
 
+    // Increment close attempts
+    selectedPerson.closeAttempts = (selectedPerson.closeAttempts || 0) + 1;
+
     // Check if customer already committed via "take it or leave it"
     const isCommitted = (selectedPerson as any).committedToBuy === true;
 
@@ -1238,16 +1294,41 @@ function App() {
     const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
     const likesThePrice = customerLikesThePrice(selectedPerson, agreedPrice);
 
+    // ATTRITION / PRESSURE SALE LOGIC
+    // If we've tried 3+ times and price is within 20% of base budget, give a small extra chance
+    const baseBudget = selectedPerson.buyerType === 'cash' ? selectedPerson.budget : selectedPerson.maxPayment;
+    const isWithin20Percent = agreedPrice > 0 && (agreedPrice <= baseBudget * 1.2);
+    const isAttritionSuccess = selectedPerson.closeAttempts >= 3 && isWithin20Percent && Math.random() < 0.15;
+
     // If either condition fails, provide specific feedback
-    if (!likesTheCar || !likesThePrice) {
-      const playerMessage = "Are you ready to sign the paperwork and drive this home today?";
+    if (!isAttritionSuccess && (!likesTheCar || !likesThePrice)) {
+      const closingQuestions = [
+        "Are you ready to sign the paperwork and drive this home today?",
+        "So, do we have a deal?",
+        "Can I get you to sign right here so we can get this cleaned up for you?",
+        "If I can get the detail team started now, can we wrap this up?",
+        "Are you ready to make this official?",
+        "Shall we head to the office and finalize everything?",
+        "Does this all look good enough to put your name on it today?"
+      ];
+      const playerMessage = closingQuestions[Math.floor(Math.random() * closingQuestions.length)];
       setConversation(prev => [...prev, { sender: 'player', text: playerMessage }]);
       setIsTyping(true);
 
       setTimeout(() => {
         let objection = "";
+        let isLeaving = selectedPerson.closeAttempts >= 4;
 
-        if (!likesTheCar && !likesThePrice) {
+        if (isLeaving) {
+          const leaveResponses = {
+            friendly: "I've told you I'm not ready, but you keep pushing. I think I'll try another dealership. Goodbye.",
+            serious: "This high-pressure tactic is unprofessional. I am leaving.",
+            skeptical: "I knew you were going to try and push me. I'm done here.",
+            enthusiastic: "Wow, okay... that's a lot of pressure. I think I need to go.",
+            analytical: "Persistent solicitation after negative feedback is inefficient. I am terminating this interaction."
+          };
+          objection = leaveResponses[selectedPerson.personality];
+        } else if (!likesTheCar && !likesThePrice) {
           // Both issues
           const responses = {
             friendly: "Honestly, I'm not sure this car is the right fit for me, and the price is a bit high...",
@@ -1285,9 +1366,15 @@ function App() {
           sentiment: 'mad'
         }]);
 
-        // Small penalty for pushing when they're not ready
-        selectedPerson.interest = Math.max(0, selectedPerson.interest - 5);
-        selectedPerson.conversationPhase = 'negotiation';
+        if (isLeaving) {
+          selectedPerson.isLost = true;
+          selectedPerson.conversationPhase = 'closed';
+          setTimeout(() => setShowLostDeal(true), 1000);
+        } else {
+          // Small penalty for pushing when they're not ready
+          selectedPerson.interest = Math.max(0, selectedPerson.interest - 5);
+          selectedPerson.conversationPhase = 'negotiation';
+        }
         setIsTyping(false);
       }, 1500);
 
@@ -1313,7 +1400,16 @@ function App() {
     }
 
     // Add player message
-    const playerMessage = "Are you ready to sign the paperwork and drive this home today?";
+    const closingQuestions = [
+      "Are you ready to sign the paperwork and drive this home today?",
+      "So, do we have a deal?",
+      "Can I get you to sign right here so we can get this cleaned up for you?",
+      "If I can get the detail team started now, can we wrap this up?",
+      "Are you ready to make this official?",
+      "Shall we head to the office and finalize everything?",
+      "Does this all look good enough to put your name on it today?"
+    ];
+    const playerMessage = closingQuestions[Math.floor(Math.random() * closingQuestions.length)];
     setConversation(prev => [...prev, { sender: 'player', text: playerMessage }]);
     setIsTyping(true);
 
@@ -1331,19 +1427,29 @@ function App() {
       successChance += contextBonus;
 
       const roll = Math.random();
-      const isSuccess = roll < successChance;
+      const isSuccess = (roll < successChance) || isAttritionSuccess;
       let response = "";
 
       if (isSuccess) {
         // Success!
-        const responses = {
-          friendly: "You know what? Let's do it! I'm excited!",
-          serious: "Acceptable. Let's proceed with the paperwork.",
-          skeptical: "Fine, you earned it. The deal is fair enough.",
-          enthusiastic: "YES! Let's do it! I'm SO ready to drive this home!",
-          analytical: "The numbers align with my targeted metrics. I accept."
-        };
-        response = responses[selectedPerson.personality];
+        if (isAttritionSuccess) {
+           const persistenceResponses = [
+             "You're persistent, I'll give you that. Fine, let's just get it over with. I'll take it.",
+             "Alright, alright! You've worn me down. I'll sign the papers.",
+             "You know what? Life is short. Let's do this deal.",
+             "I'm tired of negotiating. If you can get me out of here in an hour, we have a deal."
+           ];
+           response = persistenceResponses[Math.floor(Math.random() * persistenceResponses.length)];
+        } else {
+           const responses = {
+             friendly: "You know what? Let's do it! I'm excited!",
+             serious: "Acceptable. Let's proceed with the paperwork.",
+             skeptical: "Fine, you earned it. The deal is fair enough.",
+             enthusiastic: "YES! Let's do it! I'm SO ready to drive this home!",
+             analytical: "The numbers align with my targeted metrics. I accept."
+           };
+           response = responses[selectedPerson.personality];
+        }
         setConversation(prev => [...prev, {
           sender: 'customer',
           text: response,
@@ -1359,46 +1465,62 @@ function App() {
         setShowDealClosed(true);
 
       } else {
-        // Fail - determine if it's "thinking" or "objection"
-        const isObjection = Math.random() > 0.5;
+        // FAILURE
+        let response = "";
+        let isLeaving = selectedPerson.closeAttempts >= 4;
 
-        if (isObjection) {
-          // Harder rejection but REDUCED penalty (was 10) to avoid tanking too hard
-          const penalty = 5;
-          selectedPerson.interest = Math.max(0, selectedPerson.interest - penalty);
-
-          const responses = {
-            friendly: "I'm still not 100% sure about the price... it's a bit of a stretch.",
-            serious: "The terms are not yet where I need them to be.",
-            skeptical: "I feel like there's a better deal elsewhere. Not ready.",
-            enthusiastic: "I want it, but my wallet is telling me to wait...",
-            analytical: "The value proposition does not yet justify the expenditure."
+        if (isLeaving) {
+          const leaveResponses = {
+            friendly: "I've told you I'm not ready, but you keep pushing. I think I'll try another dealership. Goodbye.",
+            serious: "This high-pressure tactic is unprofessional. I am leaving.",
+            skeptical: "I knew you were going to try and push me. I'm done here.",
+            enthusiastic: "Wow, okay... that's a lot of pressure. I think I need to go.",
+            analytical: "Persistent solicitation after negative feedback is inefficient. I am terminating this interaction."
           };
-          response = responses[selectedPerson.personality];
-
-          setConversation(prev => [...prev, {
-             sender: 'customer',
-             text: response,
-             sentiment: 'mad'
-          }]);
+          response = leaveResponses[selectedPerson.personality];
         } else {
-          // Soft "thinking about it" - no penalty
-          const responses = {
-            friendly: "I really like it, but let me think it over for a just a minute.",
-            serious: "I need a moment to consider the final figures.",
-            skeptical: "Let me verify these numbers one more time.",
-            enthusiastic: "It's so nice! I just need to take a deep breath before deciding.",
-            analytical: "I need to run the calculations once more to be certain."
-          };
-          response = responses[selectedPerson.personality];
+          // Fail - determine if it's "thinking" or "objection"
+          const isObjection = Math.random() > 0.5;
 
-          setConversation(prev => [...prev, {
-             sender: 'customer',
-             text: response,
-             sentiment: 'neutral'
-          }]);
+          if (isObjection) {
+            // Harder rejection but REDUCED penalty (was 10) to avoid tanking too hard
+            const penalty = 5;
+            selectedPerson.interest = Math.max(0, selectedPerson.interest - penalty);
+
+            const responses = {
+              friendly: "I'm still not 100% sure about the price... it's a bit of a stretch.",
+              serious: "The terms are not yet where I need them to be.",
+              skeptical: "I feel like there's a better deal elsewhere. Not ready.",
+              enthusiastic: "I want it, but my wallet is telling me to wait...",
+              analytical: "The value proposition does not yet justify the expenditure."
+            };
+            response = responses[selectedPerson.personality];
+          } else {
+            // Soft "thinking about it" - no penalty
+            const responses = {
+              friendly: "I really like it, but let me think it over for a just a minute.",
+              serious: "I need a moment to consider the final figures.",
+              skeptical: "Let me verify these numbers one more time.",
+              enthusiastic: "It's so nice! I just need to take a deep breath before deciding.",
+              analytical: "I need to run the calculations once more to be certain."
+            };
+            response = responses[selectedPerson.personality];
+          }
         }
-        selectedPerson.conversationPhase = 'negotiation';
+
+        setConversation(prev => [...prev, {
+          sender: 'customer',
+          text: response,
+          sentiment: 'mad'
+        }]);
+
+        if (isLeaving) {
+          selectedPerson.isLost = true;
+          selectedPerson.conversationPhase = 'closed';
+          setTimeout(() => setShowLostDeal(true), 1000);
+        } else {
+          selectedPerson.conversationPhase = 'negotiation';
+        }
       }
 
       setIsTyping(false);
@@ -1633,6 +1755,19 @@ function App() {
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
     if (newPhase) selectedPerson.conversationPhase = newPhase as typeof selectedPerson.conversationPhase;
+    
+    // ZERO INTEREST = AUTO FAIL: Customer leaves immediately if interest hits 0
+    if (!isLost && !dealAccepted && selectedPerson.interest === 0) {
+      isLost = true;
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I've completely lost interest. Good luck!",
+        serious: "I've had enough. I'm done here.",
+        skeptical: "This is a complete waste of my time. I'm out.",
+        enthusiastic: "I was really hopeful but... this isn't working at all. Goodbye.",
+        analytical: "Interest level has reached zero. Interaction terminated."
+      };
+      response = frustrationResponses[selectedPerson.personality];
+    }
     
     if (dealAccepted) {
       // Customer is committed to buying! But don't auto-close.

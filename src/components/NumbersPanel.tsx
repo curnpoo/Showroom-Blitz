@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Car, OfferType, Customer } from '../types/game';
-import { calculatePayment, calculateOTDFromPayment } from '../utils/gameLogic';
+import { calculatePayment, calculateOTDFromPayment, getCreditTier } from '../utils/gameLogic';
 
 interface NumbersPanelProps {
   isOpen: boolean;
@@ -56,7 +57,7 @@ export function NumbersPanel({
         <div className="panel-backdrop" onClick={onClose} />
         <div className="side-panel">
              <div className="panel-header">
-                <h3>Price Breakdown</h3>
+                <h3>Numbers</h3>
                 <button className="panel-close" onClick={onClose}>×</button>
             </div>
             <div className="panel-content">
@@ -94,7 +95,7 @@ export function NumbersPanel({
   return (
     <div className="side-panel in-container">
          <div className="panel-header">
-            <h3>Price Breakdown</h3>
+            <h3>Numbers</h3>
             <button className="panel-close" onClick={onClose}>×</button>
         </div>
         <div className="panel-content">
@@ -146,24 +147,41 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
         onCustomerUpdate,
     } = props;
 
+    const [activeTab, setActiveTab] = useState<'cash' | 'finance'>(customer?.buyerType === 'payment' ? 'finance' : 'cash');
+    const [isSubmittingApp, setIsSubmittingApp] = useState(false);
+
     const runCreditCheck = () => {
         if (!customer) return;
-        // Simulate delay? For now instant
-        onCustomerUpdate({
-            ...customer,
-            creditRevealed: true
-        });
+        
+        setIsSubmittingApp(true);
+        
+        // Simulate credit pull delay
+        setTimeout(() => {
+            const tier = getCreditTier(customer.creditScore);
+            if (tier) {
+                setPaymentAPR(tier.minAPR);
+                // Re-calculate payment with new APR
+                setCustomPayment(calculatePayment(customOTDPrice, downPayment, tier.minAPR, paymentTerm));
+            }
+
+            onCustomerUpdate({
+                ...customer,
+                creditRevealed: true
+            });
+            setIsSubmittingApp(false);
+        }, 1500);
     };
 
     const getCreditStatus = (score: number) => {
-        if (score >= 720) return { label: 'Excellent', color: '#2ecc71' };
-        if (score >= 640) return { label: 'Fair', color: '#f39c12' };
-        return { label: 'Poor', color: '#e74c3c' };
+        const tier = getCreditTier(score);
+        if (!tier) return { label: 'Does Not Qualify', color: '#e74c3c' };
+        return { label: tier.label, color: tier.color };
     };
 
     return (
-        <div className="numbers-section">
-          <div className="internal-info">
+        <div className="numbers-form-wrapper" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          {/* Always Visible Section */}
+          <div className="internal-info" style={{ margin: '12px 16px', marginBottom: '8px' }}>
             <h4 style={{ color: '#f39c12', marginBottom: '8px', fontSize: '0.8rem' }}>Internal Info</h4>
             <div className="row">
               <span className="label">Invoice Cost:</span>
@@ -183,189 +201,273 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
             </div>
           </div>
 
-          <div className="price-breakdown">
-            <div className="row">
-              <span>Vehicle Price:</span>
-              <span>${currentCar.price.toLocaleString()}</span>
-            </div>
-            <div className="row">
-              <span>Tax (7%):</span>
-              <span>${Math.round(customSellingPrice * 0.07).toLocaleString()}</span>
-            </div>
-            <div className="row">
-              <span>Fees:</span>
-              <span>${currentCar.fees.toLocaleString()}</span>
-            </div>
-            <div className="row total">
-              <span>Out-the-Door:</span>
-              <span>${(customSellingPrice + Math.round(customSellingPrice * 0.07) + currentCar.fees).toLocaleString()}</span>
-            </div>
-          </div>
-
-          <div className="offer-section">
-            <h4>Make Offer</h4>
-            <div className="offer-row">
-              <label>Selling Price:</label>
-              <div className="input-group">
-                <input
-                  type="number"
-                  value={customSellingPrice}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0;
-                    setCustomSellingPrice(val);
-                    setCustomOTDPrice(val + Math.round(val * 0.07) + currentCar.fees);
-                  }}
-                />
-              </div>
-            </div>
-            <div className="offer-row">
-              <label>Out-the-Door:</label>
-              <div className="input-group">
-                <input
-                  type="number"
-                  value={customOTDPrice}
-                  onChange={(e) => {
-                    const otd = parseInt(e.target.value) || 0;
-                    setCustomOTDPrice(otd);
-                    // Back-calculate selling price from OTD
-                    const sellingPrice = Math.round((otd - currentCar.fees) / 1.07);
-                    setCustomSellingPrice(sellingPrice);
-                  }}
-                />
-                <button className="green" onClick={() => makeOffer(customOTDPrice, 'otd')}>
-                  Offer
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {showDealClosed && (
-            <button className="sign-deal-btn" onClick={signDeal}>
-              ✍️ SIGN HERE - SOLD!
+          {/* Tab Navigation */}
+          <div className="panel-tabs">
+            <button 
+                className={`panel-tab ${activeTab === 'cash' ? 'active' : ''}`}
+                onClick={() => setActiveTab('cash')}
+            >
+                Cash / OTD
             </button>
-          )}
+            <button 
+                className={`panel-tab ${activeTab === 'finance' ? 'active' : ''}`}
+                onClick={() => setActiveTab('finance')}
+            >
+                Finance
+            </button>
+          </div>
 
-          <div className="payment-calculator">
-            <h4>Payment Calculator</h4>
-            
-            {customer && customer.buyerType === 'payment' && (
-                <div className="credit-section" style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Credit Status</span>
-                        {customer.creditRevealed && (
-                            <span style={{ 
-                                color: getCreditStatus(customer.creditScore).color, 
-                                fontWeight: 'bold' 
-                            }}>
-                                {customer.creditScore} ({getCreditStatus(customer.creditScore).label})
-                            </span>
-                        )}
-                    </div>
-                    
-                    {!customer.creditRevealed ? (
-                        <button 
-                            className="blue" 
-                            style={{ width: '100%', padding: '8px' }}
-                            onClick={runCreditCheck}
-                        >
-                            Run Credit Application
-                        </button>
-                    ) : (
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                           {customer.creditScore < 550 ? (
-                               downPayment >= 7500 ? (
-                                   <span style={{ color: '#f39c12' }}>⚠️ Approved (High Down Exception)</span>
-                               ) : (
-                                   <span style={{ color: '#c0392b' }}>⚠️ Bank Declined: Score too low (&lt; $7,500 down).</span>
-                               )
-                           ) : customer.creditScore < 620 ? (
-                               <span style={{ color: '#d35400' }}>⚠️ Subprime: Minimum 10% APR required.</span>
-                           ) : (
-                               <span style={{ color: '#27ae60' }}>✅ Approved for Tier 1 Rates.</span>
-                           )}
-                        </div>
-                    )}
+          {/* Scrollable Content Area */}
+          <div className="numbers-section" style={{ flex: 1, overflowY: 'auto' }}>
+            {activeTab === 'cash' && (
+              <div className="tab-content-fade-in">
+                <div className="price-breakdown">
+                  <div className="row">
+                    <span>Vehicle Price:</span>
+                    <span>${currentCar.price.toLocaleString()}</span>
+                  </div>
+                  <div className="row">
+                    <span>Tax (7%):</span>
+                    <span>${Math.round(customSellingPrice * 0.07).toLocaleString()}</span>
+                  </div>
+                  <div className="row">
+                    <span>Fees:</span>
+                    <span>${currentCar.fees.toLocaleString()}</span>
+                  </div>
+                  <div className="row total">
+                    <span>Out-the-Door:</span>
+                    <span>${(customSellingPrice + Math.round(customSellingPrice * 0.07) + currentCar.fees).toLocaleString()}</span>
+                  </div>
                 </div>
+
+                <div className="offer-section">
+                  <h4>Make Offer</h4>
+                  <div className="offer-row">
+                    <label>Selling Price:</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        value={customSellingPrice}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setCustomSellingPrice(val);
+                          setCustomOTDPrice(val + Math.round(val * 0.07) + currentCar.fees);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="offer-row">
+                    <label>Out-the-Door:</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        value={customOTDPrice}
+                        onChange={(e) => {
+                          const otd = parseInt(e.target.value) || 0;
+                          setCustomOTDPrice(otd);
+                          // Back-calculate selling price from OTD
+                          const sellingPrice = Math.round((otd - currentCar.fees) / 1.07);
+                          setCustomSellingPrice(sellingPrice);
+                        }}
+                      />
+                      <button className="green" onClick={() => makeOffer(customOTDPrice, 'otd')}>
+                        Offer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-            <div className="calc-grid">
-              <div className="calc-field">
-                <label>Down:</label>
-                <input
-                  type="number"
-                  value={downPayment}
-                  onChange={(e) => {
-                    const dp = parseInt(e.target.value) || 0;
-                    setDownPayment(dp);
-                    setCustomPayment(calculatePayment(customOTDPrice, dp, paymentAPR, paymentTerm));
-                  }}
-                />
+
+            {activeTab === 'finance' && (
+              <div className="tab-content-fade-in">
+                <div className="payment-calculator" style={{ borderTop: 'none', paddingTop: 0 }}>
+                  <h4>Payment Calculator</h4>
+                  
+                  {customer && customer.buyerType === 'payment' && (
+                      <div className="credit-section" style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#333' }}>Credit Status</span>
+                              {customer.creditRevealed && (
+                                  <span style={{ 
+                                      color: getCreditStatus(customer.creditScore).color, 
+                                      fontWeight: 'bold' 
+                                  }}>
+                                      {customer.creditScore} ({getCreditStatus(customer.creditScore).label})
+                                  </span>
+                              )}
+                          </div>
+                          
+                          {!customer.creditRevealed ? (
+                              <button 
+                                  className="blue" 
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '10px', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    gap: '8px'
+                                  }}
+                                  onClick={runCreditCheck}
+                                  disabled={isSubmittingApp}
+                              >
+                                  {isSubmittingApp ? (
+                                    <>
+                                      <span className="spinner-small" /> Checking Credit...
+                                    </>
+                                  ) : (
+                                    'Run Credit Application'
+                                  )}
+                              </button>
+                          ) : (
+                              <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                                 {(() => {
+                                     const tier = getCreditTier(customer.creditScore);
+                                     if (!tier) {
+                                         return (
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <span style={{ color: '#c0392b' }}>❌ Does Not Qualify: Score under 450.</span>
+                                                 <button 
+                                                     className="green" 
+                                                     style={{ fontSize: '0.8rem', padding: '5px' }}
+                                                     onClick={() => onCustomerUpdate({...customer, buyerType: 'cash'})}
+                                                 >
+                                                     Switch to Cash Deal
+                                                 </button>
+                                             </div>
+                                         );
+                                     }
+                                     const meetsDown = !tier.minDown || downPayment >= tier.minDown;
+                                     return (
+                                         <div style={{ 
+                                            display: 'flex', 
+                                            flexDirection: 'column', 
+                                            gap: '6px',
+                                            padding: '8px',
+                                            backgroundColor: '#fff',
+                                            border: `1px solid ${tier.color}`,
+                                            borderRadius: '6px'
+                                         }}>
+                                             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>
+                                                <span style={{ color: tier.color, fontWeight: 'bold', fontSize: '1rem' }}>Tier {tier.tier} Approved</span>
+                                             </div>
+                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Minimum APR:</span>
+                                                <span style={{ fontWeight: 'bold' }}>{tier.minAPR}%</span>
+                                             </div>
+                                             {tier.minDown && (
+                                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: meetsDown ? '#27ae60' : '#c0392b' }}>
+                                                     <span>Min Down Payment:</span>
+                                                     <span style={{ fontWeight: 'bold' }}>
+                                                        {meetsDown ? '✅' : '❌'} ${tier.minDown.toLocaleString()}
+                                                     </span>
+                                                 </div>
+                                             )}
+                                         </div>
+                                     );
+                                 })()}
+                              </div>
+                          )}
+                      </div>
+                  )}
+
+                  <div className="calc-grid">
+                    <div className="calc-field">
+                      <label>Down:</label>
+                      <input
+                        type="number"
+                        value={downPayment}
+                        onChange={(e) => {
+                          const dp = parseInt(e.target.value) || 0;
+                          setDownPayment(dp);
+                          setCustomPayment(calculatePayment(customOTDPrice, dp, paymentAPR, paymentTerm));
+                        }}
+                      />
+                    </div>
+                    <div className="calc-field">
+                      <label>APR:</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={customer?.creditRevealed ? getCreditTier(customer.creditScore)?.minAPR : 0}
+                        value={paymentAPR}
+                        onChange={(e) => {
+                          let apr = parseFloat(e.target.value) || 0;
+                          if (customer?.creditRevealed) {
+                              const tier = getCreditTier(customer.creditScore);
+                              if (tier && apr < tier.minAPR) {
+                                  apr = tier.minAPR;
+                              }
+                          }
+                          setPaymentAPR(apr);
+                          setCustomPayment(calculatePayment(customOTDPrice, downPayment, apr, paymentTerm));
+                        }}
+                      />
+                    </div>
+                    <div className="calc-field">
+                      <label>Months:</label>
+                      <select
+                        value={paymentTerm}
+                        onChange={(e) => {
+                          const term = parseInt(e.target.value);
+                          setPaymentTerm(term);
+                          setCustomPayment(calculatePayment(customOTDPrice, downPayment, paymentAPR, term));
+                        }}
+                      >
+                        <option value="36">36</option>
+                        <option value="48">48</option>
+                        <option value="60">60</option>
+                        <option value="72">72</option>
+                        <option value="84">84</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="offer-row">
+                    <label>Monthly Payment:</label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        value={customPayment}
+                        onChange={(e) => {
+                          const payment = parseInt(e.target.value) || 0;
+                          setCustomPayment(payment);
+                          const newOTD = calculateOTDFromPayment(payment, downPayment, paymentAPR, paymentTerm);
+                          setCustomOTDPrice(newOTD);
+                          setCustomSellingPrice(Math.round((newOTD - currentCar.fees) / 1.07));
+                        }}
+                      />
+                      <button 
+                        className="purple" 
+                        onClick={() => makeOffer(customPayment, 'payment')}
+                        disabled={!customer || customer.buyerType !== 'payment' || !customer.creditRevealed}
+                        style={{ 
+                          opacity: !customer || customer.buyerType !== 'payment' || !customer.creditRevealed ? 0.5 : 1, 
+                          cursor: !customer || customer.buyerType !== 'payment' || !customer.creditRevealed ? 'not-allowed' : 'pointer' 
+                        }}
+                      >
+                        Offer
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="calculated-payment">
+                    Calculated: ${calculatePayment(customOTDPrice, downPayment, paymentAPR, paymentTerm)}/mo
+                    <br />
+                    <span className={`profit ${Math.round((customOTDPrice - currentCar.fees) / 1.07) - currentCar.invoice < 0 ? 'loss' : ''}`} style={{ color: 'inherit' }}>
+                      Payment Profit: ${(Math.round((customOTDPrice - currentCar.fees) / 1.07) - currentCar.invoice).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="calc-field">
-                <label>APR:</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={paymentAPR}
-                  onChange={(e) => {
-                    const apr = parseFloat(e.target.value) || 0;
-                    setPaymentAPR(apr);
-                    setCustomPayment(calculatePayment(customOTDPrice, downPayment, apr, paymentTerm));
-                  }}
-                />
-              </div>
-              <div className="calc-field">
-                <label>Months:</label>
-                <select
-                  value={paymentTerm}
-                  onChange={(e) => {
-                    const term = parseInt(e.target.value);
-                    setPaymentTerm(term);
-                    setCustomPayment(calculatePayment(customOTDPrice, downPayment, paymentAPR, term));
-                  }}
-                >
-                  <option value="36">36</option>
-                  <option value="48">48</option>
-                  <option value="60">60</option>
-                  <option value="72">72</option>
-                  <option value="84">84</option>
-                </select>
-              </div>
-            </div>
-            <div className="offer-row">
-              <label>Monthly Payment:</label>
-              <div className="input-group">
-                <input
-                  type="number"
-                  value={customPayment}
-                  onChange={(e) => {
-                    const payment = parseInt(e.target.value) || 0;
-                    setCustomPayment(payment);
-                    // Recalculate OTD and selling price based on new payment
-                    const newOTD = calculateOTDFromPayment(payment, downPayment, paymentAPR, paymentTerm);
-                    setCustomOTDPrice(newOTD);
-                    setCustomSellingPrice(Math.round((newOTD - currentCar.fees) / 1.07));
-                  }}
-                />
-                <button 
-                  className="purple" 
-                  onClick={() => makeOffer(customPayment, 'payment')}
-                  disabled={customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500))}
-                  style={{ 
-                    opacity: customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500)) ? 0.5 : 1, 
-                    cursor: customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500)) ? 'not-allowed' : 'pointer' 
-                  }}
-                >
-                  Offer
-                </button>
-              </div>
-            </div>
-            <div className="calculated-payment">
-              Calculated: ${calculatePayment(customOTDPrice, downPayment, paymentAPR, paymentTerm)}/mo
-              <br />
-              <span className={`profit ${Math.round((customOTDPrice - currentCar.fees) / 1.07) - currentCar.invoice < 0 ? 'loss' : ''}`} style={{ color: 'inherit' }}>
-                Payment Profit: ${(Math.round((customOTDPrice - currentCar.fees) / 1.07) - currentCar.invoice).toLocaleString()}
-              </span>
-            </div>
+            )}
+
+            {showDealClosed && (
+              <button className="sign-deal-btn" onClick={signDeal}>
+                ✍️ SIGN HERE - SOLD!
+              </button>
+            )}
           </div>
         </div>
     );
