@@ -277,7 +277,6 @@ export function ChatInterface({
               onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               className="chat-input"
               placeholder="Type message..."
-              autoFocus
             />
             <button onClick={() => sendMessage()} className="chat-send-btn">
               <Send size={18} />
