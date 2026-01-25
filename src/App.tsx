@@ -1363,6 +1363,9 @@ function App() {
     if (!selectedPerson || !currentCar) return;
 
     selectedPerson.active = false;
+    
+    // Remove customer from the showroom
+    customersRef.current = customersRef.current.filter(c => c.id !== selectedPerson.id);
 
     // Calculate profit properly based on offer type
     let profit = 0;
