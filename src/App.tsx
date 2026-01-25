@@ -256,12 +256,12 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation]);
 
-  // Focus input when chat opens
+  // Focus input when chat opens (desktop only - don't trigger mobile keyboard automatically)
   useEffect(() => {
-    if (showInput && inputRef.current) {
+    if (showInput && inputRef.current && !isMobile) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [showInput]);
+  }, [showInput, isMobile]);
 
   // Get canvas scale factor for responsive sizing
   const getCanvasScale = useCallback(() => {
