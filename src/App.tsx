@@ -1023,6 +1023,25 @@ function App() {
     realCustomer.interest = Math.max(0, Math.min(100, realCustomer.interest + interestChange));
     if (newPhase) realCustomer.conversationPhase = newPhase;
     
+    // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
+    if (realCustomer.interest < 5 && Math.random() < 0.8) {
+      realCustomer.isLost = true;
+      realCustomer.conversationPhase = 'closed';
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I don't think this is going to work out. Good luck!",
+        serious: "I've had enough. I'm leaving.",
+        skeptical: "This is a waste of my time. I'm out.",
+        enthusiastic: "Okay, I was really hopeful but... I need to leave.",
+        analytical: "The interaction has become unproductive. Terminating."
+      };
+      response = frustrationResponses[realCustomer.personality];
+      setConversation(prev => [...prev, { sender: 'customer', text: response }]);
+      setIsTyping(false);
+      setSelectedPerson({ ...realCustomer });
+      setTimeout(() => setShowLostDeal(true), 1000);
+      return; // Exit early
+    }
+    
     // Force state update by creating a shallow clone of the updated real customer
     setSelectedPerson({ ...realCustomer });
     
@@ -1072,6 +1091,20 @@ function App() {
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
     if (newPhase) selectedPerson.conversationPhase = newPhase;
+    
+    // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
+    if (!isLost && selectedPerson.interest < 5 && Math.random() < 0.8) {
+      isLost = true;
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I don't think this is going to work out. Good luck!",
+        serious: "I've had enough. I'm leaving.",
+        skeptical: "This is a waste of my time. I'm out.",
+        enthusiastic: "Okay, I was really hopeful but... I need to leave.",
+        analytical: "The interaction has become unproductive. Terminating."
+      };
+      response = frustrationResponses[selectedPerson.personality];
+    }
+    
     if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
@@ -1129,6 +1162,19 @@ function App() {
     }
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
+
+    // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
+    if (!isLost && !dealAccepted && selectedPerson.interest < 5 && Math.random() < 0.8) {
+      isLost = true;
+      const frustrationResponses = {
+        friendly: "I'm sorry, but I don't think this is going to work out. Good luck!",
+        serious: "I've had enough. I'm leaving.",
+        skeptical: "This is a waste of my time. I'm out.",
+        enthusiastic: "Okay, I was really hopeful but... I need to leave.",
+        analytical: "The interaction has become unproductive. Terminating."
+      };
+      response = frustrationResponses[selectedPerson.personality];
+    }
 
     if (dealAccepted) {
       setAgreedPrice(price);

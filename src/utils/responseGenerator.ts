@@ -167,6 +167,39 @@ const DISCOVERY_RESPONSES = {
   }
 };
 
+// ============ DIFFICULT CUSTOMER EVASIVE RESPONSES ============
+// These customers refuse to share preferences - player must guess
+const DIFFICULT_CUSTOMER_RESPONSES = {
+  budget: {
+    friendly: () => ["I'd rather not say exactly... just show me what you have.", "Oh, I'm flexible on price. Let's just see what's available."],
+    serious: () => ["That's my business. Show me the cars.", "I'll tell you if it's too expensive. Move on."],
+    skeptical: () => ["Why do you need to know? So you can charge me more?", "None of your business. Just show me cars."],
+    enthusiastic: () => ["Let's not worry about that yet! I want to see what you have!", "Money talk later! Show me cars!"],
+    analytical: () => ["I prefer not to anchor the negotiation. Proceed.", "That information is classified for now."],
+  },
+  type: {
+    friendly: () => ["I'm not really sure, honestly. What do you recommend?", "I don't know, maybe you can figure it out!"],
+    serious: () => ["Just show me your best vehicles.", "I'll know it when I see it."],
+    skeptical: () => ["Why should I tell you? Just show me everything.", "Does it matter? I'm the customer here."],
+    enthusiastic: () => ["Surprise me! I'm open to anything!", "I'll know when I see it! Show me stuff!"],
+    analytical: () => ["I'm evaluating multiple categories. That's all you need to know.", "Data gathering phase. Show me options."],
+  },
+  features: {
+    friendly: () => ["Oh, just something nice I guess?", "I'm not really sure what I need... maybe you can help?"],
+    serious: () => ["I have my requirements. You'll see if you meet them.", "Stop asking questions and show me cars."],
+    skeptical: () => ["I'm not giving you a checklist to upsell me.", "That's for me to know."],
+    enthusiastic: () => ["I want it all! Just show me cool stuff!", "Everything! Or anything! Whatever!"],
+    analytical: () => ["My criteria are confidential. Present your inventory.", "Feature requirements are undisclosed."],
+  },
+  model: {
+    friendly: () => ["I haven't decided yet, maybe you can help!", "Not really set on anything specific..."],
+    serious: () => ["Show me what you have. I'll decide.", "That's not relevant. Show me the lot."],
+    skeptical: () => ["So you can tell me it's sold? Just show me what's here.", "I'm not telling you that."],
+    enthusiastic: () => ["I don't know! What's cool?!", "Surprise me!"],
+    analytical: () => ["Model selection is pending further data collection.", "TBD based on comparative analysis."],
+  }
+};
+
 // ============ NEGOTIATION RESPONSES ============
 
 const OFFER_TOO_HIGH: Record<PersonalityType, (counterOffer: number, isPayment: boolean, desiredDown?: number) => string[]> = {
@@ -821,30 +854,58 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_budget': {
-      response = pickRandom(DISCOVERY_RESPONSES.budget[personality](customer));
-      customer.revealedPreferences.budget = true;
-      interestChange = 5;
+      // Difficult customers refuse to reveal their budget
+      if (customer.isDifficult) {
+        response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.budget[personality]());
+        interestChange = -5; // They're annoyed you asked
+        // DON'T reveal preferences - player must guess
+      } else {
+        response = pickRandom(DISCOVERY_RESPONSES.budget[personality](customer));
+        customer.revealedPreferences.budget = true;
+        interestChange = 5;
+      }
       break;
     }
 
     case 'ask_type': {
-      response = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
-      customer.revealedPreferences.type = true;
-      interestChange = 5;
+      // Difficult customers refuse to reveal their type preference
+      if (customer.isDifficult) {
+        response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.type[personality]());
+        interestChange = -5; // They're annoyed you asked
+        // DON'T reveal preferences - player must guess
+      } else {
+        response = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
+        customer.revealedPreferences.type = true;
+        interestChange = 5;
+      }
       break;
     }
 
     case 'ask_features': {
-      response = pickRandom(DISCOVERY_RESPONSES.features[personality](customer));
-      customer.revealedPreferences.features = true;
-      interestChange = 5;
+      // Difficult customers refuse to reveal their feature preferences
+      if (customer.isDifficult) {
+        response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.features[personality]());
+        interestChange = -5; // They're annoyed you asked
+        // DON'T reveal preferences - player must guess
+      } else {
+        response = pickRandom(DISCOVERY_RESPONSES.features[personality](customer));
+        customer.revealedPreferences.features = true;
+        interestChange = 5;
+      }
       break;
     }
 
     case 'ask_model': {
-      response = pickRandom(DISCOVERY_RESPONSES.model[personality](customer));
-      customer.revealedPreferences.model = true;
-      interestChange = 5;
+      // Difficult customers refuse to reveal their model preference
+      if (customer.isDifficult) {
+        response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.model[personality]());
+        interestChange = -5; // They're annoyed you asked
+        // DON'T reveal preferences - player must guess
+      } else {
+        response = pickRandom(DISCOVERY_RESPONSES.model[personality](customer));
+        customer.revealedPreferences.model = true;
+        interestChange = 5;
+      }
       break;
     }
 
@@ -1456,7 +1517,16 @@ Reply in 1 SHORT sentence as a ${customer.personality} person would. Stay in cha
   // For general conversation (no offer)
   const isCash = customer.buyerType === 'cash';
   
-
+  // Special handling for difficult customers who refuse to share info
+  const difficultInstructions = customer.isDifficult ? `
+IMPORTANT - DIFFICULT CUSTOMER MODE:
+- You are a DIFFICULT customer who refuses to share preferences.
+- When asked about budget, type, features, or model - be EVASIVE and UNHELPFUL.
+- Act annoyed if the salesperson keeps asking questions.
+- You have a SHORT FUSE and get frustrated easily.
+- Say things like "That's none of your business", "Just show me cars", "Stop asking questions".
+- You will NOT reveal your true preferences no matter what.
+` : '';
 
   return `You are ${customer.name}, a ${customer.personality} car buyer.
 TRUE INFO (Use only if revealed or asked):
@@ -1472,13 +1542,13 @@ CURRENTLY REVEALED TO PLAYER:
 - Model: ${customer.revealedPreferences.model ? 'REVEALED' : 'HIDDEN'}
 
 ${carInfo}
-
+${difficultInstructions}
 RULES:
 - Respond in 1 short sentence only.
-- Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.
+- Do not describe actions (e.g. *looks at tires*). Only speak to the salesperson.${customer.isDifficult ? '' : `
 - If a piece of info is HIDDEN, be vague about it unless the user explicitly asks for it.
 - If asked "What is your budget?", reveal the budget and answer clearly.
-- If asked "What do you want?", you can reveal Type and Features.
+- If asked "What do you want?", you can reveal Type and Features.`}
 - If user asks for something specific (e.g., "Do you have a trade-in?"), answer creatively (No trade-in).
 `;
 }

@@ -61,6 +61,7 @@ export interface Customer {
   inventoryDenials?: number; // Track how many times we've told them we don't have something
   creditScore: number;
   creditRevealed: boolean;
+  isDifficult: boolean; // Difficult customers won't reveal preferences and have short tempers
 }
 
 export interface Coworker {

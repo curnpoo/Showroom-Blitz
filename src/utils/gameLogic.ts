@@ -254,6 +254,13 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   if (personality === 'serious' || personality === 'analytical') stubbornness += 2;
   if (personality === 'skeptical') stubbornness += 1;
 
+  // ~20% chance for a difficult customer who won't reveal preferences
+  const isDifficult = Math.random() < 0.2;
+  
+  // Difficult customers have very low temper (10-30) and higher stubbornness
+  const finalTemper = isDifficult ? Math.floor(10 + Math.random() * 20) : temper;
+  const finalStubbornness = isDifficult ? Math.min(5, stubbornness + 2) : Math.min(5, stubbornness);
+
   return {
     id,
     name: `${pickRandom(FIRST_NAMES)} ${pickRandom(LAST_NAMES)}`,
@@ -262,7 +269,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     type: 'customer',
     buyerType,
     personality,
-    temper,
+    temper: finalTemper,
     interest: baseInterest,
     budget: buyerType === 'cash' ? (35000 + Math.floor(Math.random() * 20000)) : 0,
     maxPayment: buyerType === 'payment' ? (400 + Math.floor(Math.random() * 400)) : 0,
@@ -274,7 +281,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     desiredFeatures: pickRandomFeatures(desiredModel, desiredCategory),
     desiredColor,
     dealBreakers,
-    stubbornness: Math.min(5, stubbornness),
+    stubbornness: finalStubbornness,
     color: buyerType === 'cash' ? '#2ecc71' : '#3498db',
     active: true,
     moveTimer: 0,
@@ -290,6 +297,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     inventoryDenials: 0,
     creditScore: Math.floor(450 + Math.random() * 400), // Range: 450-850
     creditRevealed: false,
+    isDifficult,
   };
 }
 
