@@ -375,6 +375,7 @@ const WRONG_PAYMENT_TYPE: Record<string, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
 const INVENTORY_DENIAL_PUSHBACK: Record<PersonalityType, string[]> = {
   friendly: [
     "Are you sure? I could have sworn I saw one.",
