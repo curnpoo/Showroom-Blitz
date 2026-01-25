@@ -70,9 +70,10 @@ function getCompatibleFeatures(model?: string, category?: VehicleCategory): Desi
     } else if (model === 'Venue' || model === 'Elantra') {
       validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family');
       validFeatures.push('affordable', 'reliable', 'fuel_efficient');
-    } else if (model.includes('Ioniq')) {
-      validFeatures = validFeatures.filter(f => f !== 'affordable');
       validFeatures.push('tech', 'fuel_efficient', 'sporty');
+    } else if (model === 'Ioniq 6') {
+      validFeatures = validFeatures.filter(f => f !== 'affordable' && f !== 'spacious');
+      validFeatures.push('tech', 'fuel_efficient', 'sporty', 'luxury');
     }
   } else if (category) {
     if (category === 'suv') {
@@ -115,39 +116,50 @@ function getVehicleCategory(model: string, price: number): VehicleCategory {
 }
 
 // Helper to assign features based on model and trim
+// THIS IS THE SINGLE SOURCE OF TRUTH FOR VEHICLE FEATURES
 function getVehicleFeatures(model: string, trim: string): DesiredFeature[] {
   const features: DesiredFeature[] = [];
 
-  // Base features by model type
-  if (model === 'Venue' || model === 'Elantra') {
-    features.push('affordable', 'reliable');
-  }
-
-  if (model === 'Ioniq 5' || model === 'Ioniq 6') {
-    features.push('fuel_efficient', 'tech', 'sporty');
-    if (model === 'Ioniq 5') features.push('spacious', 'family');
+  // 1. Model-based features
+  if (model.includes('Ioniq')) {
+    features.push('fuel_efficient', 'tech', 'sporty', 'family'); // All Ioniqs are family friendly & tech
+    if (model === 'Ioniq 5') features.push('spacious'); // Only Ioniq 5 is spacious
   }
 
   if (model === 'Santa Fe' || model === 'Palisade') {
-    features.push('family', 'spacious', 'luxury', 'tech');
+    features.push('family', 'spacious');
   }
 
-  if (model === 'Kona' || model === 'Tucson') {
-    features.push('reliable', 'fuel_efficient', 'family');
-    if (model === 'Tucson') features.push('spacious');
+  if (model === 'Tucson') {
+    features.push('family', 'reliable'); // Tucson is family but not necessarily spacious unless higher trim? Let's just say family/reliable base.
+    features.push('spacious'); // Actually user said Tucson is spacious or high tech? Let's stick to standard SUV traits.
   }
 
-  if (model === 'Sonata') {
-    features.push('reliable', 'tech', 'family');
+  if (model === 'Kona' || model === 'Venue') {
+    features.push('reliable', 'affordable', 'fuel_efficient');
   }
 
-  // Trim-based features
-  if (trim === 'N Line') {
-    features.push('sporty');
+  if (model === 'Elantra' || model === 'Sonata') {
+    features.push('reliable');
+    if (model === 'Elantra') features.push('affordable', 'fuel_efficient');
+    if (model === 'Sonata') features.push('family'); // Midsize sedan is family friendly?
   }
 
+  // 2. Trim-based features (The "High Tech" / "Luxury" / "Sporty" rules)
+  
+  // "High Tech" & "Luxury" applies to top trims
   if (trim === 'Limited' || trim === 'Ultimate' || trim === 'Calligraphy') {
     features.push('luxury', 'tech');
+  }
+
+  // "Sporty" & "Tech" applies to N Line
+  if (trim === 'N Line') {
+    features.push('sporty', 'tech');
+  }
+
+  // Entry level feature backfill - SE/SEL trims are always affordable
+  if (trim === 'SE' || trim === 'SEL') {
+     features.push('affordable');
   }
 
   // Ensure we have at least 2 features
@@ -275,6 +287,9 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
       features: false,
       model: false,
     },
+    inventoryDenials: 0,
+    creditScore: Math.floor(450 + Math.random() * 400), // Range: 450-850
+    creditRevealed: false,
   };
 }
 

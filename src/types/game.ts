@@ -58,6 +58,9 @@ export interface Customer {
     model: boolean;
     timeline?: boolean;
   };
+  inventoryDenials?: number; // Track how many times we've told them we don't have something
+  creditScore: number;
+  creditRevealed: boolean;
 }
 
 export interface Coworker {

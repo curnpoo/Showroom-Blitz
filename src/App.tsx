@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, DollarSign, Users, Car } from 'lucide-react';
+import { Settings, DollarSign, Users, Car, HelpCircle } from 'lucide-react';
+import { TipsModal } from './components/TipsModal';
 import type { 
   Customer, 
   Coworker, 
@@ -23,7 +24,7 @@ import {
   MOBILE_DESKS,
   MOBILE_COWORKERS
 } from './utils/gameLogic';
-import { generateResponse, getAIResponse } from './utils/responseGenerator';
+import { generateResponse, getAIResponse, isTakeItOrLeaveIt, isInventoryAdmission } from './utils/responseGenerator';
 import { NumbersPanel } from './components/NumbersPanel';
 import { CustomerNotes } from './components/CustomerNotes';
 import { ChatInterface } from './components/ChatInterface';
@@ -95,6 +96,7 @@ function App() {
 
   const [timeLeft, setTimeLeft] = useState(0);
   const [showTimeUp, setShowTimeUp] = useState(false);
+  const [showTips, setShowTips] = useState(false);
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     gross: 0,
     profit: 0,
@@ -476,8 +478,8 @@ function App() {
             // EXCEPTION: If a coworker is walking to/with a customer they stole, ignore collision between them
             const c1 = e1 as any;
             const c2 = e2 as any;
-            if (c1.type === 'coworker' && c2.type === 'customer' && c2.isStolen && c2.stolenByCoworkerId === c1.id) continue;
-            if (c2.type === 'coworker' && c1.type === 'customer' && c1.isStolen && c1.stolenByCoworkerId === c2.id) continue;
+            if (c1.type === 'coworker' && c2.type === 'customer' && c1.workingWithCustomerId === c2.id) continue;
+            if (c2.type === 'coworker' && c1.type === 'customer' && c2.workingWithCustomerId === c1.id) continue;
 
             if (isE1Static && !isE2Static) {
               e2.x += moveX * 2;
@@ -686,6 +688,34 @@ function App() {
       const salesCoworkers = coworkersRef.current.filter(c => c.department === 'sales');
       const deltaTime = 1/60; // Assuming ~60fps
       
+      // Track unattended customers and despawn after 60 seconds
+      customersRef.current.forEach(customer => {
+        if (!customer.active) return;
+        
+        // Customer is considered "helped" if:
+        // 1. They're stolen by a coworker (isStolen)
+        // 2. They're past the greeting phase (conversation has started)
+        const isBeingHelped = 
+          customer.isStolen ||
+          customer.conversationPhase !== 'greeting';
+        
+        if (!isBeingHelped) {
+          // Increment unattended timer
+          customer.unattendedTimer += deltaTime;
+          
+          // Despawn after 60 seconds (1 minute)
+          if (customer.unattendedTimer >= 60) {
+            customer.active = false;
+            customer.isLost = true;
+            // Remove from customers array
+            customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
+          }
+        } else {
+          // Reset timer if being helped
+          customer.unattendedTimer = 0;
+        }
+      });
+      
       salesCoworkers.forEach(coworker => {
         // Initialize steal timer if not set
         if (coworker.nextStealTime === undefined) {
@@ -704,7 +734,7 @@ function App() {
         // If coworker is working with a stolen customer
         if (coworker.workingWithCustomerId !== undefined) {
           const customer = customersRef.current.find(c => c.id === coworker.workingWithCustomerId);
-          if (customer && customer.isStolen) {
+          if (customer) {
             
               // PHASE 1: Walking to customer
               if (coworker.stealPhase === 'walking') {
@@ -727,6 +757,7 @@ function App() {
                      coworker.stealPhase = 'returning';
                      coworker.workingWithCustomerId = undefined;
                      coworker.nextStealTime = 5; // Try again soon
+                     coworker.pendingCustomerSpawn = undefined;
                   }
 
                 } else {
@@ -739,6 +770,7 @@ function App() {
                      coworker.stealPhase = 'returning';
                      coworker.workingWithCustomerId = undefined;
                      coworker.nextStealTime = 5; 
+                     coworker.pendingCustomerSpawn = undefined;
                   } else {
                     // SUCCESSFUL STEAL
                     customer.isStolen = true;
@@ -1153,8 +1185,11 @@ function App() {
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
 
+    // Check if customer already committed via "take it or leave it"
+    const isCommitted = (selectedPerson as any).committedToBuy === true;
+
     // FIRST: Check if customer likes the car AND the price
-    const likesTheCar = customerLikesTheCar(selectedPerson, currentCar);
+    const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
     const likesThePrice = customerLikesThePrice(selectedPerson, agreedPrice);
 
     // If either condition fails, provide specific feedback
@@ -1408,6 +1443,10 @@ function App() {
   const endLostDeal = () => {
     if (!selectedPerson) return;
     selectedPerson.active = false;
+    
+    // Remove customer from the showroom
+    customersRef.current = customersRef.current.filter(c => c.id !== selectedPerson.id);
+    
     setShowLostDeal(false);
     setShowInput(false);
     setSelectedPerson(null);
@@ -1463,13 +1502,71 @@ function App() {
     let interestChange: number;
     let newPhase;
     let isLost = false;
+    let dealAccepted = false;
 
-    if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
+    // PRE-CHECK: Handle special phrases before calling AI/scripted responses
+    // This ensures these phrases work in both AI and non-AI modes
+    
+    // "Take it or leave it" ultimatum
+    if (isTakeItOrLeaveIt(userMsg)) {
+      // Calculate chance they accept based on car match
+      let takeItChance = 0.3; // Base chance
+      if (currentCar) {
+        // If car matches their category, boost chance
+        const isValid = selectedPerson.desiredCategory === 'any' || 
+          currentCar.category === selectedPerson.desiredCategory;
+        if (isValid) takeItChance += 0.3;
+        // If car matches some features, boost more
+        const featureMatch = selectedPerson.desiredFeatures.filter(f => 
+          currentCar.features.includes(f)).length / selectedPerson.desiredFeatures.length;
+        takeItChance += featureMatch * 0.3;
+      }
+      // Personality modifiers
+      if (selectedPerson.personality === 'friendly') takeItChance += 0.2;
+      if (selectedPerson.personality === 'skeptical') takeItChance -= 0.3;
+      
+      if (Math.random() < takeItChance) {
+        // They accept!
+        response = "Alright, if that's truly all you have... I'll take it.";
+        interestChange = 10;
+        dealAccepted = true;
+        newPhase = 'closed';
+      } else {
+        // They leave
+        response = "No, I can't settle for that. I'm leaving.";
+        interestChange = -100;
+        isLost = true;
+        newPhase = 'closed';
+      }
+    }
+    // "I don't have that" inventory admission
+    else if (isInventoryAdmission(userMsg)) {
+      let stayChance = 0.5;
+      if (selectedPerson.personality === 'friendly') stayChance += 0.2;
+      if (selectedPerson.personality === 'skeptical') stayChance -= 0.2;
+      
+      if (Math.random() < stayChance) {
+        response = "I understand. What else do you have that might work?";
+        interestChange = 0;
+        newPhase = 'needs_discovery';
+        // Clear their specific model requirement
+        selectedPerson.desiredModel = undefined;
+        selectedPerson.desiredCategory = 'any';
+      } else {
+        response = "Well, if you don't have what I need, I'll try somewhere else. Goodbye.";
+        interestChange = -100;
+        isLost = true;
+        newPhase = 'closed';
+      }
+    }
+    // Normal response flow
+    else if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
       const result = await getAIResponse(selectedPerson, userMsg, currentCar, settings);
       response = result.response;
       interestChange = result.interestChange;
       newPhase = result.newPhase;
       isLost = !!result.isLost;
+      dealAccepted = !!result.dealAccepted;
       selectedPerson.conversationHistory.push(
         { role: 'user', content: userMsg },
         { role: 'assistant', content: response }
@@ -1486,7 +1583,16 @@ function App() {
     }
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
-    if (newPhase) selectedPerson.conversationPhase = newPhase;
+    if (newPhase) selectedPerson.conversationPhase = newPhase as typeof selectedPerson.conversationPhase;
+    
+    if (dealAccepted) {
+      // Customer is committed to buying! But don't auto-close.
+      // Set a flag so they auto-accept when user clicks "Close Deal" (if price is right)
+      (selectedPerson as any).committedToBuy = true;
+      selectedPerson.conversationPhase = 'closed';
+      // Don't return early - continue to show the response
+    }
+    
     if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
@@ -1566,8 +1672,8 @@ function App() {
                 </button>
                </div>
                {settings.gameMode === 'volume' && (
-                 <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '5px' }}>
-                   Sell 10 cars as fast as possible! Timer counts up.
+                 <p style={{ fontSize: '0.9rem', color: '#e74c3c', marginTop: '8px', fontWeight: 'bold' }}>
+                   ⚠️ 10 Cars Total • Race against the clock!
                  </p>
                )}
             </div>
@@ -1616,7 +1722,31 @@ function App() {
           >
             Open Showroom
           </button>
+
+          <button
+            className="secondary-button"
+            style={{ 
+              marginTop: '15px', 
+              background: 'transparent', 
+              color: '#666', 
+              border: '1px solid #ddd',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              justifyContent: 'center',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              width: '100%',
+              fontSize: '0.9rem'
+            }}
+            onClick={() => setShowTips(true)}
+          >
+            <HelpCircle size={16} /> Tip Sheet & Rules
+          </button>
         </div>
+        
+        {showTips && <TipsModal onClose={() => setShowTips(false)} />}
       </div>
     );
   }
@@ -1648,8 +1778,8 @@ function App() {
                : `⏱️ ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`
              }
              {settings.gameMode === 'volume' && (
-                <div style={{ fontSize: '0.8em', opacity: 0.8, marginTop: '2px' }}>
-                  {inventoryRef.current.length} Cars Left
+                <div style={{ fontSize: '1rem', color: '#c0392b', marginTop: '4px', fontWeight: 'bold' }}>
+                  {inventoryRef.current.length}/10 Cars Left
                 </div>
              )}
           </div>
@@ -1815,6 +1945,12 @@ function App() {
                 customPayment={customPayment}
                 setCustomPayment={setCustomPayment}
                 isMobile={false}
+                customer={selectedPerson}
+                onCustomerUpdate={(updatedCustomer) => {
+                   const index = customersRef.current.findIndex(c => c.id === updatedCustomer.id);
+                   if (index !== -1) customersRef.current[index] = updatedCustomer;
+                   if (selectedPerson?.id === updatedCustomer.id) setSelectedPerson(updatedCustomer);
+                }}
               />
             </div>
 
@@ -1910,6 +2046,12 @@ function App() {
             customPayment={customPayment}
             setCustomPayment={setCustomPayment}
             isMobile={true}
+            customer={selectedPerson}
+            onCustomerUpdate={(updatedCustomer) => {
+               const index = customersRef.current.findIndex(c => c.id === updatedCustomer.id);
+               if (index !== -1) customersRef.current[index] = updatedCustomer;
+               if (selectedPerson?.id === updatedCustomer.id) setSelectedPerson(updatedCustomer);
+            }}
         />
 
         {/* Settings panel */}

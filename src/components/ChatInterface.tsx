@@ -40,7 +40,6 @@ export function ChatInterface({
   setShowNumbers,
   currentCar,
   attemptCloseDeal,
-  isMobile,
   onDiscoveryAction,
   showNotes = true,
 }: ChatInterfaceProps) {
@@ -118,8 +117,26 @@ export function ChatInterface({
             <span style={{ fontWeight: '600', color: '#fff' }}>{currentCar.model} {currentCar.trim}</span>
             <span style={{ color: '#aaa', fontSize: '0.7rem' }}>{currentCar.color}</span>
           </div>
-          <div style={{ fontWeight: '700', color: '#2ecc71' }}>
-            ${currentCar.price.toLocaleString()}
+          
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            {/* Show list price */}
+            <div style={{ fontWeight: '700', color: '#2ecc71' }}>
+              ${currentCar.price.toLocaleString()}
+            </div>
+            
+            {/* Show current offer if any */}
+            {(() => {
+              const lastOffer = [...conversation].reverse().find(msg => msg.offerDetails);
+              if (lastOffer?.offerDetails) {
+                 const { type, price } = lastOffer.offerDetails;
+                 return (
+                   <div style={{ fontSize: '0.7rem', color: '#f39c12', marginTop: '2px' }}>
+                     Offer: {type === 'payment' ? `$${price}/mo` : `$${price.toLocaleString()}`}
+                   </div>
+                 );
+              }
+              return null;
+            })()}
           </div>
         </div>
       )}
@@ -269,14 +286,7 @@ export function ChatInterface({
         )}
       </div>
 
-      <div className="chat-actions" style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr 1fr', 
-        gap: '8px',
-        padding: isMobile ? '12px 16px' : undefined,
-        borderTop: isMobile ? '1px solid var(--border)' : undefined,
-        background: isMobile ? 'rgba(0,0,0,0.2)' : undefined
-      }}>
+      <div className="chat-actions">
         <button
           className="action-btn inventory"
           onClick={() => { setShowInventory(!showInventory); if (!showInventory) setShowNumbers(false); }}

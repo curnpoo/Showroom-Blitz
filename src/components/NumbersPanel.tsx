@@ -1,4 +1,4 @@
-import { Car, OfferType } from '../types/game';
+import { Car, OfferType, Customer } from '../types/game';
 import { calculatePayment, calculateOTDFromPayment } from '../utils/gameLogic';
 
 interface NumbersPanelProps {
@@ -21,6 +21,8 @@ interface NumbersPanelProps {
   customPayment: number;
   setCustomPayment: (val: number) => void;
   isMobile: boolean;
+  customer: Customer | null;
+  onCustomerUpdate: (customer: Customer) => void;
 }
 
 export function NumbersPanel({
@@ -43,6 +45,8 @@ export function NumbersPanel({
   customPayment,
   setCustomPayment,
   isMobile,
+  customer,
+  onCustomerUpdate,
 }: NumbersPanelProps) {
   if (!isOpen || !currentCar) return null;
 
@@ -78,6 +82,8 @@ export function NumbersPanel({
                     setPaymentTerm={setPaymentTerm}
                     customPayment={customPayment}
                     setCustomPayment={setCustomPayment}
+                    customer={customer}
+                    onCustomerUpdate={onCustomerUpdate}
                 />
             </div>
         </div>
@@ -109,6 +115,8 @@ export function NumbersPanel({
                  setPaymentTerm={setPaymentTerm}
                  customPayment={customPayment}
                  setCustomPayment={setCustomPayment}
+                 customer={customer}
+                 onCustomerUpdate={onCustomerUpdate}
             />
         </div>
     </div>
@@ -134,7 +142,24 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
         setPaymentTerm,
         customPayment,
         setCustomPayment,
+        customer,
+        onCustomerUpdate,
     } = props;
+
+    const runCreditCheck = () => {
+        if (!customer) return;
+        // Simulate delay? For now instant
+        onCustomerUpdate({
+            ...customer,
+            creditRevealed: true
+        });
+    };
+
+    const getCreditStatus = (score: number) => {
+        if (score >= 720) return { label: 'Excellent', color: '#2ecc71' };
+        if (score >= 640) return { label: 'Fair', color: '#f39c12' };
+        return { label: 'Poor', color: '#e74c3c' };
+    };
 
     return (
         <div className="numbers-section">
@@ -222,6 +247,46 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
 
           <div className="payment-calculator">
             <h4>Payment Calculator</h4>
+            
+            {customer && customer.buyerType === 'payment' && (
+                <div className="credit-section" style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Credit Status</span>
+                        {customer.creditRevealed && (
+                            <span style={{ 
+                                color: getCreditStatus(customer.creditScore).color, 
+                                fontWeight: 'bold' 
+                            }}>
+                                {customer.creditScore} ({getCreditStatus(customer.creditScore).label})
+                            </span>
+                        )}
+                    </div>
+                    
+                    {!customer.creditRevealed ? (
+                        <button 
+                            className="blue" 
+                            style={{ width: '100%', padding: '8px' }}
+                            onClick={runCreditCheck}
+                        >
+                            Run Credit Application
+                        </button>
+                    ) : (
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                           {customer.creditScore < 550 ? (
+                               downPayment >= 7500 ? (
+                                   <span style={{ color: '#f39c12' }}>⚠️ Approved (High Down Exception)</span>
+                               ) : (
+                                   <span style={{ color: '#c0392b' }}>⚠️ Bank Declined: Score too low (&lt; $7,500 down).</span>
+                               )
+                           ) : customer.creditScore < 620 ? (
+                               <span style={{ color: '#d35400' }}>⚠️ Subprime: Minimum 10% APR required.</span>
+                           ) : (
+                               <span style={{ color: '#27ae60' }}>✅ Approved for Tier 1 Rates.</span>
+                           )}
+                        </div>
+                    )}
+                </div>
+            )}
             <div className="calc-grid">
               <div className="calc-field">
                 <label>Down:</label>
@@ -281,7 +346,15 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                     setCustomSellingPrice(Math.round((newOTD - currentCar.fees) / 1.07));
                   }}
                 />
-                <button className="purple" onClick={() => makeOffer(customPayment, 'payment')}>
+                <button 
+                  className="purple" 
+                  onClick={() => makeOffer(customPayment, 'payment')}
+                  disabled={customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500))}
+                  style={{ 
+                    opacity: customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500)) ? 0.5 : 1, 
+                    cursor: customer?.buyerType === 'payment' && (!customer.creditRevealed || (customer.creditScore < 550 && downPayment < 7500)) ? 'not-allowed' : 'pointer' 
+                  }}
+                >
                   Offer
                 </button>
               </div>

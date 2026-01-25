@@ -375,6 +375,113 @@ const WRONG_PAYMENT_TYPE: Record<string, string[]> = {
   ],
 };
 
+const INVENTORY_DENIAL_PUSHBACK: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Are you sure? I could have sworn I saw one.",
+    "Oh really? Can you double check? I'm pretty flexible but I really wanted that.",
+    "That's surprising! Is there maybe one on the way?",
+  ],
+  serious: [
+    "Check your inventory again. I'm not in a rush.",
+    "Are you certain? I did my research before coming here.",
+    "I'd like you to be absolutely sure before we move on.",
+  ],
+  skeptical: [
+    "Yeah right. Did you even look?",
+    "You just don't want to sell it to me. Check again.",
+    "I bet you have one in the back. Go look.",
+  ],
+  enthusiastic: [
+    "Aww! Are you 100% sure?! Please check again!",
+    "No way! I was so hoping for it! Maybe one is hiding?",
+    "Really? Can you check one more time for me?",
+  ],
+  analytical: [
+    "Please verify inventory data. Discrepancy detected.",
+    "I request a secondary check of your stock.",
+    "Probability of zero stock is low. Please confirm.",
+  ],
+};
+
+const DEAL_ACCEPTED_GREAT_VALUE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Wow! At that price, I can't say no! I'll take it!",
+    "That is such a steal! I don't care about the other stuff, let's do it!",
+    "You know what? For that price, I can live with it. Deal!",
+  ],
+  serious: [
+    "The value proposition is undeniable. I'll take it.",
+    "That price dictates the decision. Proceed.",
+    "Agreed. The savings outweigh the compromised specifications.",
+  ],
+  skeptical: [
+    "Okay, even I have to admit that's a crazy good price. Fine, I'll take it.",
+    "Are you serious? For that much off? ...Alright, twist my arm. Sold.",
+    "I'd be stupid to walk away from that deal. Write it up.",
+  ],
+  enthusiastic: [
+    "OH MY GOSH! Are you serious?! That's so cheap! YES!",
+    "I can't believe this deal! I'm buying it right now!",
+    "At that price?! SOLD! SOLD! SOLD!",
+  ],
+  analytical: [
+    "Price point is 20% below market average. Purchase is logical optimization.",
+    "Value-to-cost ratio exceeds threshold. Executing purchase.",
+    "Economic opportunity identified. Proceeding with transaction.",
+  ],
+};
+
+const INVENTORY_ADMISSION_SUCCESS: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Oh, that's a shame! Well, I'm open to suggestions. What do you have?",
+    "No worries! I'm not set in stone. Show me something else nice!",
+    "Ah, bummer. But I trust you - what else is good on the lot?",
+  ],
+  serious: [
+    "Unfortunate. I suppose I can look at alternatives if they are comparable.",
+    "I see. Well, don't waste my time. What DO you have that's worth buying?",
+    "That is disappointing. Show me what is available then.",
+  ],
+  skeptical: [
+    "Of course you don't. Figures. Fine, what IS actually here?",
+    "Typical. Bait and switch? Whatever, show me what you got.",
+    "Ugh. Fine. I'm already here. Show me something else.",
+  ],
+  enthusiastic: [
+    "Aww man! That's okay though! I'm sure you have other awesome cars!",
+    "Oh no! Well, surprise me! What else is cool?!",
+    "That's sad, but I'm still excited to buy a car! What else can I see?",
+  ],
+  analytical: [
+    "Noted. Resetting search parameters. What inventory is currently available?",
+    " unavailability acknowledged. Please present alternative options.",
+    "I will adjust my criteria. Proceed with available inventory.",
+  ],
+};
+
+const INVENTORY_ADMISSION_FAILURE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Oh... that's really the only car I wanted. I think I'll look somewhere else.",
+    "That's disappointing. I really had my heart set on that. Thanks anyway.",
+  ],
+  serious: [
+    "That was a waste of my trip. I'm leaving.",
+    "If you don't have what I need, we have nothing to discuss.",
+  ],
+  skeptical: [
+    "I knew it. You guys never have anything good. I'm out.",
+    "See? Complete waste of time. I'm walking.",
+  ],
+  enthusiastic: [
+    "Aww, that's literally the only one I wanted! I'm so sad! Bye!",
+    "Noooo! My dream car! I can't look at anything else right now!",
+  ],
+  analytical: [
+    "Specific requirement matching failed. Terminating purchase process.",
+    "Critical criteria not met. Aborting transaction.",
+  ],
+};
+
 // ============ HELPER FUNCTIONS ============
 
 const FEATURE_LABELS: Record<DesiredFeature, string> = {
@@ -420,6 +527,172 @@ export function isNeedsInquiry(text: string): boolean {
   ];
   return needsKeywords.some(regex => regex.test(text));
 }
+
+export function isInventoryAdmission(text: string): boolean {
+  const admissionKeywords = [
+    /\b(don't|dont|do not)\b.*\b(have|got|stock)\b/i, // "I don't have that", "We don't got that"
+    /\b(out of|no)\b.*\b(stock|inventory)\b/i, // "Out of stock", "No inventory"
+    /\b(sold|gone)\b/i, // "It's sold", "It's gone"
+    /\b(cant|can't|cannot)\b.*\b(get|find)\b/i, // "Can't get that"
+  ];
+  return admissionKeywords.some(regex => regex.test(text));
+}
+
+export function isTakeItOrLeaveIt(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  
+  // Direct phrase matches (most reliable)
+  const directPhrases = [
+    'all i have',
+    'all we have',
+    'all i got',
+    'all we got',
+    'take it or leave it',
+    'only option',
+    'only choice',
+    'only one',
+    'only one left',
+    'best i can do',
+    'best we can do',
+    'thats it',
+    "that's it",
+    'nothing else',
+  ];
+  
+  if (directPhrases.some(phrase => lowerText.includes(phrase))) {
+    return true;
+  }
+  
+  // Regex fallbacks for variations
+  const patterns = [
+      /\bthis is (all|it)\b/i,
+      /\b(take|accept) it or (leave|go)\b/i,
+  ];
+  
+  return patterns.some(regex => regex.test(text));
+}
+
+const TAKE_IT_OR_LEAVE_IT_SUCCESS: Record<PersonalityType, string[]> = {
+  friendly: [
+      "Well... if that's really the only option, I guess I'll take it! It's still a nice car.",
+      "Okay then! I don't want to leave empty handed. Let's do it.",
+      "Fair enough. I trust you. I'll take this one."
+  ],
+  serious: [
+      "I see. Given the market conditions, I will accept this vehicle as the solution.",
+      "Very well. If the inventory is limited, I will proceed with this purchase.",
+      "Understood. Let's finalize the paperwork for this unit then."
+  ],
+  skeptical: [
+      "Fine. I guess I'm stuck with this one. Whatever, let's just get it over with.",
+      "You're lucky I need a car today. I'll take it, but I'm not thrilled.",
+      "Ugh. Fine. I'll take it."
+  ],
+  enthusiastic: [
+      "Okay!!! I just really want a car today! I'll take it!!",
+      "If that's the only one, then it's DESTINY! Let's do it!",
+      "I can't wait any longer! I'll take this one! Yay!"
+  ],
+  analytical: [
+      "Analyzing alternatives... None available. Proceeding with current local optimum.",
+      "Given the constraint of limited inventory, acceptance is the logical path.",
+      "I will acquire this unit rather than restart the search process."
+  ],
+};
+
+const TAKE_IT_OR_LEAVE_IT_FAILURE: Record<PersonalityType, string[]> = {
+  friendly: [
+      "I understand, but I just can't settle for something I don't love. Sorry!",
+      "If that's all you have, I think I better keep looking elsewhere. Thanks anyway!",
+      "Ah that's a shame. I really need something else. Bye!"
+  ],
+  serious: [
+      "Then we have nothing more to discuss. Good day.",
+      "That is unacceptable. I will find a dealership with better stock.",
+      "I am not one to settle. Goodbye."
+  ],
+  skeptical: [
+      "Wow. 'That's all you have'? What a joke. I'm leaving.",
+      "I knew this place was a waste of time. Don't bother calling me back.",
+      "Yeah, right. I'm not buying your leftovers. See ya."
+  ],
+  enthusiastic: [
+      "But I don't want thiiiis one! I'm so sad! I have to go!",
+      "Noooo! I can't believe that's it! I'm leaving!",
+      "Aww! I guess I won't get a car today after all. Bye!"
+  ],
+  analytical: [
+      "Inventory constraints prevent optimal matching. Terminating process.",
+      "Current option does not meet threshold criteria. Aborting.",
+      "Insufficient selection. I will conduct business elsewhere."
+  ],
+};
+
+export function isCreditDenial(text: string): boolean {
+  const denialKeywords = [
+    /\b(denied|deny|decline|declined)\b/i, // "Credit denied", "You were declined"
+    /\b(not|n't)\b.*\b(approved|approve|qualify|qualified)\b/i, // "You're not approved", "Didn't qualify"
+    /\b(bad|low|poor)\b.*\b(credit|score)\b/i, // "Bad credit", "Score too low"
+    /\b(bank)\b.*\b(no|said no|reject)\b/i, // "Bank said no"
+  ];
+  return denialKeywords.some(regex => regex.test(text));
+}
+
+const CREDIT_DENIAL_RESPONSES: Record<PersonalityType, string[]> = {
+  friendly: [
+      "Oh... that's really embarrassing. I guess I can't buy a car today then. Sorry to waste your time.",
+      "I see. That's disappointing to hear. I'll go work on my credit and come back another time.",
+      "Ouch. I was hoping it would go through. Thanks for checking anyway."
+  ],
+  serious: [
+      "I understand. If the bank won't lend, we have no business to conduct.",
+      "Well, that's final then. I will be leaving.",
+      "Disappointing. I thought I had everything in order. Goodbye."
+  ],
+  skeptical: [
+      "Figures. You guys never approve anyone unless they have perfect credit.",
+      "Yeah, yeah. I knew this was a waste of time. I'm out.",
+      "Of course. Whatever, I'll go to a buy-here-pay-here lot."
+  ],
+  enthusiastic: [
+      "Oh no! Really?! I wanted this car so bad! This is the worst day ever!",
+      "No way! Are you sure?! Aww man... I guess I have to leave...",
+      "That makes me so sad! I was ready to drive it home!"
+  ],
+  analytical: [
+      "Financing rejection acknowledged. Transaction cannot proceed. Terminating.",
+      "Credit parameters insufficient. Aborting purchase process.",
+      "Understood. Without financing, I cannot acquire the asset. Goodbye."
+  ],
+};
+
+const CREDIT_DENIAL_PUSHBACK: Record<PersonalityType, string[]> = {
+  friendly: [
+      "But wait! I have a huge down payment! Doesn't that help??",
+      "Hold on - even with my large down payment? Are you sure?",
+      "Please check again! I'm putting so much money down!"
+  ],
+  serious: [
+      "Incorrect. My down payment is substantial. Run it again.",
+      "I am putting serious cash down. That changes the risk profile.",
+      "Re-evaluate. My down payment covers a significant portion of the asset."
+  ],
+  skeptical: [
+      "Are you blind? I'm putting more than half down! That has to count for something.",
+      "Don't give me that. Look at the down payment I'm offering.",
+      "You're turning down cash? I have a huge down payment right here."
+  ],
+  enthusiastic: [
+      "Wait wait! I have so much cash for the down payment! Please let me have the car!",
+      "But I saved up SO MUCH for the down payment! Doesn't that work?!",
+      "Don't make me leave! Look at my down payment money!"
+  ],
+  analytical: [
+      "Objection. Loan-to-value ratio is favorable due to high down payment.",
+      "Re-calculate risk. Large capital contribution significantly reduces exposure.",
+      "My down payment alters the approval probability. Please reconsider."
+  ],
+};
 
 // Unused but kept for reference
 // @ts-ignore
@@ -472,43 +745,13 @@ interface MatchResult {
 }
 
 function carMatchesFeatures(car: Car, features: DesiredFeature[]): MatchResult {
-  const model = car.model.toLowerCase();
-  const trim = car.trim.toLowerCase();
-  
   const matched: DesiredFeature[] = [];
   const missing: DesiredFeature[] = [];
   
+  // SINGLE SOURCE OF TRUTH: We check the car's assigned features
+  // which are generated by getVehicleFeatures using the exact logic for trims/models.
   for (const feature of features) {
-    let isMatch = false;
-    switch (feature) {
-      case 'sporty':
-        if (model.includes('ioniq') || trim.includes('n line')) isMatch = true;
-        break;
-      case 'luxury':
-        if (trim.includes('limited') || trim.includes('calligraphy') || trim.includes('ultimate') || model === 'palisade') isMatch = true;
-        break;
-      case 'family':
-        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) isMatch = true;
-        break;
-      case 'fuel_efficient':
-        if (model.includes('ioniq') || model.includes('elantra') || model.includes('kona') || model.includes('sonata')) isMatch = true;
-        break;
-      case 'spacious':
-        if (model.includes('palisade') || model.includes('santa fe') || model.includes('tucson')) isMatch = true;
-        break;
-      case 'affordable':
-        if (model.includes('venue') || model.includes('kona') || model.includes('elantra')) isMatch = true;
-        if (trim === 'se' || trim === 'sel') isMatch = true;
-        break;
-      case 'tech':
-        if (model.includes('ioniq') || trim.includes('ultimate') || trim.includes('calligraphy') || trim.includes('limited')) isMatch = true;
-        break;
-      case 'reliable':
-        isMatch = true; // All Hyundais are reliable! ;)
-        break;
-    }
-    
-    if (isMatch) {
+    if (car.features.includes(feature)) {
       matched.push(feature);
     } else {
       missing.push(feature);
@@ -613,11 +856,24 @@ export function generateResponse(context: ResponseContext): ResponseResult {
       // Check if car matches what they want (both category AND features)
       const matchesCategory = carMatchesCategory(currentCar, customer);
       const featureMatch = carMatchesFeatures(currentCar, desiredFeatures);
-      const isPerfectMatch = matchesCategory && featureMatch.score === 1;
-      const isGoodMatch = matchesCategory && featureMatch.score >= 0.5;
+      
+      let isPerfectMatch = matchesCategory && featureMatch.score === 1;
+      let isGoodMatch = matchesCategory && featureMatch.score >= 0.5;
+
+      // BAD CREDIT OVERRIDE: If credit < 620 and revealed, they aren't picky!
+      if (customer.creditRevealed && customer.creditScore < 620) {
+          isPerfectMatch = true; // Pretend it matches perfectly
+          isGoodMatch = true;
+          // You could add specific dialogue here or just let them react positively
+      }
       
       if (isPerfectMatch) {
-        response = pickRandom(CAR_REACTION_POSITIVE[personality]);
+        if (customer.creditRevealed && customer.creditScore < 620) {
+            // Specific response for bad credit acceptance
+            response = "With my credit situation, I can't look a gift horse in the mouth. This car works for me.";
+        } else {
+            response = pickRandom(CAR_REACTION_POSITIVE[personality]);
+        }
         interestChange = 15;
         // Recovery: if they like the car, it can clear a strike
         if (customer.strikes > 0) customer.strikes--;
@@ -690,6 +946,18 @@ export function generateResponse(context: ResponseContext): ResponseResult {
 
       const targetPrice = effectiveBudget;
       const isPayment = offerType === 'payment';
+
+      // Check for 'Great Deal' override (20% off MSRP)
+      // We need to know MSRP. In game logic, price on car object is usually MSRP.
+      // If offerPrice is significantly lower than currentCar.price, it overrides preferences.
+      if (currentCar && offerPrice <= currentCar.price * 0.8) {
+         response = pickRandom(DEAL_ACCEPTED_GREAT_VALUE[personality]);
+         interestChange = 30;
+         customer.strikes = 0;
+         dealAccepted = true;
+         newPhase = 'closed';
+         break;
+      }
 
       if (offerPrice <= targetPrice) {
         // Deal accepted!
@@ -790,7 +1058,119 @@ export async function getAIResponse(
   if (contextOverrides?.messageType === 'ask_features') customer.revealedPreferences.features = true;
   if (contextOverrides?.messageType === 'ask_model') customer.revealedPreferences.model = true;
 
+  // Check for "Take it or leave it" ultimatum
+  if (isTakeItOrLeaveIt(message)) {
+      // Logic: If the deal is "bad" or "downgrade_request", they likely leave.
+      // If it's a "budget_stretch" or match is decent (>= 0.5), they might take it.
+      
+      let takeItChance = 0.1; // Base low chance
+      if (currentCar) {
+          const catMatch = carMatchesCategory(currentCar, customer);
+          const featMatch = carMatchesFeatures(currentCar, customer.desiredFeatures);
+          
+          if (catMatch) takeItChance += 0.3;
+          if (featMatch.score >= 0.5) takeItChance += 0.3;
+          if (featMatch.score === 1) takeItChance += 0.3; // Perfect match? They'll probably take it.
+      }
+      
+      // Personality modifiers
+      if (customer.personality === 'friendly') takeItChance += 0.2;
+      if (customer.personality === 'enthusiastic') takeItChance += 0.1;
+      if (customer.personality === 'serious') takeItChance += 0.1; // Logic dictates taking a good deal
+      if (customer.personality === 'skeptical') takeItChance -= 0.3; // Hates ultimatums
+      if (customer.personality === 'analytical') takeItChance += 0.0; 
+
+      if (Math.random() < takeItChance) {
+          // THEY TAKE IT!
+          return {
+              response: pickRandom(TAKE_IT_OR_LEAVE_IT_SUCCESS[customer.personality]),
+              interestChange: 10,
+              dealAccepted: true, // Auto-accept!
+              newPhase: 'closed',
+              isLost: false,
+              customerSentiment: 'neutral',
+              playerSentiment: playerSentiment
+          };
+      } else {
+          // THEY LEAVE!
+          return {
+              response: pickRandom(TAKE_IT_OR_LEAVE_IT_FAILURE[customer.personality]),
+              interestChange: -100,
+              dealAccepted: false,
+              newPhase: 'closed',
+              isLost: true,
+              customerSentiment: 'mad',
+              playerSentiment: playerSentiment
+          };
+      }
+  }
+
+  // Check for inventory admission (e.g. "I don't have that")
+  if (isInventoryAdmission(message)) {
+    // 50/50 chance they are okay with looking at something else vs leaving
+    // Bonus chance if personality is friendly/enthusiastic
+    let stayChance = 0.5;
+    if (customer.personality === 'friendly') stayChance += 0.2;
+    if (customer.personality === 'enthusiastic') stayChance += 0.2;
+    if (customer.personality === 'skeptical') stayChance -= 0.2;
+    if (customer.personality === 'serious') stayChance -= 0.1;
+
+    if (Math.random() < stayChance) {
+        // They stay!
+        return {
+            response: pickRandom(INVENTORY_ADMISSION_SUCCESS[customer.personality]),
+            interestChange: 5, // They appreciate the honesty/flexibility
+            dealAccepted: false,
+            newPhase: 'needs_discovery',
+            isLost: false,
+            customerSentiment: 'neutral',
+            playerSentiment: playerSentiment
+        };
+    } else {
+        // They leave!
+        return {
+            response: pickRandom(INVENTORY_ADMISSION_FAILURE[customer.personality]),
+            interestChange: -100,
+            dealAccepted: false,
+            newPhase: 'closed',
+            isLost: true,
+            customerSentiment: 'mad',
+            playerSentiment: playerSentiment
+        };
+    }
+  }
+
+  // Check for Credit Denial
+  if (isCreditDenial(message)) {
+      if (contextOverrides?.offerDownPayment !== undefined && contextOverrides.offerDownPayment >= 7500) {
+          // Pushback: They have high down payment!
+          return {
+              response: pickRandom(CREDIT_DENIAL_PUSHBACK[customer.personality]),
+              interestChange: -5,
+              dealAccepted: false,
+              newPhase: 'negotiation',
+              isLost: false,
+              customerSentiment: 'mad',
+              playerSentiment: playerSentiment
+          };
+      } else {
+           // Standard Denial: They leave
+           return {
+               response: pickRandom(CREDIT_DENIAL_RESPONSES[customer.personality]),
+               interestChange: -100,
+               dealAccepted: false,
+               newPhase: 'closed',
+               isLost: true,
+               customerSentiment: 'mad',
+               playerSentiment: playerSentiment
+           };
+      }
+  }
+
   // Also check natural language questions if no explicit type passed
+
+  // Also check natural language questions if no explicit type passed
+
   if (!contextOverrides?.messageType) {
     if (/\b(budget|spend|cost|price|money)\b/i.test(message)) customer.revealedPreferences.budget = true;
     if (/\b(type|kind|style|suv|sedan)\b/i.test(message)) customer.revealedPreferences.type = true;
