@@ -17,30 +17,30 @@ const CATEGORY_LABELS: Record<VehicleCategory, string> = {
 // Customer responds with what they're looking for
 
 const GREETING_RESPONSES: Record<PersonalityType, (features: DesiredFeature[], customer: Customer) => string[]> = {
-  friendly: (_features, _customer) => [
-    "Hi there! Just looking around for a new car today.",
-    "Hello! I'm hoping to find something nice.",
-    "Hi! Do you have a moment to help me find a car?",
+  friendly: (_features, customer) => [
+    `Hi there! I'm looking for ${CATEGORY_LABELS[customer.desiredCategory]} and hoping to spend around $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hello! Can you help me find ${CATEGORY_LABELS[customer.desiredCategory]}? My budget is roughly $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hi! I need a car today. I'm looking for ${CATEGORY_LABELS[customer.desiredCategory]} under $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
   ],
-  serious: (_features, _customer) => [
-    "I'm in the market for a vehicle. Show me what you have.",
-    "Hello. I need to buy a car today if the numbers work.",
-    "Hi. I'm looking for a specific kind of vehicle.",
+  serious: (_features, customer) => [
+    `I'm in the market for ${CATEGORY_LABELS[customer.desiredCategory]}. Max limit: $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hello. Show me ${CATEGORY_LABELS[customer.desiredCategory]} inventory. I will not exceed $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hi. I need to buy ${CATEGORY_LABELS[customer.desiredCategory]} today. Budget cap is $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
   ],
-  skeptical: (_features, _customer) => [
-    "Just looking. Don't hassle me.",
-    "I'm lookin' for a car, but I'm not playing games.",
-    "Yeah, I need a car. Just something reliable.",
+  skeptical: (_features, customer) => [
+    `Look, I just need ${CATEGORY_LABELS[customer.desiredCategory]}. Don't try to go over $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `I'm lookin' for ${CATEGORY_LABELS[customer.desiredCategory]}, but I'm not playing games. $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'} is my limit.`,
+    `Yeah, I need ${CATEGORY_LABELS[customer.desiredCategory]}. Just keep it under $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
   ],
-  enthusiastic: (_features, _customer) => [
-    "Hi!! I'm so excited to get a new car today!",
-    "Hello! I can't wait to see what you have on the lot!",
-    "Hey! I'm ready to drive home in something awesome!",
+  enthusiastic: (_features, customer) => [
+    `Hi!! I'm so excited to get ${CATEGORY_LABELS[customer.desiredCategory]} today! I have $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'} to spend!`,
+    `Hello! I can't wait to see your ${CATEGORY_LABELS[customer.desiredCategory]}s! I can afford about $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}!`,
+    `Hey! I'm ready to drive home in ${CATEGORY_LABELS[customer.desiredCategory]}! My budget is $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}!`,
   ],
-  analytical: (_features, _customer) => [
-    "I am conducting market research for a vehicle purchase.",
-    "Hello. I have specific requirements for my next vehicle.",
-    "Hi. I'm looking for a car that meets my criteria.",
+  analytical: (_features, customer) => [
+    `I am seeking ${CATEGORY_LABELS[customer.desiredCategory]} with a strict financial ceiling of $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hello. parameters: ${CATEGORY_LABELS[customer.desiredCategory]}, maximum execution price $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
+    `Hi. I'm looking for ${CATEGORY_LABELS[customer.desiredCategory]} that meets my criteria of $${customer.buyerType === 'cash' ? customer.budget.toLocaleString() : customer.maxPayment + '/mo'}.`,
   ],
 };
 
@@ -522,6 +522,7 @@ const DEAL_ACCEPTED_GREAT_VALUE: Record<PersonalityType, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
 const INVENTORY_ADMISSION_SUCCESS: Record<PersonalityType, string[]> = {
   friendly: [
     "Oh, that's a shame! Well, I'm open to suggestions. What do you have?",
@@ -550,6 +551,7 @@ const INVENTORY_ADMISSION_SUCCESS: Record<PersonalityType, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
 const INVENTORY_ADMISSION_FAILURE: Record<PersonalityType, string[]> = {
   friendly: [
     "Oh... that's really the only car I wanted. I think I'll look somewhere else.",
@@ -663,6 +665,7 @@ export function isTakeItOrLeaveIt(text: string): boolean {
   return patterns.some(regex => regex.test(text));
 }
 
+// @ts-ignore - Reserved for future use
 const TAKE_IT_OR_LEAVE_IT_SUCCESS: Record<PersonalityType, string[]> = {
   friendly: [
       "Well... if that's really the only option, I guess I'll take it! It's still a nice car.",
@@ -691,6 +694,7 @@ const TAKE_IT_OR_LEAVE_IT_SUCCESS: Record<PersonalityType, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
 const TAKE_IT_OR_LEAVE_IT_FAILURE: Record<PersonalityType, string[]> = {
   friendly: [
       "I understand, but I just can't settle for something I don't love. Sorry!",
@@ -729,6 +733,7 @@ export function isCreditDenial(text: string): boolean {
   return denialKeywords.some(regex => regex.test(text));
 }
 
+// @ts-ignore - Reserved for future use
 const CREDIT_DENIAL_RESPONSES: Record<PersonalityType, string[]> = {
   friendly: [
       "Oh... that's really embarrassing. I guess I can't buy a car today then. Sorry to waste your time.",
@@ -757,6 +762,7 @@ const CREDIT_DENIAL_RESPONSES: Record<PersonalityType, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
 const CREDIT_DENIAL_PUSHBACK: Record<PersonalityType, string[]> = {
   friendly: [
       "But wait! I have a huge down payment! Doesn't that help??",
@@ -912,6 +918,9 @@ export function generateResponse(context: ResponseContext): ResponseResult {
       } else {
          response = pickRandom(GREETING_RESPONSES[personality](desiredFeatures, customer));
          interestChange = 5; // Slight interest bump for engagement
+         // Reveal info since they just said it
+         customer.revealedPreferences.budget = true;
+         customer.revealedPreferences.type = true;
       }
       newPhase = 'needs_discovery';
       break;
@@ -1018,11 +1027,11 @@ export function generateResponse(context: ResponseContext): ResponseResult {
         } else if (!matchesCategory) {
           // Wrong category entirely
           response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
-          interestChange = -10;
+          interestChange = -5; // Reduced from -10
         } else {
           // Generic fallback
           response = pickRandom(CAR_REACTION_NEGATIVE[personality]);
-          interestChange = -8;
+          interestChange = -3; // Reduced from -8
         }
         
         customer.strikes++;
@@ -1043,8 +1052,12 @@ export function generateResponse(context: ResponseContext): ResponseResult {
            }
         }
         
-        // Only leave if they have 3+ strikes AND interest is very low, OR if interest hits rock bottom
-        if ((customer.strikes >= 3 && interest + interestChange < 20) || interest + interestChange <= 0 || (customer.strikes >= 3 && !isGoodMatch)) {
+        // Give them more chances (4 strikes instead of 3), and ensure interest doesn't just zero out immediately
+        // Also added a check to ensure they've seen at least a few cars or had some interaction
+        const isVeryMad = interest + interestChange <= 0;
+        const tooManyStrikes = customer.strikes >= 4; // Increased from 3
+        
+        if ((tooManyStrikes && !isGoodMatch) || (tooManyStrikes && isVeryMad)) {
           isLost = true;
           response = pickRandom(FRUSTRATED_WALKING[personality]);
         } else {
@@ -1388,7 +1401,7 @@ export async function getAIResponse(
       instructionType = 'general_chat';
   }
 
-  const systemPrompt = buildSystemPrompt(customer, currentCar, dealQuality);
+  const systemPrompt = buildSystemPrompt(customer, currentCar, instructionType, scenarioData);
 
   try {
     let aiResponse = '';
