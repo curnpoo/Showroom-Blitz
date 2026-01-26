@@ -22,6 +22,7 @@ interface ChatInterfaceProps {
   isMobile: boolean;
   onDiscoveryAction: (type: 'budget' | 'type' | 'features' | 'model') => void;
   showNotes?: boolean;
+  useAI?: boolean;
 }
 
 export function ChatInterface({
@@ -42,6 +43,7 @@ export function ChatInterface({
   attemptCloseDeal,
   onDiscoveryAction,
   showNotes = true,
+  useAI = false,
 }: ChatInterfaceProps) {
   
   const getInterestColor = (interest: number) => {
@@ -143,7 +145,7 @@ export function ChatInterface({
 
       <div className="interest-bar-container">
         <div className="interest-bar-label">
-          <span>Interest</span>
+          <span>{useAI ? 'Satisfaction' : 'Interest'}</span>
           <span>{selectedPerson.interest}%</span>
         </div>
         <div className="interest-bar">
@@ -169,7 +171,8 @@ export function ChatInterface({
 
       <div className="chat-input-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* Discovery Action Bar */}
-        {(selectedPerson.conversationPhase === 'greeting' || selectedPerson.conversationPhase === 'needs_discovery') && (
+        {/* Discovery Action Bar - Hide in AI mode */}
+        {!useAI && (selectedPerson.conversationPhase === 'greeting' || selectedPerson.conversationPhase === 'needs_discovery') && (
           <div className="discovery-actions" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', width: '100%' }}>
             {!selectedPerson.revealedPreferences.budget && (
               <button 

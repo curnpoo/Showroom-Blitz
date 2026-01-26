@@ -86,10 +86,12 @@ function getCompatibleFeatures(model?: string, category?: VehicleCategory): Desi
     if (model === 'Palisade' || model === 'Santa Fe') {
       validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' && f !== 'sporty' && f !== 'affordable');
       validFeatures.push('family', 'spacious', 'luxury', 'tech'); // Bias towards these
-    } else if (model === 'Venue' || model === 'Elantra') {
+    } else if (model === 'Venue') {
+      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family' && f !== 'sporty');
+      validFeatures.push('affordable', 'reliable', 'fuel_efficient', 'tech');
+    } else if (model === 'Elantra') {
       validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family');
-      validFeatures.push('affordable', 'reliable', 'fuel_efficient');
-      validFeatures.push('tech', 'fuel_efficient', 'sporty');
+      validFeatures.push('affordable', 'reliable', 'fuel_efficient', 'tech', 'sporty');
     } else if (model === 'Ioniq 6') {
       validFeatures = validFeatures.filter(f => f !== 'affordable' && f !== 'spacious');
       validFeatures.push('tech', 'fuel_efficient', 'sporty', 'luxury');
@@ -292,9 +294,17 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     personality,
     temper: finalTemper,
     interest: baseInterest,
-    budget: buyerType === 'cash' ? (35000 + Math.floor(Math.random() * 20000)) : 0,
-    maxPayment: buyerType === 'payment' ? (400 + Math.floor(Math.random() * 400)) : 0,
-    desiredDown: buyerType === 'payment' ? Math.floor(Math.random() * 10001) : 0,
+    budget: buyerType === 'cash' ? (15000 + Math.floor(Math.random() * 55000)) : 0,
+    maxPayment: buyerType === 'payment' ? (() => {
+      const rand = Math.random();
+      // 60% chance of unrealistic low payment (hard mode)
+      if (rand < 0.6) return 250 + Math.floor(Math.random() * 200); // $250 - $450
+      // 30% chance of reasonable payment
+      if (rand < 0.9) return 450 + Math.floor(Math.random() * 250); // $450 - $700
+      // 10% chance of high payment (easy mode)
+      return 700 + Math.floor(Math.random() * 500); // $700 - $1200
+    })() : 0,
+    desiredDown: buyerType === 'payment' ? (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 5000)) : 0,
     conversationHistory: [],
     conversationPhase: 'greeting',
     desiredCategory,

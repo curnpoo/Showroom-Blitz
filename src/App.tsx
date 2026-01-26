@@ -2064,6 +2064,7 @@ function App() {
                   isMobile={false}
                   onDiscoveryAction={handleDiscoveryAction}
                   showNotes={false}
+                  useAI={settings.useAI}
                 />
               </div>
 
