@@ -294,15 +294,20 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     personality,
     temper: finalTemper,
     interest: baseInterest,
-    budget: buyerType === 'cash' ? (15000 + Math.floor(Math.random() * 55000)) : 0,
+    budget: buyerType === 'cash' ? (() => {
+      const rand = Math.random();
+      // ~20% high rollers — way more budget so deals are easier to close
+      if (rand < 0.2) return 80000 + Math.floor(Math.random() * 70000); // $80k - $150k
+      // ~80% normal range
+      return 15000 + Math.floor(Math.random() * 55000); // $15k - $70k
+    })() : 0,
     maxPayment: buyerType === 'payment' ? (() => {
       const rand = Math.random();
-      // 60% chance of unrealistic low payment (hard mode)
-      if (rand < 0.6) return 250 + Math.floor(Math.random() * 200); // $250 - $450
-      // 30% chance of reasonable payment
-      if (rand < 0.9) return 450 + Math.floor(Math.random() * 250); // $450 - $700
-      // 10% chance of high payment (easy mode)
-      return 700 + Math.floor(Math.random() * 500); // $700 - $1200
+      // Wider range so we can "double" payments and still close: 40% low, 30% mid, 20% higher, 10% high
+      if (rand < 0.4) return 250 + Math.floor(Math.random() * 200); // $250 - $450
+      if (rand < 0.7) return 450 + Math.floor(Math.random() * 450); // $450 - $900 (can double from low)
+      if (rand < 0.9) return 700 + Math.floor(Math.random() * 700); // $700 - $1400
+      return 1000 + Math.floor(Math.random() * 1400); // $1000 - $2400 (way more headroom)
     })() : 0,
     desiredDown: buyerType === 'payment' ? (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 5000)) : 0,
     conversationHistory: [],

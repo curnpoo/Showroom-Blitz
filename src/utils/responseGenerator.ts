@@ -1,15 +1,5 @@
-import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
-
-// ============ VEHICLE CATEGORY LABELS ============
-const CATEGORY_LABELS: Record<VehicleCategory, string> = {
-  suv: 'an SUV',
-  sedan: 'a sedan',
-  electric: 'an electric car',
-  hybrid: 'a hybrid',
-  affordable: 'something affordable',
-  luxury: 'something luxury',
-  any: '', // Not used directly, handled separately
-};
+import type { Car, Customer, PersonalityType, DesiredFeature, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
+import { CATEGORY_LABELS, FEATURE_LABELS, formatFeatures, TAKE_IT_OR_LEAVE_IT_SUCCESS, TAKE_IT_OR_LEAVE_IT_FAILURE, INVENTORY_ADMISSION_SUCCESS, INVENTORY_ADMISSION_FAILURE } from '../data/dialogue';
 
 
 
@@ -522,78 +512,6 @@ const DEAL_ACCEPTED_GREAT_VALUE: Record<PersonalityType, string[]> = {
   ],
 };
 
-// @ts-ignore - Reserved for future use
-const INVENTORY_ADMISSION_SUCCESS: Record<PersonalityType, string[]> = {
-  friendly: [
-    "Oh, that's a shame! Well, I'm open to suggestions. What do you have?",
-    "No worries! I'm not set in stone. Show me something else nice!",
-    "Ah, bummer. But I trust you - what else is good on the lot?",
-  ],
-  serious: [
-    "Unfortunate. I suppose I can look at alternatives if they are comparable.",
-    "I see. Well, don't waste my time. What DO you have that's worth buying?",
-    "That is disappointing. Show me what is available then.",
-  ],
-  skeptical: [
-    "Of course you don't. Figures. Fine, what IS actually here?",
-    "Typical. Bait and switch? Whatever, show me what you got.",
-    "Ugh. Fine. I'm already here. Show me something else.",
-  ],
-  enthusiastic: [
-    "Aww man! That's okay though! I'm sure you have other awesome cars!",
-    "Oh no! Well, surprise me! What else is cool?!",
-    "That's sad, but I'm still excited to buy a car! What else can I see?",
-  ],
-  analytical: [
-    "Noted. Resetting search parameters. What inventory is currently available?",
-    " unavailability acknowledged. Please present alternative options.",
-    "I will adjust my criteria. Proceed with available inventory.",
-  ],
-};
-
-// @ts-ignore - Reserved for future use
-const INVENTORY_ADMISSION_FAILURE: Record<PersonalityType, string[]> = {
-  friendly: [
-    "Oh... that's really the only car I wanted. I think I'll look somewhere else.",
-    "That's disappointing. I really had my heart set on that. Thanks anyway.",
-  ],
-  serious: [
-    "That was a waste of my trip. I'm leaving.",
-    "If you don't have what I need, we have nothing to discuss.",
-  ],
-  skeptical: [
-    "I knew it. You guys never have anything good. I'm out.",
-    "See? Complete waste of time. I'm walking.",
-  ],
-  enthusiastic: [
-    "Aww, that's literally the only one I wanted! I'm so sad! Bye!",
-    "Noooo! My dream car! I can't look at anything else right now!",
-  ],
-  analytical: [
-    "Specific requirement matching failed. Terminating purchase process.",
-    "Critical criteria not met. Aborting transaction.",
-  ],
-};
-
-// ============ HELPER FUNCTIONS ============
-
-const FEATURE_LABELS: Record<DesiredFeature, string> = {
-  sporty: 'sporty',
-  fuel_efficient: 'fuel efficient',
-  luxury: 'luxurious',
-  family: 'family-friendly',
-  affordable: 'affordable',
-  tech: 'high-tech',
-  spacious: 'spacious',
-  reliable: 'reliable',
-};
-
-function formatFeatures(features: DesiredFeature[]): string {
-  const labels = features.map(f => FEATURE_LABELS[f]);
-  if (labels.length === 1) return labels[0];
-  return labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
-}
-
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -665,64 +583,6 @@ export function isTakeItOrLeaveIt(text: string): boolean {
   return patterns.some(regex => regex.test(text));
 }
 
-// @ts-ignore - Reserved for future use
-const TAKE_IT_OR_LEAVE_IT_SUCCESS: Record<PersonalityType, string[]> = {
-  friendly: [
-      "Well... if that's really the only option, I guess I'll take it! It's still a nice car.",
-      "Okay then! I don't want to leave empty handed. Let's do it.",
-      "Fair enough. I trust you. I'll take this one."
-  ],
-  serious: [
-      "I see. Given the market conditions, I will accept this vehicle as the solution.",
-      "Very well. If the inventory is limited, I will proceed with this purchase.",
-      "Understood. Let's finalize the paperwork for this unit then."
-  ],
-  skeptical: [
-      "Fine. I guess I'm stuck with this one. Whatever, let's just get it over with.",
-      "You're lucky I need a car today. I'll take it, but I'm not thrilled.",
-      "Ugh. Fine. I'll take it."
-  ],
-  enthusiastic: [
-      "Okay!!! I just really want a car today! I'll take it!!",
-      "If that's the only one, then it's DESTINY! Let's do it!",
-      "I can't wait any longer! I'll take this one! Yay!"
-  ],
-  analytical: [
-      "Analyzing alternatives... None available. Proceeding with current local optimum.",
-      "Given the constraint of limited inventory, acceptance is the logical path.",
-      "I will acquire this unit rather than restart the search process."
-  ],
-};
-
-// @ts-ignore - Reserved for future use
-const TAKE_IT_OR_LEAVE_IT_FAILURE: Record<PersonalityType, string[]> = {
-  friendly: [
-      "I understand, but I just can't settle for something I don't love. Sorry!",
-      "If that's all you have, I think I better keep looking elsewhere. Thanks anyway!",
-      "Ah that's a shame. I really need something else. Bye!"
-  ],
-  serious: [
-      "Then we have nothing more to discuss. Good day.",
-      "That is unacceptable. I will find a dealership with better stock.",
-      "I am not one to settle. Goodbye."
-  ],
-  skeptical: [
-      "Wow. 'That's all you have'? What a joke. I'm leaving.",
-      "I knew this place was a waste of time. Don't bother calling me back.",
-      "Yeah, right. I'm not buying your leftovers. See ya."
-  ],
-  enthusiastic: [
-      "But I don't want thiiiis one! I'm so sad! I have to go!",
-      "Noooo! I can't believe that's it! I'm leaving!",
-      "Aww! I guess I won't get a car today after all. Bye!"
-  ],
-  analytical: [
-      "Inventory constraints prevent optimal matching. Terminating process.",
-      "Current option does not meet threshold criteria. Aborting.",
-      "Insufficient selection. I will conduct business elsewhere."
-  ],
-};
-
 export function isCreditDenial(text: string): boolean {
   const denialKeywords = [
     /\b(denied|deny|decline|declined)\b/i, // "Credit denied", "You were declined"
@@ -731,6 +591,33 @@ export function isCreditDenial(text: string): boolean {
     /\b(bank)\b.*\b(no|said no|reject)\b/i, // "Bank said no"
   ];
   return denialKeywords.some(regex => regex.test(text));
+}
+
+/** Player/salesperson is asking for final confirmation to close (e.g. "Does this look good?", "Ready to sign?") */
+export function isPlayerClosingAttempt(text: string): boolean {
+  const lower = text.toLowerCase();
+  const closingPhrases = [
+    'look good', 'looks good', 'good enough', 'put your name on it',
+    'ready to sign', 'sign the', 'finalize', 'wrap this up', 'we have a deal',
+    'do we have a deal', 'shall we', 'next steps', 'where do i sign',
+    'ready to make it official', 'make it official', 'finalize everything',
+  ];
+  if (closingPhrases.some(p => lower.includes(p))) return true;
+  return /\b(deal|sign|close)\b.*\?/i.test(text) || /ready\s+to\s+(sign|close|finalize)/i.test(text);
+}
+
+/** Customer's last message indicated they accepted (deal, next steps, etc.) */
+function lastAssistantIndicatedAcceptance(content: string): boolean {
+  const lower = content.toLowerCase();
+  const acceptPhrases = [
+    "i'll take it", "i'll take", "i will take", "let's do it", "lets do it",
+    "deal", "sold", "where do i sign", "next steps", "we have a deal",
+    "accept", "agreed", "done", "ready to sign", "let's go", "lets go",
+    "take it at", "must-have features confirmed",
+  ];
+  if (acceptPhrases.some(p => lower.includes(p))) return true;
+  if (/\bat \$\d/i.test(content)) return true; // "at $38,000" etc.
+  return /\b(deal|sold|accept|agreed)\b/i.test(lower);
 }
 
 // @ts-ignore - Reserved for future use
@@ -884,6 +771,8 @@ export interface ResponseContext {
   offerTerm?: number;
 }
 
+export type ScenarioData = { offeredDown?: number; desiredDown?: number; budget?: number };
+
 export interface ResponseResult {
   response: string;
   interestChange: number;
@@ -892,6 +781,52 @@ export interface ResponseResult {
   isLost?: boolean;
   customerSentiment: Sentiment;
   playerSentiment: Sentiment;
+}
+
+/** Single source of truth for "take it or leave it" and "inventory admission" special phrases. Returns null if message is not a special phrase. */
+export function resolveSpecialPhrase(message: string, customer: Customer, currentCar: Car | null): ResponseResult | null {
+  const playerSentiment: Sentiment = 'neutral';
+
+  if (isTakeItOrLeaveIt(message)) {
+    let takeItChance = 0.1;
+    if (currentCar) {
+      const catMatch = carMatchesCategory(currentCar, customer);
+      const featMatch = carMatchesFeatures(currentCar, customer.desiredFeatures);
+      if (catMatch) takeItChance += 0.3;
+      if (featMatch.score >= 0.5) takeItChance += 0.3;
+      if (featMatch.score === 1) takeItChance += 0.3;
+    }
+    if (customer.personality === 'friendly') takeItChance += 0.2;
+    if (customer.personality === 'enthusiastic') takeItChance += 0.1;
+    if (customer.personality === 'serious') takeItChance += 0.1;
+    if (customer.personality === 'skeptical') takeItChance -= 0.3;
+
+    if (Math.random() < takeItChance) {
+      const response = pickRandom(TAKE_IT_OR_LEAVE_IT_SUCCESS[customer.personality]);
+      return { response, interestChange: 10, dealAccepted: true, newPhase: 'closed', customerSentiment: detectSentiment(response), playerSentiment };
+    }
+    const response = pickRandom(TAKE_IT_OR_LEAVE_IT_FAILURE[customer.personality]);
+    return { response, interestChange: -100, dealAccepted: false, newPhase: 'closed', isLost: true, customerSentiment: detectSentiment(response), playerSentiment };
+  }
+
+  if (isInventoryAdmission(message)) {
+    let stayChance = 0.5;
+    if (customer.personality === 'friendly') stayChance += 0.2;
+    if (customer.personality === 'enthusiastic') stayChance += 0.2;
+    if (customer.personality === 'skeptical') stayChance -= 0.2;
+    if (customer.personality === 'serious') stayChance -= 0.1;
+
+    if (Math.random() < stayChance) {
+      customer.desiredModel = undefined;
+      customer.desiredCategory = 'any';
+      const response = pickRandom(INVENTORY_ADMISSION_SUCCESS[customer.personality]);
+      return { response, interestChange: 5, dealAccepted: false, newPhase: 'needs_discovery', customerSentiment: detectSentiment(response), playerSentiment };
+    }
+    const response = pickRandom(INVENTORY_ADMISSION_FAILURE[customer.personality]);
+    return { response, interestChange: -100, dealAccepted: false, newPhase: 'closed', isLost: true, customerSentiment: detectSentiment(response), playerSentiment };
+  }
+
+  return null;
 }
 
 export function generateResponse(context: ResponseContext): ResponseResult {
@@ -1139,8 +1074,10 @@ export function generateResponse(context: ResponseContext): ResponseResult {
       const targetPrice = effectiveBudget;
       const isPayment = offerType === 'payment';
 
-      // Check for 'Great Deal' override (20% off MSRP)
-      if (currentCar && offerPrice <= currentCar.price * 0.8) {
+      // Check for 'Great Deal' override: 20% off MSRP for cash/OTD, or payment well under their max
+      const isGreatDealCash = currentCar && !isPayment && offerPrice <= currentCar.price * 0.8;
+      const isGreatDealPayment = isPayment && offerPrice <= maxPayment * 0.9; // payment at or below ~90% of max = obvious discount
+      if (isGreatDealCash || isGreatDealPayment) {
          response = pickRandom(DEAL_ACCEPTED_GREAT_VALUE[personality]);
          interestChange = 30;
          customer.strikes = 0;
@@ -1245,7 +1182,7 @@ export async function getAIResponse(
   // --- ANALYSIS PHASE ---
   // --- ANALYSIS PHASE ---
   let instructionType: string | undefined;
-  let scenarioData: any = {};
+  let scenarioData: ScenarioData = {};
   
   // Initialize Logic Variables
   let dealQuality: string | undefined;
@@ -1371,8 +1308,11 @@ export async function getAIResponse(
     } else {
       const moodMultiplier = 1 + (interest / 1000);
       const effectiveBudget = buyerType === 'cash' ? Math.round(budget * moodMultiplier) : Math.round(maxPayment * moodMultiplier);
+      const isGreatDeal = offerType === 'payment'
+        ? offerPrice <= maxPayment * 0.9
+        : currentCar && offerPrice <= currentCar.price * 0.8;
 
-      if (offerPrice <= effectiveBudget) {
+      if (offerPrice <= effectiveBudget || isGreatDeal) {
         instructionType = 'offer_accepted';
       } else if (offerPrice <= effectiveBudget * 1.05) {
         instructionType = 'offer_close';
@@ -1393,6 +1333,14 @@ export async function getAIResponse(
            instructionType = 'offer_way_too_high';
         }
       }
+    }
+  }
+
+  // Player is asking to confirm/close after customer already accepted — avoid backtracking
+  if (!instructionType && isPlayerClosingAttempt(message)) {
+    const lastAsst = [...customer.conversationHistory].reverse().find(m => m.role === 'assistant');
+    if (lastAsst && lastAssistantIndicatedAcceptance(lastAsst.content)) {
+      instructionType = 'customer_affirm_close';
     }
   }
   
@@ -1550,6 +1498,12 @@ export async function getAIResponse(
              }
             newPhase = 'negotiation';
             break;
+        case 'customer_affirm_close':
+            interestChange = 5;
+            dealAccepted = true;
+            customer.strikes = 0;
+            newPhase = 'closed';
+            break;
         case 'general_chat':
         default:
              // Logic will fall through to sentiment analysis below if no explicit instruction action
@@ -1614,7 +1568,7 @@ export async function getAIResponse(
 } // End function
 
 
-function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructionType?: string, scenarioData?: any): string {
+function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructionType?: string, scenarioData?: ScenarioData): string {
   const featureList = customer.desiredFeatures.map(f => FEATURE_LABELS[f]).join(', ');
   
   let matchAnalysis = '';
@@ -1694,6 +1648,9 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
               break;
           case 'offer_downgrade_request':
               instruction = "The car is nice but too expensive. Tell them you need a cheaper model or lower trim level.";
+              break;
+          case 'customer_affirm_close':
+              instruction = "You (the customer) ALREADY accepted the deal in your last message. The salesperson is asking for final confirmation. You MUST affirm the deal. Say you're ready to sign, that we have a deal, or where do I sign. Do NOT backtrack, renegotiate, or say the price is wrong.";
               break;
           
           case 'general_chat':

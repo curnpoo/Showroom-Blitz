@@ -65,6 +65,7 @@ export interface Customer {
   isGuarded: boolean; // Guarded customers initially say "just looking" and reveal info slowly
   offerCount: number; // For "attrition" logic (repeatedly offering same deal)
   closeAttempts: number; // Tracks how many times the player has tried to close the deal
+  committedToBuy?: boolean; // Set when customer accepted an offer; used for "Close Deal" flow
 }
 
 export interface Coworker {
