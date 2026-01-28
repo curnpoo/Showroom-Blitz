@@ -2362,7 +2362,7 @@ function App() {
                             </button>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
-                            Default: /api/lm-studio (Fixes CORS issues)
+                            Default: https://e5e3db2e421c.ngrok-free.app (Fixes CORS issues)
                           </div>
                           
                           {/* Cloud-to-Local Warning */}
