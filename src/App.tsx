@@ -66,7 +66,7 @@ function App() {
       useAI: false,
       apiKey: '',
       provider: 'anthropic' as const,
-      apiBaseUrl: '/api/lm-studio',
+      apiBaseUrl: import.meta.env.VITE_AI_API_URL || '/api/lm-studio',
       modelName: 'claude-3-sonnet-20240229',
       timer: {
         enabled: false,
