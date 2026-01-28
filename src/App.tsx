@@ -440,7 +440,19 @@ function App() {
     canvas.addEventListener('click', handleClick);
     canvas.addEventListener('touchstart', handleClick);
 
-    const animate = () => {
+    let lastTimestamp = 0; // Track previous frame time for deltaTime calculation
+
+    const animate = (timestamp: number) => {
+      // Calculate real deltaTime in seconds
+      if (lastTimestamp === 0) {
+        lastTimestamp = timestamp;
+        animationRef.current = requestAnimationFrame(animate);
+        return; // Skip first frame
+      }
+
+      const deltaTime = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      lastTimestamp = timestamp;
+
       // Scale UI elements for mobile readability
       const uiScale = isMobile ? 1.75 : 1; 
       
@@ -501,9 +513,10 @@ function App() {
       const dy = player.targetY - player.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
+      const PLAYER_SPEED = 300; // pixels per second (was 5 px/frame * 60fps)
       if (dist > 2) {
-        player.x += (dx / dist) * player.speed;
-        player.y += (dy / dist) * player.speed;
+        player.x += (dx / dist) * PLAYER_SPEED * deltaTime;
+        player.y += (dy / dist) * PLAYER_SPEED * deltaTime;
       }
 
       // Clear canvas
@@ -686,8 +699,7 @@ function App() {
       // Proactive Coworker Steal Mechanic
       // Sales coworkers randomly steal customers every 5-30 seconds
       const salesCoworkers = coworkersRef.current.filter(c => c.department === 'sales');
-      const deltaTime = 1/60; // Assuming ~60fps
-      
+
       // Track unattended customers and despawn after 60 seconds
       customersRef.current.forEach(customer => {
         if (!customer.active) return;
@@ -741,12 +753,12 @@ function App() {
                 const dx = customer.x - coworker.x;
                 const dy = customer.y - coworker.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (dist > 15) {
                   // Still walking to customer
-                  const speed = 2.5;
-                  coworker.x += (dx / dist) * speed;
-                  coworker.y += (dy / dist) * speed;
+                  const COWORKER_SPEED = 150; // pixels per second (was 2.5 px/frame * 60fps)
+                  coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
+                  coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
 
                   // CHECK FOR INTERCEPTION: If player talks to this customer while walking
                   // Using specific customer reference since 'customer' variable in this scope is valid
@@ -803,13 +815,13 @@ function App() {
               const dx = targetX - coworker.x;
               const dy = targetY - coworker.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              
+
               if (dist > 5) {
                 // Move coworker back to desk
-                const speed = 2.5;
-                coworker.x += (dx / dist) * speed;
-                coworker.y += (dy / dist) * speed;
-                
+                const COWORKER_SPEED = 150; // pixels per second (was 2.5 px/frame * 60fps)
+                coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
+                coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
+
                 // Customer follows coworker (slightly behind)
                 const custTargetX = coworker.x;
                 const custTargetY = coworker.y + 45;
@@ -817,8 +829,8 @@ function App() {
                 const cdy = custTargetY - customer.y;
                 const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
                 if (cdist > 5) {
-                  customer.x += (cdx / cdist) * speed;
-                  customer.y += (cdy / cdist) * speed;
+                  customer.x += (cdx / cdist) * COWORKER_SPEED * deltaTime;
+                  customer.y += (cdy / cdist) * COWORKER_SPEED * deltaTime;
                 }
               } else {
                 // Coworker arrived at desk! Position customer in front
@@ -948,7 +960,7 @@ function App() {
       animationRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       canvas.removeEventListener('click', handleClick);
