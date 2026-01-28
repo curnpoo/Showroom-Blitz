@@ -1817,88 +1817,146 @@ function App() {
 
 
 
-  // Intro screen
+  // Welcome screen
   if (gameState === 'intro') {
     return (
       <div className="intro-screen">
         <div className="intro-card">
           <h1>Showroom Blitz</h1>
-          <p className="subtitle">Master the art of car sales</p>
-          
+          <p className="subtitle">Competitive Car Sales Simulation</p>
+
+          <div className="game-description">
+            <p>Work the showroom floor as a car salesperson competing against AI coworkers. Move quickly to intercept customers, learn their preferences, and close deals before your competition does.</p>
+          </div>
+
           <div className="features">
             <div className="feature">
-              <div className="feature-icon green">
-                <DollarSign size={18} />
+              <div className="feature-icon">
+                <DollarSign size={20} />
               </div>
-              <span>Negotiate deals with dynamic customers</span>
+              <div className="feature-text">
+                <strong>Real Deal Math</strong>
+                <span>Calculate profit margins, payments, and OTD pricing</span>
+              </div>
             </div>
             <div className="feature">
-              <div className="feature-icon blue">
-                <Users size={18} />
+              <div className="feature-icon">
+                <Users size={20} />
               </div>
-              <span>Each customer has unique personality & budget</span>
+              <div className="feature-text">
+                <strong>AI Personalities</strong>
+                <span>Each customer has unique budgets, preferences, and negotiation styles</span>
+              </div>
             </div>
             <div className="feature">
-              <div className="feature-icon orange">
-                <Car size={18} />
+              <div className="feature-icon">
+                <Car size={20} />
               </div>
-              <span>Up to 100 vehicles (10 in Volume Run)</span>
+              <div className="feature-text">
+                <strong>Dynamic Inventory</strong>
+                <span>Browse 10-100 vehicles with real specs and pricing</span>
+              </div>
             </div>
           </div>
 
-          <div className="timer-config">
-            <h3>Timed Session Settings</h3>
-            <div className="toggle-group">
-              <button 
-                className={`toggle-btn ${settings.timer.enabled ? 'active' : ''}`}
-                onClick={() => setSettings(prev => ({
-                  ...prev,
-                  timer: { ...prev.timer, enabled: !prev.timer.enabled }
-                }))}
-              >
-                Timer: {settings.timer.enabled ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            
-            <div className="toggle-group" style={{ marginTop: '15px' }}>
+          <button
+            className="start-button"
+            onClick={() => setGameState('setup')}
+          >
+            Get Started
+          </button>
+
+          <button
+            className="tips-button"
+            onClick={() => setShowTips(true)}
+          >
+            <HelpCircle size={18} /> How to Play
+          </button>
+
+          <p className="made-by-footer">Made by Curren</p>
+        </div>
+
+        {showTips && <TipsModal onClose={() => setShowTips(false)} />}
+      </div>
+    );
+  }
+
+  // Setup screen (game mode selection)
+  if (gameState === 'setup') {
+    return (
+      <div className="intro-screen">
+        <div className="intro-card setup-card">
+          <h2 className="setup-title">Game Setup</h2>
+          <p className="setup-subtitle">Choose your game mode and settings</p>
+
+          <div className="settings-container">
+            <div className="setting-section">
               <h3>Game Mode</h3>
-               <div className="mode-toggle" style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <div className="mode-buttons">
                 <button
-                  className={`toggle-btn ${settings.gameMode === 'standard' ? 'active' : ''}`}
+                  className={`mode-btn ${settings.gameMode === 'standard' ? 'active' : ''}`}
                   onClick={() => setSettings(prev => ({ ...prev, gameMode: 'standard' }))}
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: settings.gameMode === 'standard' ? 'var(--primary, #3498db)' : 'transparent', color: settings.gameMode === 'standard' ? 'white' : '#666', cursor: 'pointer' }}
                 >
                   Standard
                 </button>
                 <button
-                  className={`toggle-btn ${settings.gameMode === 'volume' ? 'active' : ''}`}
-                  onClick={() => setSettings(prev => ({ ...prev, gameMode: 'volume', timer: { ...prev.timer, enabled: false } }))} 
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: settings.gameMode === 'volume' ? 'var(--primary, #3498db)' : 'transparent', color: settings.gameMode === 'volume' ? 'white' : '#666', cursor: 'pointer' }}
+                  className={`mode-btn ${settings.gameMode === 'volume' ? 'active' : ''}`}
+                  onClick={() => setSettings(prev => ({ ...prev, gameMode: 'volume', timer: { ...prev.timer, enabled: false } }))}
                 >
                   Volume Run
                 </button>
-               </div>
-               {settings.gameMode === 'volume' && (
-                 <p style={{ fontSize: '0.9rem', color: '#e74c3c', marginTop: '8px', fontWeight: 'bold' }}>
-                   ⚠️ 10 Cars Total • Race against the clock!
-                 </p>
-               )}
+              </div>
+              <div className="mode-description">
+                <div className={`mode-info ${settings.gameMode === 'standard' ? 'visible' : 'hidden'}`}>
+                  100 vehicles • Practice deals
+                </div>
+                <div className={`mode-info ${settings.gameMode === 'volume' ? 'visible' : 'hidden'}`}>
+                  10 vehicles • Race the clock!
+                </div>
+              </div>
             </div>
 
-            {settings.timer.enabled && settings.gameMode === 'standard' && (
-              <div className="duration-group">
-                {[3, 5, 10].map(d => (
+            {settings.gameMode === 'standard' && (
+              <div className="setting-section">
+                <h3>Timed Session</h3>
+                <div className="timer-buttons">
                   <button
-                    key={d}
-                    className={`duration-btn ${settings.timer.duration === d ? 'active' : ''}`}
+                    className={`timer-btn ${!settings.timer.enabled ? 'active' : ''}`}
                     onClick={() => setSettings(prev => ({
                       ...prev,
-                      timer: { ...prev.timer, duration: d as 3 | 5 | 10 }
+                      timer: { ...prev.timer, enabled: false }
                     }))}
                   >
-                    {d}m
+                    Off
                   </button>
-                ))}
+                  <button
+                    className={`timer-btn ${settings.timer.enabled ? 'active' : ''}`}
+                    onClick={() => setSettings(prev => ({
+                      ...prev,
+                      timer: { ...prev.timer, enabled: true }
+                    }))}
+                  >
+                    On
+                  </button>
+                </div>
+                <div className="timer-duration-container">
+                  <div className={`timer-duration ${settings.timer.enabled ? 'visible' : 'hidden'}`}>
+                    <div className="duration-buttons">
+                      {[3, 5, 10].map(d => (
+                        <button
+                          key={d}
+                          className={`duration-btn ${settings.timer.duration === d ? 'active' : ''}`}
+                          onClick={() => setSettings(prev => ({
+                            ...prev,
+                            timer: { ...prev.timer, duration: d as 3 | 5 | 10 }
+                          }))}
+                        >
+                          {d} min
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1909,21 +1967,17 @@ function App() {
               setGameState('playing');
               setShowDealClosed(false);
               customersRef.current.forEach(c => c.active = true);
-              
+
               if (settings.gameMode === 'volume') {
                 inventoryRef.current = generateInventory(10);
-                setTimeLeft(0); // Count up starts at 0
+                setTimeLeft(0);
                 setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
               } else if (settings.timer.enabled) {
-                // Determine inventory size? Standard is 100 usually, re-generate or keep?
-                // Existing code generated 10 on load? No, it did 100 in useRef(generateInventory(100)).
-                // We should probably reset inventory to 100 if switching back to standard.
                 inventoryRef.current = generateInventory(100);
                 setTimeLeft(settings.timer.duration * 60);
                 setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
               } else {
-                 // Standard no timer, ensure full inventory
-                 inventoryRef.current = generateInventory(100);
+                inventoryRef.current = generateInventory(100);
               }
             }}
           >
@@ -1932,27 +1986,14 @@ function App() {
 
           <button
             className="secondary-button"
-            style={{ 
-              marginTop: '15px', 
-              background: 'transparent', 
-              color: '#666', 
-              border: '1px solid #ddd',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              justifyContent: 'center',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              width: '100%',
-              fontSize: '0.9rem'
-            }}
-            onClick={() => setShowTips(true)}
+            onClick={() => setGameState('intro')}
           >
-            <HelpCircle size={16} /> Tip Sheet & Rules
+            Back
           </button>
+
+          <p className="made-by-footer">Made by Curren</p>
         </div>
-        
+
         {showTips && <TipsModal onClose={() => setShowTips(false)} />}
       </div>
     );

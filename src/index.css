@@ -75,97 +75,337 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+    background: #36393f; /* Discord background - solid, no gradient */
     padding: 24px;
 }
 
 .intro-card {
-    background: linear-gradient(145deg, var(--bg-card) 0%, #0f172a 100%);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 48px 40px;
-    max-width: 400px;
+    background: #2f3136; /* Discord card color */
+    border: 1px solid #202225; /* Subtle dark border */
+    border-radius: 16px;
+    padding: 40px 36px;
+    max-width: 440px;
     width: 100%;
     text-align: center;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Material elevation shadow */
 }
 
 .intro-card h1 {
-    font-size: 2.5rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #38b2ac 0%, #3182ce 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 8px;
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #dcddde; /* Light gray text */
+    margin-bottom: 6px;
 }
 
 .intro-card .subtitle {
-    color: var(--text-secondary);
-    font-size: 1.1rem;
-    margin-bottom: 32px;
+    color: #b9bbbe; /* Muted gray */
+    font-size: 1rem;
+    margin-bottom: 16px;
+}
+
+.intro-card .game-description {
+    color: #b9bbbe;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #40444b;
+    border: 1px solid #202225;
+    border-radius: 8px;
+    text-align: left;
+}
+
+.intro-card .game-description p {
+    margin: 0;
+}
+
+.intro-card .made-by {
+    color: #72767d; /* Very muted */
+    font-size: 0.85rem;
+    margin-bottom: 28px;
+    font-weight: 500;
+}
+
+.intro-card .made-by-footer {
+    color: #72767d;
+    font-size: 0.8rem;
+    margin-top: 16px;
+    margin-bottom: 0;
+    font-weight: 400;
 }
 
 .intro-card .features {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 32px;
+    gap: 10px;
+    margin-bottom: 28px;
     text-align: left;
 }
 
 .intro-card .feature {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
-    color: var(--text-secondary);
+    color: #b9bbbe;
+    font-size: 0.9rem;
+    padding: 12px;
+    background: #40444b; /* Lighter than card */
+    border: 1px solid #202225;
+    border-radius: 8px;
+}
+
+.intro-card .feature-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.intro-card .feature-text strong {
+    color: #dcddde;
     font-size: 0.95rem;
 }
 
+.intro-card .feature-text span {
+    color: #b9bbbe;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
 .intro-card .feature-icon {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    background: #36393f; /* Match screen background */
+    color: #dcddde;
+    margin-top: 2px;
 }
 
-.intro-card .feature-icon.green {
-    background: rgba(46, 204, 113, 0.2);
-    color: var(--success);
+.settings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 28px;
 }
-.intro-card .feature-icon.blue {
-    background: rgba(52, 152, 219, 0.2);
-    color: var(--payment-color);
+
+.setting-section {
+    text-align: left;
 }
-.intro-card .feature-icon.orange {
-    background: rgba(243, 156, 18, 0.2);
-    color: var(--warning);
+
+.setting-section h3 {
+    font-size: 0.8rem;
+    color: #72767d; /* Muted uppercase labels */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.mode-buttons,
+.timer-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.mode-btn,
+.timer-btn {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #202225;
+    border-radius: 8px;
+    background: #40444b; /* Slightly elevated */
+    color: #dcddde;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mode-btn:hover,
+.timer-btn:hover {
+    background: #484c52; /* Lighter on hover */
+    border-color: #2c2f33;
+}
+
+.mode-btn.active,
+.timer-btn.active {
+    background: #5865F2; /* Discord blurple */
+    border-color: #5865F2;
+    color: white;
+    box-shadow: 0 2px 6px rgba(88, 101, 242, 0.3); /* Glow effect */
+}
+
+.mode-description {
+    height: 32px;
+    position: relative;
+}
+
+.mode-info {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #b9bbbe;
+    font-size: 0.85rem;
+    padding: 8px;
+    background: #40444b;
+    border: 1px solid #202225;
+    border-radius: 6px;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.mode-info.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mode-info.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.timer-duration-container {
+    height: 48px;
+    position: relative;
+}
+
+.timer-duration {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.timer-duration.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.timer-duration.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.duration-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.duration-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #202225;
+    border-radius: 8px;
+    background: #40444b;
+    color: #dcddde;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.duration-btn:hover {
+    background: #484c52;
+}
+
+.duration-btn.active {
+    background: #3ba55d; /* Green accent */
+    border-color: #3ba55d;
+    color: white;
+    box-shadow: 0 2px 6px rgba(59, 165, 93, 0.3);
 }
 
 .start-button {
     width: 100%;
     padding: 16px 32px;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 700;
     border: none;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent) 0%, #2c7a7b 100%);
+    border-radius: 10px;
+    background: #5865F2; /* Discord blurple */
     color: white;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 20px rgba(56, 178, 172, 0.3);
+    box-shadow: 0 2px 8px rgba(88, 101, 242, 0.4);
+    margin-bottom: 12px;
 }
 
 .start-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 30px rgba(56, 178, 172, 0.4);
+    background: #4752c4; /* Darker blurple */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(88, 101, 242, 0.5);
 }
 
 .start-button:active {
     transform: translateY(0);
+}
+
+.tips-button {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    color: #b9bbbe;
+    border: 1px solid #40444b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tips-button:hover {
+    background: #40444b;
+    border-color: #484c52;
+    color: #dcddde;
+}
+
+.secondary-button {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    color: #b9bbbe;
+    border: 1px solid #40444b;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin-bottom: 12px;
+}
+
+.secondary-button:hover {
+    background: #40444b;
+    border-color: #484c52;
+    color: #dcddde;
+}
+
+/* ========== Setup screen ========== */
+.setup-card {
+    max-width: 420px;
+}
+
+.setup-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #dcddde;
+    margin-bottom: 8px;
+    margin-top: 0;
+}
+
+.setup-subtitle {
+    color: #b9bbbe;
+    font-size: 0.95rem;
+    margin-bottom: 28px;
 }
 
 /* ========== Stats overlay ========== */
@@ -1186,67 +1426,7 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
 }
-/* ========== Timer configuration ========== */
-.timer-config {
-    margin: 24px 0;
-    padding: 20px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 16px;
-    border: 1px solid var(--border);
-}
-
-.timer-config h3 {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 12px;
-}
-
-.timer-config .toggle-group {
-    margin-bottom: 16px;
-}
-
-.toggle-btn {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: #0f172a;
-    color: var(--text-secondary);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.toggle-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
-}
-
-.duration-group {
-    display: flex;
-    gap: 8px;
-}
-
-.duration-btn {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: #0f172a;
-    color: var(--text-secondary);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.duration-btn.active {
-    background: var(--primary);
-    border-color: var(--primary-light);
-    color: white;
-}
+/* ========== Timer configuration (old styles removed - now using new intro-card styles) ========== */
 
 /* ========== Timer overlay ========== */
 .timer-overlay {
