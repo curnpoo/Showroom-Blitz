@@ -52,6 +52,13 @@ export function ChatInterface({
     return 'linear-gradient(90deg, #e74c3c, #c0392b)';
   };
 
+  const canCloseDeal = !!currentCar && (
+    conversation.some(msg => msg.offerDetails) ||
+    selectedPerson.interest >= 40 ||
+    selectedPerson.conversationPhase === 'closed'
+  );
+  const customerAccepted = selectedPerson.conversationPhase === 'closed';
+
   return (
     <>
       <div className="chat-header">
@@ -291,7 +298,13 @@ export function ChatInterface({
       <div className="chat-actions">
         <button
           className="action-btn inventory"
-          onClick={() => { setShowInventory(!showInventory); if (!showInventory) setShowNumbers(false); }}
+          onClick={() => {
+            if (showInventory) {
+              setShowInventory(false);
+            } else {
+              setShowInventory(true);
+            }
+          }}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'auto', padding: '12px 8px' }}
         >
           <Package size={18} style={{ marginBottom: '4px' }} />
@@ -299,7 +312,13 @@ export function ChatInterface({
         </button>
         <button
           className="action-btn numbers"
-          onClick={() => { setShowNumbers(!showNumbers); if (!showNumbers) setShowInventory(false); }}
+          onClick={() => {
+            if (showNumbers) {
+              setShowNumbers(false);
+            } else {
+              setShowNumbers(true);
+            }
+          }}
           disabled={!currentCar}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'auto', padding: '12px 8px' }}
         >
@@ -308,7 +327,7 @@ export function ChatInterface({
         </button>
         <button
           onClick={attemptCloseDeal}
-          disabled={!currentCar || (!conversation.some(msg => msg.offerDetails) && selectedPerson.interest < 40)}
+          disabled={!canCloseDeal}
           style={{
             display: 'flex', 
             flexDirection: 'column', 
@@ -316,36 +335,24 @@ export function ChatInterface({
             justifyContent: 'center', 
             height: 'auto', 
             padding: '12px 8px',
-            background: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? '#eab308' // Yellow-500
-              : 'rgba(255, 255, 255, 0.05)',
-            backgroundImage: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+            background: canCloseDeal ? 'transparent' : 'rgba(255, 255, 255, 0.05)',
+            backgroundImage: canCloseDeal
+              ? (customerAccepted ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)')
               : 'none',
-            backgroundColor: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? 'transparent'
-              : '#e5e7eb', // Gray for disabled
-            color: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? 'white'
-              : '#9ca3af',
+            backgroundColor: canCloseDeal ? 'transparent' : '#e5e7eb',
+            color: canCloseDeal ? 'white' : '#9ca3af',
             border: 'none',
             borderRadius: '10px',
             fontSize: '0.85rem',
             fontWeight: '600',
-            cursor: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40) 
-              ? 'pointer' 
-              : 'not-allowed',
-            boxShadow: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-              : 'none',
-            animation: currentCar && (conversation.some(msg => msg.offerDetails) || selectedPerson.interest >= 40)
-              ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-              : 'none',
+            cursor: canCloseDeal ? 'pointer' : 'not-allowed',
+            boxShadow: canCloseDeal ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
+            animation: canCloseDeal ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
             transition: 'all 0.2s'
           }}
         >
           <TrendingUp size={18} style={{ marginBottom: '4px' }} />
-          Close Deal
+          {customerAccepted ? 'Finalize deal' : 'Close Deal'}
         </button>
       </div>
     </>
