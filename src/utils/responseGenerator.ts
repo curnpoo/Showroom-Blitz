@@ -1,5 +1,7 @@
 import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
 
+const AI_RESPONSE_MAX_TOKENS = 512;
+
 // ============ VEHICLE CATEGORY LABELS ============
 const CATEGORY_LABELS: Record<VehicleCategory, string> = {
   suv: 'an SUV',
@@ -1433,7 +1435,7 @@ export async function getAIResponse(
         },
         body: JSON.stringify({
           model: 'claude-3-sonnet-20240229',
-          max_tokens: 80,
+          max_tokens: AI_RESPONSE_MAX_TOKENS,
           system: systemPrompt,
           messages: [
             ...customer.conversationHistory.map((msg: AIConversationMessage) => ({
@@ -1472,7 +1474,7 @@ export async function getAIResponse(
             })),
             { role: 'user', content: message },
           ],
-          max_tokens: 80,
+          max_tokens: AI_RESPONSE_MAX_TOKENS,
           temperature: 0.7,
         }),
       });
@@ -1483,7 +1485,8 @@ export async function getAIResponse(
     }
 
     // Clean potential chain-of-thought tokens from reasoning models (DeepSeek R1 etc)
-    aiResponse = aiResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    const THINK_SECTION_REGEX = /<think\b[^>]*>[\s\S]*?<\/think>/gi;
+    aiResponse = aiResponse.replace(THINK_SECTION_REGEX, ' ').replace(/\s{2,}/g, ' ').trim();
 
     // --- OUTCOME PROCESSING ---
     switch (instructionType) {

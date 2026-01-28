@@ -1310,21 +1310,26 @@ function App() {
     // Increment close attempts
     selectedPerson.closeAttempts = (selectedPerson.closeAttempts || 0) + 1;
 
+    const priceForEvaluation = agreedPrice || customSellingPrice;
+
     // Check if customer already committed via "take it or leave it"
     const isCommitted = (selectedPerson as any).committedToBuy === true;
 
     // FIRST: Check if customer likes the car AND the price
     const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
-    const likesThePrice = customerLikesThePrice(selectedPerson, agreedPrice);
+    const likesThePrice = customerLikesThePrice(selectedPerson, priceForEvaluation);
 
     // ATTRITION / PRESSURE SALE LOGIC
     // If we've tried 3+ times and price is within 20% of base budget, give a small extra chance
     const baseBudget = selectedPerson.buyerType === 'cash' ? selectedPerson.budget : selectedPerson.maxPayment;
-    const isWithin20Percent = agreedPrice > 0 && (agreedPrice <= baseBudget * 1.2);
+    const isWithin20Percent = priceForEvaluation > 0 && (priceForEvaluation <= baseBudget * 1.2);
     const isAttritionSuccess = selectedPerson.closeAttempts >= 3 && isWithin20Percent && Math.random() < 0.15;
+    const priceWithinBaseBudget = priceForEvaluation > 0 && baseBudget > 0 && priceForEvaluation <= baseBudget;
+    const forceHappyDeal = priceWithinBaseBudget && likesTheCar && likesThePrice;
+    const shouldFailBecausePrice = !priceWithinBaseBudget && !likesThePrice;
 
     // If either condition fails, provide specific feedback
-    if (!isAttritionSuccess && (!likesTheCar || !likesThePrice)) {
+    if (!isAttritionSuccess && (!likesTheCar || shouldFailBecausePrice)) {
       const closingQuestions = [
         "Are you ready to sign the paperwork and drive this home today?",
         "So, do we have a deal?",
@@ -1450,7 +1455,7 @@ function App() {
       successChance += contextBonus;
 
       const roll = Math.random();
-      const isSuccess = (roll < successChance) || isAttritionSuccess;
+      const isSuccess = forceHappyDeal || (roll < successChance) || isAttritionSuccess;
       let response = "";
 
       if (isSuccess) {
