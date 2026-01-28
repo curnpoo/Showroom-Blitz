@@ -1284,6 +1284,17 @@ function App() {
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
 
+    // If customer already accepted, just finalize the deal immediately
+    if (selectedPerson.conversationPhase === 'closed') {
+      // Set agreed price/type if not set
+      if (agreedPrice === 0) {
+        setAgreedPrice(customSellingPrice);
+        setAgreedType('selling');
+      }
+      setShowDealClosed(true);
+      return;
+    }
+
     // Increment close attempts
     selectedPerson.closeAttempts = (selectedPerson.closeAttempts || 0) + 1;
 

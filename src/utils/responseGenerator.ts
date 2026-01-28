@@ -1619,6 +1619,34 @@ export async function getAIResponse(
       }
     }
 
+    // Parse AI response to extract and reveal customer preferences
+    // Check for payment mentions (e.g., "$500/month", "$1157/mo")
+    const paymentMatch = aiResponse.match(/\$\s*(\d{1,4})\s*\/\s*(month|mo)/i);
+    if (paymentMatch && customer.buyerType === 'payment') {
+      customer.revealedPreferences.budget = true;
+    }
+
+    // Check for cash budget mentions (e.g., "$30,000", "$50k")
+    const cashMatch = aiResponse.match(/\$\s*(\d{1,3}),?(\d{3})|(\d{1,3})k/i);
+    if (cashMatch && customer.buyerType === 'cash') {
+      customer.revealedPreferences.budget = true;
+    }
+
+    // Check for type/category mentions (SUV, sedan, etc.)
+    if (/\b(suv|sedan|truck|electric|hybrid|coupe|wagon|van|minivan)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.type = true;
+    }
+
+    // Check for feature mentions
+    if (/\b(sporty|fuel.efficient|luxury|family|affordable|tech|spacious|reliable|safety)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.features = true;
+    }
+
+    // Check for specific model mentions (broader patterns)
+    if (/\b(model|specific|particular|looking for)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.model = true;
+    }
+
     const customerSentiment = detectSentiment(aiResponse);
 
     return { response: aiResponse, interestChange, dealAccepted, newPhase, isLost, customerSentiment, playerSentiment };
