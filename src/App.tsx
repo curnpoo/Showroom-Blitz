@@ -226,7 +226,7 @@ function App() {
     y: initialIsMobile ? 570 : 635,
     targetX: initialIsMobile ? 90 : 285,
     targetY: initialIsMobile ? 570 : 635,
-    speed: 3,
+    speed: 5,
   });
 
   const inventoryRef = useRef<CarType[]>(generateInventory(100));
