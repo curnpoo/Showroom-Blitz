@@ -2349,7 +2349,7 @@ function App() {
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                               type="text"
-                              placeholder="/api/lm-studio"
+                              placeholder="https://e5e3db2e421c.ngrok-free.app"
                               value={settings.apiBaseUrl}
                               onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
                             />
@@ -2362,7 +2362,7 @@ function App() {
                             </button>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
-                            Default: https://e5e3db2e421c.ngrok-free.app (Fixes CORS issues)
+                            Default: /api/lm-studio (Fixes CORS issues)
                           </div>
                           
                           {/* Cloud-to-Local Warning */}
