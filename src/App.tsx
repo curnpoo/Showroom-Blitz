@@ -66,7 +66,7 @@ function App() {
       useAI: false,
       apiKey: '',
       provider: 'anthropic' as const,
-      apiBaseUrl: import.meta.env.VITE_AI_API_URL || '/api/lm-studio',
+      apiBaseUrl: import.meta.env.VITE_AI_API_URL || 'https://e5e3db2e421c.ngrok-free.app/v1',
       modelName: 'claude-3-sonnet-20240229',
       timer: {
         enabled: false,
@@ -2349,7 +2349,7 @@ function App() {
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                               type="text"
-                              placeholder="https://e5e3db2e421c.ngrok-free.app"
+                              placeholder="https://e5e3db2e421c.ngrok-free.app/v1"
                               value={settings.apiBaseUrl}
                               onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
                             />
@@ -2362,7 +2362,7 @@ function App() {
                             </button>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
-                            Default: /api/lm-studio (Fixes CORS issues)
+                            Default: https://e5e3db2e421c.ngrok-free.app/v1 (Fixes CORS issues)
                           </div>
                           
                           {/* Cloud-to-Local Warning */}
