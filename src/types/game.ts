@@ -34,7 +34,7 @@ export interface Customer {
   conversationPhase: ConversationPhase;
   desiredFeatures: DesiredFeature[];
   desiredCategory: VehicleCategory; // What type of vehicle they want (SUV, sedan, electric, etc.) or 'any' if not picky
-  desiredModel?: string; // e.g., "Hyundai Ioniq 5"
+  desiredModel?: string; // "Brand Model" e.g. "Kia Forte", "Toyota Corolla"
   desiredColor?: string; // e.g., "Blue"
   dealBreakers: string[]; // e.g., ["Too high APR", "Wrong color"]
   stubbornness: number; // 1-5, higher = harder to negotiate
@@ -65,7 +65,6 @@ export interface Customer {
   isGuarded: boolean; // Guarded customers initially say "just looking" and reveal info slowly
   offerCount: number; // For "attrition" logic (repeatedly offering same deal)
   closeAttempts: number; // Tracks how many times the player has tried to close the deal
-  committedToBuy?: boolean; // Set when customer accepted an offer; used for "Close Deal" flow
 }
 
 export interface Coworker {

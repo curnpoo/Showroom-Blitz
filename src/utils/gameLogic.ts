@@ -1,42 +1,115 @@
 import type { Car, Customer, Coworker, PersonalityType, BuyerType, DesiredFeature, VehicleCategory } from '../types/game';
 
-// Realistic 2026 Hyundai base prices (MSRP)
-const MODEL_BASE_PRICES: Record<string, number> = {
-  'Venue': 20500,      // Subcompact SUV
-  'Kona': 24500,       // Compact SUV
-  'Elantra': 22500,    // Compact Sedan
-  'Tucson': 30500,     // Compact SUV
-  'Sonata': 28500,     // Midsize Sedan
-  'Santa Fe': 36500,   // Midsize SUV
-  'Ioniq 5': 44500,    // Electric SUV
-  'Ioniq 6': 46500,    // Electric Sedan
-  'Palisade': 50500,   // Full-size SUV
-};
+// Trim taxonomy: semantic buckets for feature logic (Base, Sport, Luxury, S Luxury)
+export type TrimClass = 'base' | 'sport' | 'luxury' | 's_luxury';
+export type VehicleSegment = 'compact_sedan' | 'midsize_sedan' | 'compact_suv' | 'midsize_suv' | 'fullsize_suv' | 'electric';
 
-// Trim level price additions (percentage of base)
-const TRIM_MULTIPLIERS: Record<string, number> = {
-  'SE': 1.0,           // Base trim
-  'SEL': 1.08,         // +8%
-  'N Line': 1.12,      // +12% (sport)
-  'Limited': 1.18,     // +18%
-  'Ultimate': 1.25,    // +25%
-  'Calligraphy': 1.30, // +30% (luxury)
-};
+interface TrimSpec {
+  name: string;
+  trimClass: TrimClass;
+  priceMultiplier: number;
+}
 
-// Which trims are available per model (not all models have all trims)
-const MODEL_TRIMS: Record<string, string[]> = {
-  'Venue': ['SE', 'SEL', 'Limited'],
-  'Kona': ['SE', 'SEL', 'N Line', 'Limited'],
-  'Elantra': ['SE', 'SEL', 'N Line', 'Limited'],
-  'Tucson': ['SE', 'SEL', 'N Line', 'Limited'],
-  'Sonata': ['SE', 'SEL', 'N Line', 'Limited'],
-  'Santa Fe': ['SE', 'SEL', 'Limited', 'Calligraphy'],
-  'Ioniq 5': ['SE', 'SEL', 'Limited'],
-  'Ioniq 6': ['SE', 'SEL', 'Limited'],
-  'Palisade': ['SE', 'SEL', 'Limited', 'Calligraphy'],
-};
+interface ModelSpec {
+  model: string;
+  basePrice: number;
+  segment: VehicleSegment;
+  trims: TrimSpec[];
+}
 
-const MODELS = Object.keys(MODEL_BASE_PRICES);
+interface BrandSpec {
+  brand: string;
+  models: ModelSpec[];
+}
+
+// Car database: multi-brand, 2026-style trims, segment + trimClass drive features/category
+const CAR_DATABASE: BrandSpec[] = [
+  {
+    brand: 'Hyundai',
+    models: [
+      { model: 'Venue', basePrice: 20500, segment: 'compact_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.15 }] },
+      { model: 'Kona', basePrice: 24500, segment: 'compact_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'N Line', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }] },
+      { model: 'Elantra', basePrice: 22500, segment: 'compact_sedan', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'N Line', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }] },
+      { model: 'Tucson', basePrice: 30500, segment: 'compact_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'N Line', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }] },
+      { model: 'Sonata', basePrice: 28500, segment: 'midsize_sedan', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'N Line', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.2 }] },
+      { model: 'Santa Fe', basePrice: 36500, segment: 'midsize_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }, { name: 'Calligraphy', trimClass: 'luxury', priceMultiplier: 1.28 }] },
+      { model: 'Ioniq 5', basePrice: 44500, segment: 'electric', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 's_luxury', priceMultiplier: 1.1 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.2 }] },
+      { model: 'Ioniq 6', basePrice: 46500, segment: 'electric', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }] },
+      { model: 'Palisade', basePrice: 50500, segment: 'fullsize_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.18 }, { name: 'Calligraphy', trimClass: 'luxury', priceMultiplier: 1.28 }] },
+    ],
+  },
+  {
+    brand: 'Kia',
+    models: [
+      { model: 'Forte', basePrice: 21800, segment: 'compact_sedan', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'LXS', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'GT-Line', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'GT', trimClass: 'sport', priceMultiplier: 1.18 }] },
+      { model: 'Soul', basePrice: 23400, segment: 'compact_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'S', trimClass: 'base', priceMultiplier: 1.05 }, { name: 'GT-Line', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'EX', trimClass: 'luxury', priceMultiplier: 1.18 }] },
+      { model: 'Seltos', basePrice: 25900, segment: 'compact_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'S', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'EX', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'SX', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'K5', basePrice: 26800, segment: 'midsize_sedan', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'LXS', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'GT-Line', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'GT', trimClass: 'sport', priceMultiplier: 1.2 }, { name: 'EX', trimClass: 'luxury', priceMultiplier: 1.26 }] },
+      { model: 'Sportage', basePrice: 30400, segment: 'compact_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'EX', trimClass: 's_luxury', priceMultiplier: 1.1 }, { name: 'SX-Prestige', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'Sorento', basePrice: 34800, segment: 'midsize_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'S', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'EX', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'SX-Prestige', trimClass: 'luxury', priceMultiplier: 1.24 }] },
+      { model: 'EV6', basePrice: 43500, segment: 'electric', trims: [{ name: 'Light', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Wind', trimClass: 's_luxury', priceMultiplier: 1.1 }, { name: 'GT-Line', trimClass: 'sport', priceMultiplier: 1.18 }, { name: 'GT', trimClass: 'sport', priceMultiplier: 1.28 }] },
+      { model: 'Telluride', basePrice: 41400, segment: 'fullsize_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'S', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'EX', trimClass: 's_luxury', priceMultiplier: 1.16 }, { name: 'SX-Prestige', trimClass: 'luxury', priceMultiplier: 1.26 }] },
+    ],
+  },
+  {
+    brand: 'Toyota',
+    models: [
+      { model: 'Corolla', basePrice: 22800, segment: 'compact_sedan', trims: [{ name: 'L', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'LE', trimClass: 'base', priceMultiplier: 1.05 }, { name: 'SE', trimClass: 's_luxury', priceMultiplier: 1.1 }, { name: 'XSE', trimClass: 's_luxury', priceMultiplier: 1.16 }, { name: 'XLE', trimClass: 'luxury', priceMultiplier: 1.2 }] },
+      { model: 'Camry', basePrice: 29200, segment: 'midsize_sedan', trims: [{ name: 'LE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SE', trimClass: 's_luxury', priceMultiplier: 1.06 }, { name: 'XSE', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'XLE', trimClass: 'luxury', priceMultiplier: 1.18 }, { name: 'TRD', trimClass: 'sport', priceMultiplier: 1.2 }] },
+      { model: 'RAV4', basePrice: 32200, segment: 'compact_suv', trims: [{ name: 'LE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'XLE', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'XLE Premium', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'Highlander', basePrice: 41200, segment: 'midsize_suv', trims: [{ name: 'L', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'LE', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'XLE', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.24 }, { name: 'Platinum', trimClass: 'luxury', priceMultiplier: 1.3 }] },
+      { model: 'bZ4X', basePrice: 44800, segment: 'electric', trims: [{ name: 'XLE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.12 }] },
+    ],
+  },
+  {
+    brand: 'Honda',
+    models: [
+      { model: 'Civic', basePrice: 24700, segment: 'compact_sedan', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Sport', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'EX', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'Si', trimClass: 'sport', priceMultiplier: 1.18 }, { name: 'Touring', trimClass: 'luxury', priceMultiplier: 1.24 }] },
+      { model: 'Accord', basePrice: 28400, segment: 'midsize_sedan', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Sport', trimClass: 's_luxury', priceMultiplier: 1.06 }, { name: 'EX-L', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'Touring', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'HR-V', basePrice: 26300, segment: 'compact_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Sport', trimClass: 's_luxury', priceMultiplier: 1.06 }, { name: 'EX-L', trimClass: 'luxury', priceMultiplier: 1.14 }] },
+      { model: 'CR-V', basePrice: 32200, segment: 'compact_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Sport', trimClass: 's_luxury', priceMultiplier: 1.06 }, { name: 'EX-L', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'Touring', trimClass: 'luxury', priceMultiplier: 1.2 }] },
+      { model: 'Pilot', basePrice: 42400, segment: 'midsize_suv', trims: [{ name: 'LX', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Sport', trimClass: 's_luxury', priceMultiplier: 1.06 }, { name: 'EX-L', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'Touring', trimClass: 'luxury', priceMultiplier: 1.22 }, { name: 'Elite', trimClass: 'luxury', priceMultiplier: 1.28 }] },
+    ],
+  },
+  {
+    brand: 'Ford',
+    models: [
+      { model: 'Escape', basePrice: 30200, segment: 'compact_suv', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SE', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'SEL', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'Platinum', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'Edge', basePrice: 36200, segment: 'midsize_suv', trims: [{ name: 'SE', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SEL', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'ST-Line', trimClass: 'sport', priceMultiplier: 1.12 }, { name: 'Titanium', trimClass: 'luxury', priceMultiplier: 1.2 }] },
+      { model: 'Explorer', basePrice: 42200, segment: 'midsize_suv', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'XLT', trimClass: 'base', priceMultiplier: 1.08 }, { name: 'ST-Line', trimClass: 'sport', priceMultiplier: 1.14 }, { name: 'Limited', trimClass: 'luxury', priceMultiplier: 1.22 }, { name: 'Platinum', trimClass: 'luxury', priceMultiplier: 1.28 }] },
+      { model: 'Bronco Sport', basePrice: 33200, segment: 'compact_suv', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Big Bend', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'Outer Banks', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'Badlands', trimClass: 'sport', priceMultiplier: 1.22 }] },
+    ],
+  },
+  {
+    brand: 'Mazda',
+    models: [
+      { model: 'Mazda3', basePrice: 25600, segment: 'compact_sedan', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Preferred', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'Carbon Turbo', trimClass: 'sport', priceMultiplier: 1.14 }, { name: 'Turbo Premium Plus', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+      { model: 'CX-30', basePrice: 27200, segment: 'compact_suv', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Preferred', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'Turbo', trimClass: 'sport', priceMultiplier: 1.16 }, { name: 'Turbo Premium Plus', trimClass: 'luxury', priceMultiplier: 1.24 }] },
+      { model: 'CX-5', basePrice: 30500, segment: 'compact_suv', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'Preferred', trimClass: 's_luxury', priceMultiplier: 1.08 }, { name: 'Turbo', trimClass: 'sport', priceMultiplier: 1.14 }, { name: 'Turbo Signature', trimClass: 'luxury', priceMultiplier: 1.24 }] },
+    ],
+  },
+  {
+    brand: 'Nissan',
+    models: [
+      { model: 'Sentra', basePrice: 22800, segment: 'compact_sedan', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SV', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'SR', trimClass: 's_luxury', priceMultiplier: 1.12 }, { name: 'SR Premium', trimClass: 's_luxury', priceMultiplier: 1.18 }] },
+      { model: 'Altima', basePrice: 28800, segment: 'midsize_sedan', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SV', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'SR', trimClass: 's_luxury', priceMultiplier: 1.1 }, { name: 'SL', trimClass: 'luxury', priceMultiplier: 1.18 }, { name: 'VC-Turbo', trimClass: 'sport', priceMultiplier: 1.22 }] },
+      { model: 'Rogue', basePrice: 32200, segment: 'compact_suv', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SV', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'SL', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'Platinum', trimClass: 'luxury', priceMultiplier: 1.22 }] },
+    ],
+  },
+];
+
+// Flatten to "Brand Model" for desiredModel and for lookups
+function getAllBrandModelPairs(): { brand: string; model: string; brandModel: string }[] {
+  const pairs: { brand: string; model: string; brandModel: string }[] = [];
+  for (const b of CAR_DATABASE) {
+    for (const m of b.models) {
+      pairs.push({ brand: b.brand, model: m.model, brandModel: `${b.brand} ${m.model}` });
+    }
+  }
+  return pairs;
+}
+
+const BRAND_MODEL_PAIRS = getAllBrandModelPairs();
 const COLORS = ['White', 'Black', 'Silver', 'Blue', 'Red', 'Gray', 'Green'];
 const FIRST_NAMES = ['Alex', 'Sarah', 'Marcus', 'Jessica', 'David', 'Emily', 'James', 'Lisa', 'Michael', 'Amanda', 'Chris', 'Nicole', 'Brian', 'Ashley', 'Kevin'];
 const LAST_NAMES = ['Rivera', 'Chen', 'Johnson', 'Smith', 'Williams', 'Garcia', 'Martinez', 'Davis', 'Miller', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson'];
@@ -77,35 +150,55 @@ function pickRandomCategory(): VehicleCategory {
   return pickRandom(VEHICLE_CATEGORIES);
 }
 
-// Helper to get features that actually exist for a given model or category
-function getCompatibleFeatures(model?: string, category?: VehicleCategory): DesiredFeature[] {
+// Resolve "Brand Model" to segment and basePrice for category/features
+function getSpecForBrandModel(brandModel: string): { segment: VehicleSegment; basePrice: number } | null {
+  const pair = BRAND_MODEL_PAIRS.find(p => p.brandModel === brandModel);
+  if (!pair) return null;
+  const brandSpec = CAR_DATABASE.find(b => b.brand === pair.brand);
+  const modelSpec = brandSpec?.models.find(m => m.model === pair.model);
+  if (!modelSpec) return null;
+  return { segment: modelSpec.segment, basePrice: modelSpec.basePrice };
+}
+
+function getSegmentForBrandModel(brandModel: string): VehicleSegment | null {
+  return getSpecForBrandModel(brandModel)?.segment ?? null;
+}
+
+// Helper to get features that actually exist for a given "Brand Model" or category
+function getCompatibleFeatures(brandModel?: string, category?: VehicleCategory): DesiredFeature[] {
   let validFeatures = [...DESIRED_FEATURES];
-  
-  if (model) {
-    // Filter features based on model reality
-    if (model === 'Palisade' || model === 'Santa Fe') {
-      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' && f !== 'sporty' && f !== 'affordable');
-      validFeatures.push('family', 'spacious', 'luxury', 'tech'); // Bias towards these
-    } else if (model === 'Venue') {
-      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family' && f !== 'sporty');
-      validFeatures.push('affordable', 'reliable', 'fuel_efficient', 'tech');
-    } else if (model === 'Elantra') {
-      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious' && f !== 'family');
-      validFeatures.push('affordable', 'reliable', 'fuel_efficient', 'tech', 'sporty');
-    } else if (model === 'Ioniq 6') {
-      validFeatures = validFeatures.filter(f => f !== 'affordable' && f !== 'spacious');
-      validFeatures.push('tech', 'fuel_efficient', 'sporty', 'luxury');
+  const segment = brandModel ? getSegmentForBrandModel(brandModel) : null;
+
+  if (segment) {
+    // Use segment to filter; no spacious on compact_sedan/midsize_sedan, etc.
+    if (segment === 'compact_sedan' || segment === 'midsize_sedan') {
+      validFeatures = validFeatures.filter(f => f !== 'spacious');
+    }
+    if (segment === 'electric') {
+      validFeatures = validFeatures.filter(f => f !== 'affordable');
+      validFeatures.push('tech', 'fuel_efficient');
+    }
+    if (segment === 'compact_suv' || segment === 'midsize_suv' || segment === 'fullsize_suv') {
+      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' || Math.random() > 0.7);
+    }
+    if (segment === 'compact_sedan') {
+      validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious');
+      validFeatures.push('affordable', 'reliable', 'sporty');
+    }
+    if (segment === 'fullsize_suv') {
+      validFeatures = validFeatures.filter(f => f !== 'affordable');
     }
   } else if (category) {
     if (category === 'suv') {
-      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' || Math.random() > 0.7); // Rare to want fuel efficient SUV unless hybrid
+      validFeatures = validFeatures.filter(f => f !== 'fuel_efficient' || Math.random() > 0.7);
     } else if (category === 'sedan') {
       validFeatures = validFeatures.filter(f => f !== 'spacious');
     } else if (category === 'affordable') {
       validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'sporty');
+    } else if (category === 'luxury') {
+      validFeatures = validFeatures.filter(f => f !== 'affordable');
     }
   }
-  
   return [...new Set(validFeatures)];
 }
 
@@ -116,79 +209,49 @@ function pickRandomFeatures(model?: string, category?: VehicleCategory): Desired
   return shuffled.slice(0, count);
 }
 
-// Helper to determine vehicle category based on model
-function getVehicleCategory(model: string, price: number): VehicleCategory {
-  // Electric models
-  if (model.includes('Ioniq')) return 'electric';
-
-  // Luxury (high-end models)
-  if (model === 'Palisade' || price > 45000) return 'luxury';
-
-  // Affordable (entry-level)
-  if (model === 'Venue' || model === 'Elantra' || price < 25000) return 'affordable';
-
-  // SUVs
-  if (['Venue', 'Kona', 'Tucson', 'Santa Fe', 'Palisade', 'Ioniq 5'].includes(model)) return 'suv';
-
-  // Sedans
-  if (['Elantra', 'Sonata', 'Ioniq 6'].includes(model)) return 'sedan';
-
+// Map segment + price to VehicleCategory for customer matching
+function getVehicleCategoryFromSegment(segment: VehicleSegment, price: number): VehicleCategory {
+  if (segment === 'electric') return 'electric';
+  if (segment === 'fullsize_suv' || price > 45000) return 'luxury';
+  if (segment === 'compact_sedan' || price < 27000) return 'affordable';
+  if (segment === 'compact_suv' || segment === 'midsize_suv') return 'suv';
+  if (segment === 'midsize_sedan') return 'sedan';
   return 'any';
 }
 
-// Helper to assign features based on model and trim
-// THIS IS THE SINGLE SOURCE OF TRUTH FOR VEHICLE FEATURES
-function getVehicleFeatures(model: string, trim: string): DesiredFeature[] {
+// Assign features from segment + trimClass. Single source of truth for vehicle features.
+function getVehicleFeaturesFromSegment(segment: VehicleSegment, trimClass: TrimClass): DesiredFeature[] {
   const features: DesiredFeature[] = [];
 
-  // 1. Model-based features
-  if (model.includes('Ioniq')) {
-    features.push('fuel_efficient', 'tech', 'sporty', 'family'); // All Ioniqs are family friendly & tech
-    if (model === 'Ioniq 5') features.push('spacious'); // Only Ioniq 5 is spacious
-  }
-
-  if (model === 'Santa Fe' || model === 'Palisade') {
-    features.push('family', 'spacious');
-  }
-
-  if (model === 'Tucson') {
-    features.push('family', 'reliable'); // Tucson is family but not necessarily spacious unless higher trim? Let's just say family/reliable base.
-    features.push('spacious'); // Actually user said Tucson is spacious or high tech? Let's stick to standard SUV traits.
-  }
-
-  if (model === 'Kona' || model === 'Venue') {
+  // Segment-based features
+  if (segment === 'compact_sedan') {
     features.push('reliable', 'affordable', 'fuel_efficient');
+  } else if (segment === 'midsize_sedan') {
+    features.push('reliable', 'family');
+  } else if (segment === 'compact_suv') {
+    features.push('family', 'reliable');
+  } else if (segment === 'midsize_suv') {
+    features.push('family', 'spacious');
+  } else if (segment === 'fullsize_suv') {
+    features.push('family', 'spacious');
+  } else if (segment === 'electric') {
+    features.push('fuel_efficient', 'tech', 'family');
   }
 
-  if (model === 'Elantra' || model === 'Sonata') {
-    features.push('reliable');
-    if (model === 'Elantra') features.push('affordable', 'fuel_efficient');
-    if (model === 'Sonata') features.push('family'); // Midsize sedan is family friendly?
-  }
-
-  // 2. Trim-based features (The "High Tech" / "Luxury" / "Sporty" rules)
-  
-  // "High Tech" & "Luxury" applies to top trims
-  if (trim === 'Limited' || trim === 'Ultimate' || trim === 'Calligraphy') {
-    features.push('luxury', 'tech');
-  }
-
-  // "Sporty" & "Tech" applies to N Line
-  if (trim === 'N Line') {
+  // TrimClass-based features
+  if (trimClass === 'base') {
+    features.push('affordable');
+  } else if (trimClass === 'sport') {
     features.push('sporty', 'tech');
+  } else if (trimClass === 'luxury') {
+    features.push('luxury', 'tech');
+    if (segment === 'midsize_suv' || segment === 'fullsize_suv') features.push('spacious');
+  } else if (trimClass === 's_luxury') {
+    features.push('sporty', 'tech');
+    if (segment === 'compact_sedan' || segment === 'midsize_sedan') features.push('affordable');
   }
 
-  // Entry level feature backfill - SE/SEL trims are always affordable
-  if (trim === 'SE' || trim === 'SEL') {
-     features.push('affordable');
-  }
-
-  // Ensure we have at least 2 features
-  if (features.length < 2) {
-    features.push('reliable');
-  }
-
-  // Remove duplicates
+  if (features.length < 2) features.push('reliable');
   return [...new Set(features)];
 }
 
@@ -196,24 +259,19 @@ export function generateInventory(count: number = 100): Car[] {
   const inventory: Car[] = [];
 
   for (let i = 0; i < count; i++) {
-    const model = pickRandom(MODELS);
-    const availableTrims = MODEL_TRIMS[model];
-    const trim = pickRandom(availableTrims);
+    const brandSpec = pickRandom(CAR_DATABASE);
+    const modelSpec = pickRandom(brandSpec.models);
+    const trimSpec = pickRandom(modelSpec.trims);
     const color = pickRandom(COLORS);
 
-    // Calculate price based on model + trim
-    const basePrice = MODEL_BASE_PRICES[model];
-    const trimMultiplier = TRIM_MULTIPLIERS[trim];
-    const msrp = Math.round(basePrice * trimMultiplier);
-
-    // Invoice is typically 92-95% of MSRP
+    const msrp = Math.round(modelSpec.basePrice * trimSpec.priceMultiplier);
     const invoice = Math.round(msrp * (0.92 + Math.random() * 0.03));
     const tax = Math.round(msrp * 0.07);
 
     inventory.push({
       id: `CAR${i + 1}`,
-      model: `2026 Hyundai ${model}`,
-      trim,
+      model: `2026 ${brandSpec.brand} ${modelSpec.model}`,
+      trim: trimSpec.name,
       color,
       price: msrp,
       invoice,
@@ -221,9 +279,9 @@ export function generateInventory(count: number = 100): Car[] {
       tax,
       otd: msrp + 1000 + tax,
       mileage: 0,
-      vin: `KM8${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
-      features: getVehicleFeatures(model, trim),
-      category: getVehicleCategory(model, msrp),
+      vin: `${brandSpec.brand.slice(0, 2).toUpperCase()}${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
+      features: getVehicleFeaturesFromSegment(modelSpec.segment, trimSpec.trimClass),
+      category: getVehicleCategoryFromSegment(modelSpec.segment, msrp),
     });
   }
 
@@ -241,14 +299,14 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   
   const temper = Math.floor(Math.random() * 100);
 
-  // Generate specific desires (50% chance for a specific model/color)
+  // Generate specific desires (50% chance for a specific "Brand Model")
   const hasSpecificModel = Math.random() > 0.5;
-  const desiredModel = hasSpecificModel ? pickRandom(MODELS) : undefined;
-  
-  // If they have a model, their category MUST match that model
+  const desiredModel = hasSpecificModel ? pickRandom(BRAND_MODEL_PAIRS).brandModel : undefined;
+
   let desiredCategory: VehicleCategory = 'any';
   if (desiredModel) {
-    desiredCategory = getVehicleCategory(desiredModel, MODEL_BASE_PRICES[desiredModel]);
+    const spec = getSpecForBrandModel(desiredModel);
+    desiredCategory = spec ? getVehicleCategoryFromSegment(spec.segment, spec.basePrice) : pickRandomCategory();
   } else {
     desiredCategory = pickRandomCategory();
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useReducer } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Settings, DollarSign, Users, Car, HelpCircle } from 'lucide-react';
 import { TipsModal } from './components/TipsModal';
 import type { 
@@ -24,17 +24,15 @@ import {
   MOBILE_DESKS,
   MOBILE_COWORKERS
 } from './utils/gameLogic';
-import { generateResponse, getAIResponse, resolveSpecialPhrase } from './utils/responseGenerator';
+import { generateResponse, getAIResponse, isTakeItOrLeaveIt, isInventoryAdmission } from './utils/responseGenerator';
 import { NumbersPanel } from './components/NumbersPanel';
 import { CustomerNotes } from './components/CustomerNotes';
 import { ChatInterface } from './components/ChatInterface';
-import { useGameLoop } from './hooks/useGameLoop';
-import { sessionReducer, initialSessionState } from './reducers/sessionReducer';
-
-type UiPanel = 'none' | 'dealClosed' | 'lostDeal' | 'inventory' | 'numbers' | 'settings' | 'tips';
 
 const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
+const MOBILE_CANVAS_HEIGHT = 800;
 
 function App() {
   const [gameState, setGameState] = useState<GameState>('intro');
@@ -43,12 +41,21 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Customer | null>(null);
-  const [uiPanel, setUiPanel] = useState<UiPanel>('none');
+  const [showDealClosed, setShowDealClosed] = useState(false);
+  const [showLostDeal, setShowLostDeal] = useState(false);
   const [currentCar, setCurrentCar] = useState<CarType | null>(null);
+  const [showInventory, setShowInventory] = useState(false);
+  const [showNumbers, setShowNumbers] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
-  const [session, dispatchSession] = useReducer(sessionReducer, initialSessionState);
+  const [totalSales, setTotalSales] = useState(0);
+  const [lastSaleAmount, setLastSaleAmount] = useState(0);
+  const [agreedPrice, setAgreedPrice] = useState(0);
+  const [agreedType, setAgreedType] = useState<OfferType>('selling');
   const [customSellingPrice, setCustomSellingPrice] = useState(0);
   const [customOTDPrice, setCustomOTDPrice] = useState(0);
+  const [lastProfit, setLastProfit] = useState(0);
+  const [totalProfit, setTotalProfit] = useState(0);
   const [customPayment, setCustomPayment] = useState(0);
   const [paymentTerm, setPaymentTerm] = useState(72);
   const [paymentAPR, setPaymentAPR] = useState(6.9);
@@ -89,6 +96,7 @@ function App() {
 
   const [timeLeft, setTimeLeft] = useState(0);
   const [showTimeUp, setShowTimeUp] = useState(false);
+  const [showTips, setShowTips] = useState(false);
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     gross: 0,
     profit: 0,
@@ -205,6 +213,7 @@ function App() {
   }, [settings]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -293,55 +302,45 @@ function App() {
     return newCustomer;
   }, [isMobile]);
 
-  // Timer logic: one interval per "playing" session. Do not depend on timeLeft so the effect does not re-run every second.
-  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Timer logic
   useEffect(() => {
-    if (gameState !== 'playing' || showTimeUp || (!settings.timer.enabled && settings.gameMode !== 'volume')) {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-      return;
+    let interval: any;
+    if (gameState === 'playing' && !showTimeUp && (settings.timer.enabled || settings.gameMode === 'volume')) {
+      interval = setInterval(() => {
+        setTimeLeft(prev => {
+          if (settings.gameMode === 'volume') {
+             // Count UP
+             return prev + 1;
+          } else {
+             // Count DOWN
+             if (prev <= 1) {
+               clearInterval(interval);
+               setShowTimeUp(true);
+               // setGameState('intro'); // Don't switch yet, show results first
+               return 0;
+             }
+             return prev - 1;
+          }
+        });
+      }, 1000);
     }
-    timerIntervalRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (settings.gameMode === 'volume') {
-          return prev + 1;
-        }
-        if (prev <= 1) {
-          setShowTimeUp(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-    };
-  }, [gameState, settings.timer.enabled, settings.gameMode, showTimeUp]);
+    return () => clearInterval(interval);
+  }, [gameState, settings.timer.enabled, timeLeft]);
 
-  useGameLoop({
-    canvasRef,
-    isMobile,
-    gameState,
-    customersRef,
-    coworkersRef,
-    desksRef,
-    playerRef,
-    showInput,
-    selectedPerson,
-    spawnNewCustomer,
-  });
-
-  // Canvas click/touch handlers (game loop lives in useGameLoop)
+  // Initialize game
   useEffect(() => {
     if (gameState !== 'playing') return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const targetWidth = isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH;
+    const targetHeight = isMobile ? MOBILE_CANVAS_HEIGHT : CANVAS_HEIGHT;
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     const handleClick = (e: MouseEvent | TouchEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -395,7 +394,8 @@ function App() {
             setSelectedPerson(customer);
             setShowInput(true);
             setConversation([]);
-            setUiPanel('none');
+            setShowInventory(false);
+            setShowNumbers(false);
             setCurrentCar(null);
             return;
           }
@@ -440,11 +440,524 @@ function App() {
     canvas.addEventListener('click', handleClick);
     canvas.addEventListener('touchstart', handleClick);
 
+    const animate = () => {
+      // Scale UI elements for mobile readability
+      const uiScale = isMobile ? 1.75 : 1; 
+      
+      const player = playerRef.current;
+      
+      // Collision avoidance between all entities (player, coworkers, active customers)
+      const entities: any[] = [
+        player,
+        ...coworkersRef.current,
+        ...customersRef.current.filter(c => c.active)
+      ];
+
+      for (let i = 0; i < entities.length; i++) {
+        for (let j = i + 1; j < entities.length; j++) {
+          const e1 = entities[i];
+          const e2 = entities[j];
+          const dx = e2.x - e1.x;
+          const dy = e2.y - e1.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const minDist = 35; // Minimum distance between centers
+
+          if (dist < minDist) {
+            const overlap = minDist - dist;
+            const nx = dx / (dist || 1);
+            const ny = dy / (dist || 1);
+            
+            // Push away from each other
+            const moveX = (nx * overlap) / 2;
+            const moveY = (ny * overlap) / 2;
+            
+            // Coworkers are static at their desks
+            const isE1Static = (e1 as any).type === 'coworker';
+            const isE2Static = (e2 as any).type === 'coworker';
+
+            // EXCEPTION: If a coworker is walking to/with a customer they stole, ignore collision between them
+            const c1 = e1 as any;
+            const c2 = e2 as any;
+            if (c1.type === 'coworker' && c2.type === 'customer' && c1.workingWithCustomerId === c2.id) continue;
+            if (c2.type === 'coworker' && c1.type === 'customer' && c2.workingWithCustomerId === c1.id) continue;
+
+            if (isE1Static && !isE2Static) {
+              e2.x += moveX * 2;
+              e2.y += moveY * 2;
+            } else if (!isE1Static && isE2Static) {
+              e1.x -= moveX * 2;
+              e1.y -= moveY * 2;
+            } else if (!isE1Static && !isE2Static) {
+              e1.x -= moveX;
+              e1.y -= moveY;
+              e2.x += moveX;
+              e2.y += moveY;
+            }
+          }
+        }
+      }
+
+      const dx = player.targetX - player.x;
+      const dy = player.targetY - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 2) {
+        player.x += (dx / dist) * player.speed;
+        player.y += (dy / dist) * player.speed;
+      }
+
+      // Clear canvas
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw entrance
+      ctx.fillStyle = '#8b4513';
+      const entranceX = isMobile ? (MOBILE_CANVAS_WIDTH / 2) - 30 : 380;
+      ctx.fillRect(entranceX, 0, 60, 20);
+      ctx.fillStyle = '#666';
+      ctx.fillStyle = '#666';
+      ctx.font = `${12 * uiScale}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText('ENTRANCE', entranceX + 30, 35);
+
+      // Draw grid
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      for (let i = 0; i < canvas.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
+
+      // Draw desks
+      desksRef.current.forEach(desk => {
+        ctx.fillStyle = '#8b7355';
+        ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(desk.x, desk.y, desk.w, desk.h);
+      });
+
+      // Draw coworkers
+      coworkersRef.current.forEach(coworker => {
+        // Check if this coworker is working with a stolen customer
+        const isWorking = coworker.workingWithCustomerId !== undefined;
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(coworker.x, coworker.y + 20, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = coworker.color;
+        ctx.beginPath();
+        ctx.arc(coworker.x, coworker.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Title badge (above name) - HIDE when working with customer
+        if (!isWorking) {
+          const titleWidth = ctx.measureText(coworker.title).width + 10;
+          ctx.fillStyle = coworker.color;
+          ctx.fillRect(coworker.x - titleWidth / 2, coworker.y - 48, titleWidth, 14);
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${9 * uiScale}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.fillText(coworker.title, coworker.x, coworker.y - 37);
+        }
+
+        // First name only
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${11 * uiScale}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText(coworker.name, coworker.x, coworker.y - 22);
+      });
+
+      // Draw customers
+      customersRef.current.forEach(customer => {
+        if (!customer.active) return;
+
+        const distToPlayer = Math.sqrt(
+          Math.pow(player.x - customer.x, 2) +
+          Math.pow(player.y - customer.y, 2)
+        );
+        const isNearby = distToPlayer < 80;
+        const isStolen = customer.isStolen;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(customer.x, customer.y + 20, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Body - grayed out if stolen
+        ctx.fillStyle = isStolen ? '#888' : customer.color;
+        ctx.beginPath();
+        ctx.arc(customer.x, customer.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Interest bar - hidden if stolen
+        if (!isStolen) {
+          const barWidth = 30;
+          const barHeight = 4;
+          ctx.fillStyle = '#333';
+          ctx.fillRect(customer.x - barWidth / 2, customer.y + 25, barWidth, barHeight);
+          ctx.fillStyle = customer.interest > 60 ? '#2ecc71' : customer.interest > 30 ? '#f39c12' : '#e74c3c';
+          ctx.fillRect(customer.x - barWidth / 2, customer.y + 25, (customer.interest / 100) * barWidth, barHeight);
+        }
+
+        // Name - show first name + last initial only (e.g., "Marcus W.")
+        const nameParts = customer.name.split(' ');
+        const displayName = nameParts.length > 1 
+          ? `${nameParts[0]} ${nameParts[1][0]}.`
+          : nameParts[0];
+        ctx.fillStyle = isStolen ? '#999' : '#000';
+        ctx.font = `bold ${11 * uiScale}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText(displayName, customer.x, customer.y - 25);
+
+        // Buyer type badge OR stolen badge
+        if (isStolen) {
+          // TAKEN badge - wider pill with clean styling
+          const badgeWidth = 50;
+          const badgeHeight = 14;
+          ctx.fillStyle = '#c0392b';
+          ctx.beginPath();
+          ctx.roundRect(customer.x - badgeWidth/2, customer.y - 53, badgeWidth, badgeHeight, 7);
+          ctx.fill();
+          
+          // Text (no emoji for cleaner look)
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${9 * uiScale}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.fillText('TAKEN', customer.x, customer.y - 43);
+        } else {
+          ctx.fillStyle = customer.buyerType === 'cash' ? '#2ecc71' : '#3498db';
+          ctx.fillRect(customer.x - 25, customer.y - 52, 50, 12);
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${8 * uiScale}px Arial`;
+          ctx.fillText(customer.buyerType.toUpperCase(), customer.x, customer.y - 43);
+        }
+
+        // Talk button when nearby - hidden if stolen
+        if (isNearby && !showInput && !isStolen) {
+          const buttonX = customer.x - 30;
+          const buttonY = customer.y + 35;
+          const buttonW = 60 * uiScale;
+          const buttonH = 20 * uiScale;
+
+          customer.buttonBounds = { x: buttonX, y: buttonY, w: buttonW, h: buttonH };
+
+          ctx.fillStyle = '#2ecc71';
+          ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
+          ctx.strokeStyle = '#27ae60';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(buttonX, buttonY, buttonW, buttonH);
+
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${11 * uiScale}px Arial`;
+          ctx.fillText('TALK', customer.x, buttonY + (14 * uiScale));
+        } else {
+          customer.buttonBounds = null;
+        }
+      });
+
+      // Draw player
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(player.x, player.y + 20, 12, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#2c3e50';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, 15, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${11 * uiScale}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText('YOU', player.x, player.y - 25);
+
+      // Proactive Coworker Steal Mechanic
+      // Sales coworkers randomly steal customers every 5-30 seconds
+      const salesCoworkers = coworkersRef.current.filter(c => c.department === 'sales');
+      const deltaTime = 1/60; // Assuming ~60fps
+      
+      // Track unattended customers and despawn after 60 seconds
+      customersRef.current.forEach(customer => {
+        if (!customer.active) return;
+        
+        // Customer is considered "helped" if:
+        // 1. They're stolen by a coworker (isStolen)
+        // 2. They're past the greeting phase (conversation has started)
+        const isBeingHelped = 
+          customer.isStolen ||
+          customer.conversationPhase !== 'greeting';
+        
+        if (!isBeingHelped) {
+          // Increment unattended timer
+          customer.unattendedTimer += deltaTime;
+          
+          // Despawn after 60 seconds (1 minute)
+          if (customer.unattendedTimer >= 60) {
+            customer.active = false;
+            customer.isLost = true;
+            // Remove from customers array
+            customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
+          }
+        } else {
+          // Reset timer if being helped
+          customer.unattendedTimer = 0;
+        }
+      });
+      
+      salesCoworkers.forEach(coworker => {
+        // Initialize steal timer if not set
+        if (coworker.nextStealTime === undefined) {
+          coworker.nextStealTime = 5 + Math.random() * 25; // 5-30 seconds
+        }
+        
+        // Handle pending customer spawn (delayed 3-5 seconds after steal)
+        if (coworker.pendingCustomerSpawn !== undefined && coworker.pendingCustomerSpawn > 0) {
+          coworker.pendingCustomerSpawn -= deltaTime;
+          if (coworker.pendingCustomerSpawn <= 0) {
+            coworker.pendingCustomerSpawn = undefined;
+            spawnNewCustomer();
+          }
+        }
+        
+        // If coworker is working with a stolen customer
+        if (coworker.workingWithCustomerId !== undefined) {
+          const customer = customersRef.current.find(c => c.id === coworker.workingWithCustomerId);
+          if (customer) {
+            
+              // PHASE 1: Walking to customer
+              if (coworker.stealPhase === 'walking') {
+                const dx = customer.x - coworker.x;
+                const dy = customer.y - coworker.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 15) {
+                  // Still walking to customer
+                  const speed = 2.5;
+                  coworker.x += (dx / dist) * speed;
+                  coworker.y += (dy / dist) * speed;
+
+                  // CHECK FOR INTERCEPTION: If player talks to this customer while walking
+                  // Using specific customer reference since 'customer' variable in this scope is valid
+                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                  
+                  if (isIntercepted || !customer.active || customer.isLost) {
+                     // Abort steal!
+                     coworker.stealPhase = 'returning';
+                     coworker.workingWithCustomerId = undefined;
+                     coworker.nextStealTime = 5; // Try again soon
+                     coworker.pendingCustomerSpawn = undefined;
+                  }
+
+                } else {
+                  // Arrived at customer! 
+                  // Final check - is player talking to them?
+                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                  
+                  if (isIntercepted) {
+                     // Abort steal!
+                     coworker.stealPhase = 'returning';
+                     coworker.workingWithCustomerId = undefined;
+                     coworker.nextStealTime = 5; 
+                     coworker.pendingCustomerSpawn = undefined;
+                  } else {
+                    // SUCCESSFUL STEAL
+                    customer.isStolen = true;
+                    customer.stolenByCoworkerId = coworker.id;
+                    // Set these now, not at start
+                    customer.stolenDealTimer = 0;
+                    customer.stolenDealDuration = 15 + Math.random() * 15;
+
+                    coworker.stealPhase = 'greeting';
+                    coworker.workingTimer = 0; // Use workingTimer for greeting duration
+                  }
+                }
+              }
+              
+              // NEW PHASE: Greeting customer (pause for interaction)
+              else if (coworker.stealPhase === 'greeting') {
+                coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
+                
+                // Wait for 1.5 seconds before returning
+                if (coworker.workingTimer >= 1.5) {
+                  coworker.stealPhase = 'returning';
+                  coworker.workingTimer = 0;
+                }
+              }
+            
+            // PHASE 2: Returning to desk with customer
+            else if (coworker.stealPhase === 'returning') {
+              const targetX = coworker.originalX || 0;
+              const targetY = coworker.originalY || 0;
+              const dx = targetX - coworker.x;
+              const dy = targetY - coworker.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              
+              if (dist > 5) {
+                // Move coworker back to desk
+                const speed = 2.5;
+                coworker.x += (dx / dist) * speed;
+                coworker.y += (dy / dist) * speed;
+                
+                // Customer follows coworker (slightly behind)
+                const custTargetX = coworker.x;
+                const custTargetY = coworker.y + 45;
+                const cdx = custTargetX - customer.x;
+                const cdy = custTargetY - customer.y;
+                const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+                if (cdist > 5) {
+                  customer.x += (cdx / cdist) * speed;
+                  customer.y += (cdy / cdist) * speed;
+                }
+              } else {
+                // Coworker arrived at desk! Position customer in front
+                coworker.x = targetX;
+                coworker.y = targetY;
+                customer.x = targetX;
+                customer.y = targetY - 55;
+                coworker.stealPhase = 'working';
+                coworker.workingTimer = 0;
+              }
+            }
+            
+            // PHASE 3: Working at desk
+            else if (coworker.stealPhase === 'working') {
+              // Increment working timer
+              coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
+              
+              // Customer stays in front of desk
+              customer.x = (coworker.originalX || coworker.x);
+              customer.y = (coworker.originalY || coworker.y) - 55;
+              
+              // Increment deal timer
+              customer.stolenDealTimer = (customer.stolenDealTimer || 0) + deltaTime;
+              
+              // Check if deal time is up
+              if (customer.stolenDealDuration && customer.stolenDealTimer >= customer.stolenDealDuration) {
+                // Resolve the deal - 50/50 chance
+                const coinToss = Math.random();
+                
+                if (coinToss >= 0.5) {
+                  // Coworker makes the sale - but DON'T count towards player stats
+                  customer.active = false;
+                  customer.conversationPhase = 'closed';
+                  
+                  // Simulation only: inventory remains untouched for the player
+                  /* 
+                  if (settings.gameMode === 'volume') {
+                    const randomCar = inventoryRef.current[Math.floor(Math.random() * inventoryRef.current.length)];
+                    if (randomCar) {
+                      const carIndex = inventoryRef.current.findIndex(c => c.id === randomCar.id);
+                      if (carIndex > -1) {
+                        inventoryRef.current.splice(carIndex, 1);
+                      }
+                    }
+                  }
+                  */
+                } else {
+                  // Customer leaves (deal lost)
+                  customer.active = false;
+                  customer.isLost = true;
+                  customer.conversationPhase = 'closed';
+                }
+                
+                // Reset coworker state
+                coworker.workingWithCustomerId = undefined;
+                coworker.workingTimer = 0;
+                coworker.stealPhase = undefined;
+                coworker.nextStealTime = 5 + Math.random() * 25; // Next steal in 5-30 seconds
+                
+                // Reset customer stolen state
+                customer.isStolen = false;
+                customer.stolenByCoworkerId = undefined;
+                customer.stolenDealTimer = undefined;
+                customer.stolenDealDuration = undefined;
+              }
+              
+              // Draw pencil/working animation on the coworker
+              const pencilBob = Math.sin(Date.now() / 200) * 3; // Bobbing animation
+              ctx.save();
+              ctx.translate(coworker.originalX || coworker.x, (coworker.originalY || coworker.y) - 30 + pencilBob);
+              
+              // Draw pencil icon
+              ctx.fillStyle = '#f1c40f';
+              ctx.fillRect(-3, -10, 6, 16); // Pencil body
+              ctx.fillStyle = '#e74c3c';
+              ctx.fillRect(-3, -10, 6, 4); // Eraser
+              ctx.fillStyle = '#2c3e50';
+              ctx.beginPath();
+              ctx.moveTo(-3, 6);
+              ctx.lineTo(0, 12);
+              ctx.lineTo(3, 6);
+              ctx.closePath();
+              ctx.fill(); // Pencil tip
+              
+              ctx.restore();
+            }
+          }
+        } else {
+          // Coworker is available to steal - decrement steal timer
+          coworker.nextStealTime -= deltaTime;
+          
+          if (coworker.nextStealTime <= 0) {
+            // Time to steal! Find an available customer
+            const availableCustomers = customersRef.current.filter(c => 
+              c.active && 
+              !c.isStolen && 
+              c.conversationPhase === 'greeting' &&
+              // Not currently being talked to by player
+              !(showInput && selectedPerson?.id === c.id)
+            );
+            
+            if (availableCustomers.length > 0) {
+              // Pick a random customer to steal
+              const victim = availableCustomers[Math.floor(Math.random() * availableCustomers.length)];
+              
+              // Mark customer as target (but NOT stolen yet)
+              // victim.isStolen = true; // CHANGED: Don't set this yet
+              // victim.stolenByCoworkerId = coworker.id; // CHANGED: Don't set this yet
+              // victim.stolenDealTimer = 0; // CHANGED: Don't set this yet
+              // victim.stolenDealDuration = 15 + Math.random() * 15; // CHANGED: Don't set this yet
+              
+              // Coworker starts walking to customer
+              coworker.workingWithCustomerId = victim.id;
+              coworker.workingTimer = 0;
+              coworker.stealPhase = 'walking';
+              
+              // Schedule a new customer to spawn after 3-5 second delay
+              coworker.pendingCustomerSpawn = 3 + Math.random() * 2;
+            } else {
+              // No customers to steal, try again in 5-30 seconds
+              coworker.nextStealTime = 5 + Math.random() * 25;
+            }
+          }
+        }
+      });
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+
     return () => {
       canvas.removeEventListener('click', handleClick);
       canvas.removeEventListener('touchstart', handleClick);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
     };
-  }, [gameState, getCanvasScale, isMobile, showInput]);
+  }, [gameState, showInput, getCanvasScale, isMobile]);
 
   const handleDiscoveryAction = async (type: 'budget' | 'type' | 'features' | 'model') => {
     if (!selectedPerson) return;
@@ -525,7 +1038,7 @@ function App() {
       setConversation(prev => [...prev, { sender: 'customer', text: response }]);
       setIsTyping(false);
       setSelectedPerson({ ...realCustomer });
-      setTimeout(() => setUiPanel('lostDeal'), 1000);
+      setTimeout(() => setShowLostDeal(true), 1000);
       return; // Exit early
     }
     
@@ -544,7 +1057,7 @@ function App() {
       setConversation(prev => [...prev, { sender: 'customer', text: response }]);
       setIsTyping(false);
       setSelectedPerson({ ...realCustomer });
-      setTimeout(() => setUiPanel('lostDeal'), 1000);
+      setTimeout(() => setShowLostDeal(true), 1000);
       return; // Exit early
     }
     
@@ -627,7 +1140,7 @@ function App() {
     if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
-      setTimeout(() => setUiPanel('lostDeal'), 1000);
+      setTimeout(() => setShowLostDeal(true), 1000);
     }
     setConversation(prev => [...prev, { sender: 'customer', text: response }]);
     setIsTyping(false);
@@ -717,13 +1230,14 @@ function App() {
     }
 
     if (dealAccepted) {
-      dispatchSession({ type: 'SET_AGREED_OFFER', price, offerType: type });
+      setAgreedPrice(price);
+      setAgreedType(type);
       // Don't auto-close! Wait for player to click Close Deal button
       // But we can give a hint in the response or trust the "dealAccepted" flag for internal logic if needed
     } else if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
-      setTimeout(() => setUiPanel('lostDeal'), 1000);
+      setTimeout(() => setShowLostDeal(true), 1000);
     } else {
       selectedPerson.conversationPhase = 'negotiation';
     }
@@ -733,7 +1247,8 @@ function App() {
 
     // FIX: On mobile, close the Numbers/Inventory panels so the user can see the chat/response
     if (isMobile) {
-      setUiPanel('none');
+      setShowNumbers(false);
+      setShowInventory(false);
     }
   };
   
@@ -773,76 +1288,16 @@ function App() {
     selectedPerson.closeAttempts = (selectedPerson.closeAttempts || 0) + 1;
 
     // Check if customer already committed via "take it or leave it"
-    const isCommitted = selectedPerson.committedToBuy === true;
+    const isCommitted = (selectedPerson as any).committedToBuy === true;
 
-    // Price to use for "likes the price" check: agreed price, or last offer from conversation if none set
-    const lastOfferMsg = [...conversation].reverse().find(m => (m as ConversationMessage).offerDetails);
-    const lastOffer = lastOfferMsg && (lastOfferMsg as ConversationMessage).offerDetails;
-    const lastOfferMatchesBuyerType = lastOffer && (
-      (selectedPerson.buyerType === 'payment' && lastOffer.type === 'payment') ||
-      (selectedPerson.buyerType === 'cash' && lastOffer.type !== 'payment')
-    );
-    const priceToCheck = session.agreedPrice > 0
-      ? session.agreedPrice
-      : (lastOfferMatchesBuyerType && lastOffer && typeof lastOffer.price === 'number')
-        ? lastOffer.price  // same units as effectiveBudget: monthly for payment, dollars for otd/selling
-        : 0;
-
-    // If the customer's LAST message clearly said they want to buy (deal, I'll take it, etc.), close the deal
-    const reversedConv = [...conversation].reverse();
-    const lastCustomerMsg = reversedConv.find(m => m.sender === 'customer');
-    const customerJustSaidYes = lastCustomerMsg && (() => {
-      const t = lastCustomerMsg.text.toLowerCase();
-      const buyWords = /\b(deal|sold|i'll take it|i will take it|lets do it|let's do it|yes|accept|ready to sign|where do i sign|we have a deal)\b/i;
-      const negated = /\b(not|n't|won't|can't)\s+(ready|buy|deal|sign|take|accept)\b/i;
-      return buyWords.test(t) && !negated.test(t);
-    })();
-
-    if (customerJustSaidYes || isCommitted) {
-      // They already said they want to buy — close the deal. If we have price and commitment, finalize immediately.
-      if (isCommitted && (session.agreedPrice > 0 || (lastOffer && typeof lastOffer.price === 'number'))) {
-        if (session.agreedPrice === 0 && lastOffer) {
-          dispatchSession({ type: 'SET_AGREED_OFFER', price: lastOffer.price, offerType: (lastOffer.type as OfferType) ?? 'otd' });
-        }
-        setUiPanel('dealClosed');
-        return;
-      }
-      // Otherwise do a short confirmation exchange
-      const closingQuestions = [
-        "Are you ready to sign the paperwork and drive this home today?",
-        "So, do we have a deal?",
-        "Does this all look good enough to put your name on it today?"
-      ];
-      const playerMessage = closingQuestions[Math.floor(Math.random() * closingQuestions.length)];
-      setConversation(prev => [...prev, { sender: 'player', text: playerMessage }]);
-      setIsTyping(true);
-      setTimeout(() => {
-        const responses: Record<string, string> = {
-          friendly: "You know what? Let's do it! I'm excited!",
-          serious: "Acceptable. Let's proceed with the paperwork.",
-          skeptical: "Fine, you earned it. The deal is fair enough.",
-          enthusiastic: "YES! Let's do it! I'm SO ready to drive this home!",
-          analytical: "The numbers align with my targeted metrics. I accept."
-        };
-        setConversation(prev => [...prev, { sender: 'customer', text: responses[selectedPerson.personality], sentiment: 'happy' }]);
-        selectedPerson.conversationPhase = 'closed';
-        if (session.agreedPrice === 0 && lastOffer) {
-          dispatchSession({ type: 'SET_AGREED_OFFER', price: lastOffer.price, offerType: (lastOffer.type as OfferType) ?? 'otd' });
-        }
-        setUiPanel('dealClosed');
-        setIsTyping(false);
-      }, 800);
-      return;
-    }
-
-    // FIRST: Check if customer likes the car AND the price (use last offer when agreedPrice not set)
-    const likesTheCar = customerLikesTheCar(selectedPerson, currentCar);
-    const likesThePrice = priceToCheck > 0 && customerLikesThePrice(selectedPerson, priceToCheck);
+    // FIRST: Check if customer likes the car AND the price
+    const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
+    const likesThePrice = customerLikesThePrice(selectedPerson, agreedPrice);
 
     // ATTRITION / PRESSURE SALE LOGIC
     // If we've tried 3+ times and price is within 20% of base budget, give a small extra chance
     const baseBudget = selectedPerson.buyerType === 'cash' ? selectedPerson.budget : selectedPerson.maxPayment;
-    const isWithin20Percent = priceToCheck > 0 && (priceToCheck <= baseBudget * 1.2);
+    const isWithin20Percent = agreedPrice > 0 && (agreedPrice <= baseBudget * 1.2);
     const isAttritionSuccess = selectedPerson.closeAttempts >= 3 && isWithin20Percent && Math.random() < 0.15;
 
     // If either condition fails, provide specific feedback
@@ -914,7 +1369,7 @@ function App() {
         if (isLeaving) {
           selectedPerson.isLost = true;
           selectedPerson.conversationPhase = 'closed';
-          setTimeout(() => setUiPanel('lostDeal'), 1000);
+          setTimeout(() => setShowLostDeal(true), 1000);
         } else {
           // Small penalty for pushing when they're not ready
           selectedPerson.interest = Math.max(0, selectedPerson.interest - 5);
@@ -927,8 +1382,10 @@ function App() {
     }
 
     // If we get here, customer likes both the car AND the price
-    // Analyze context BEFORE adding player message (reuse reversedConv/lastCustomerMsg from above)
+    // Analyze context BEFORE adding player message
     let contextBonus = 0;
+    const reversedConv = [...conversation].reverse();
+    const lastCustomerMsg = reversedConv.find(m => m.sender === 'customer');
 
     if (lastCustomerMsg) {
       const text = lastCustomerMsg.text.toLowerCase();
@@ -1001,10 +1458,11 @@ function App() {
 
         selectedPerson.conversationPhase = 'closed';
         // Set agreed price/type if not set (default to current offer or list price)
-        if (session.agreedPrice === 0) {
-           dispatchSession({ type: 'SET_AGREED_OFFER', price: customSellingPrice, offerType: 'selling' });
+        if (agreedPrice === 0) {
+           setAgreedPrice(customSellingPrice);
+           setAgreedType('selling');
         }
-        setUiPanel('dealClosed');
+        setShowDealClosed(true);
 
       } else {
         // FAILURE
@@ -1059,7 +1517,7 @@ function App() {
         if (isLeaving) {
           selectedPerson.isLost = true;
           selectedPerson.conversationPhase = 'closed';
-          setTimeout(() => setUiPanel('lostDeal'), 1000);
+          setTimeout(() => setShowLostDeal(true), 1000);
         } else {
           selectedPerson.conversationPhase = 'negotiation';
         }
@@ -1081,20 +1539,20 @@ function App() {
     let profit = 0;
     let saleAmount = 0;
     
-    if (session.agreedType === 'selling') {
+    if (agreedType === 'selling') {
       // Selling price offer - profit is selling price minus invoice
-      profit = session.agreedPrice - currentCar.invoice;
-      saleAmount = session.agreedPrice + currentCar.fees + Math.round(session.agreedPrice * 0.07);
-    } else if (session.agreedType === 'otd') {
+      profit = agreedPrice - currentCar.invoice;
+      saleAmount = agreedPrice + currentCar.fees + Math.round(agreedPrice * 0.07);
+    } else if (agreedType === 'otd') {
       // OTD offer - need to back out tax and fees to get selling price
       // OTD = selling + tax(7%) + fees
       // OTD = selling + (selling * 0.07) + fees
       // OTD - fees = selling * 1.07
       // selling = (OTD - fees) / 1.07
-      const sellingPrice = Math.round((session.agreedPrice - currentCar.fees) / 1.07);
+      const sellingPrice = Math.round((agreedPrice - currentCar.fees) / 1.07);
       profit = sellingPrice - currentCar.invoice;
-      saleAmount = session.agreedPrice;
-    } else if (session.agreedType === 'payment') {
+      saleAmount = agreedPrice;
+    } else if (agreedType === 'payment') {
       // Payment offer - use the OTD price that was being financed
       // The customOTDPrice is what they're financing
       const sellingPrice = Math.round((customOTDPrice - currentCar.fees) / 1.07);
@@ -1102,7 +1560,10 @@ function App() {
       saleAmount = customOTDPrice;
     }
 
-    dispatchSession({ type: 'DEAL_CLOSED', saleAmount, profit });
+    setLastSaleAmount(saleAmount);
+    setLastProfit(profit);
+    setTotalProfit(prev => prev + profit);
+    setTotalSales(prev => prev + saleAmount);
     
     if (settings.timer.enabled || settings.gameMode === 'volume') {
       setSessionStats(prev => ({
@@ -1123,17 +1584,19 @@ function App() {
       // Check if won
       if (inventoryRef.current.length === 0) {
         // setGameState('intro'); // Don't switch yet, show results
-        setUiPanel('none');
+        setShowDealClosed(false);
         setShowTimeUp(true); 
         return; // Stop execution
       }
     }
 
-    setUiPanel('none');
+    setShowDealClosed(false);
     setShowInput(false);
     setSelectedPerson(null);
     setConversation([]);
     setCurrentCar(null);
+    setShowInventory(false);
+    setShowNumbers(false);
 
     // Move player back to an open desk
     const desks = desksRef.current;
@@ -1155,11 +1618,13 @@ function App() {
     // Remove customer from the showroom
     customersRef.current = customersRef.current.filter(c => c.id !== selectedPerson.id);
     
-    setUiPanel('none');
+    setShowLostDeal(false);
     setShowInput(false);
     setSelectedPerson(null);
     setConversation([]);
     setCurrentCar(null);
+    setShowInventory(false);
+    setShowNumbers(false);
 
     // Move player back to an unoccupied desk
     const allDesks = desksRef.current;
@@ -1206,19 +1671,67 @@ function App() {
 
     let response: string;
     let interestChange: number;
-    let newPhase: typeof selectedPerson.conversationPhase | undefined;
+    let newPhase;
     let isLost = false;
     let dealAccepted = false;
 
-    // Single source of truth for "take it or leave it" and "inventory admission"
-    const specialResult = resolveSpecialPhrase(userMsg, selectedPerson, currentCar);
-    if (specialResult) {
-      response = specialResult.response;
-      interestChange = specialResult.interestChange;
-      newPhase = specialResult.newPhase;
-      isLost = !!specialResult.isLost;
-      dealAccepted = !!specialResult.dealAccepted;
-    } else if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
+    // PRE-CHECK: Handle special phrases before calling AI/scripted responses
+    // This ensures these phrases work in both AI and non-AI modes
+    
+    // "Take it or leave it" ultimatum
+    if (isTakeItOrLeaveIt(userMsg)) {
+      // Calculate chance they accept based on car match
+      let takeItChance = 0.3; // Base chance
+      if (currentCar) {
+        // If car matches their category, boost chance
+        const isValid = selectedPerson.desiredCategory === 'any' || 
+          currentCar.category === selectedPerson.desiredCategory;
+        if (isValid) takeItChance += 0.3;
+        // If car matches some features, boost more
+        const featureMatch = selectedPerson.desiredFeatures.filter(f => 
+          currentCar.features.includes(f)).length / selectedPerson.desiredFeatures.length;
+        takeItChance += featureMatch * 0.3;
+      }
+      // Personality modifiers
+      if (selectedPerson.personality === 'friendly') takeItChance += 0.2;
+      if (selectedPerson.personality === 'skeptical') takeItChance -= 0.3;
+      
+      if (Math.random() < takeItChance) {
+        // They accept!
+        response = "Alright, if that's truly all you have... I'll take it.";
+        interestChange = 10;
+        dealAccepted = true;
+        newPhase = 'closed';
+      } else {
+        // They leave
+        response = "No, I can't settle for that. I'm leaving.";
+        interestChange = -100;
+        isLost = true;
+        newPhase = 'closed';
+      }
+    }
+    // "I don't have that" inventory admission
+    else if (isInventoryAdmission(userMsg)) {
+      let stayChance = 0.5;
+      if (selectedPerson.personality === 'friendly') stayChance += 0.2;
+      if (selectedPerson.personality === 'skeptical') stayChance -= 0.2;
+      
+      if (Math.random() < stayChance) {
+        response = "I understand. What else do you have that might work?";
+        interestChange = 0;
+        newPhase = 'needs_discovery';
+        // Clear their specific model requirement
+        selectedPerson.desiredModel = undefined;
+        selectedPerson.desiredCategory = 'any';
+      } else {
+        response = "Well, if you don't have what I need, I'll try somewhere else. Goodbye.";
+        interestChange = -100;
+        isLost = true;
+        newPhase = 'closed';
+      }
+    }
+    // Normal response flow
+    else if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
       const result = await getAIResponse(selectedPerson, userMsg, currentCar, settings);
       response = result.response;
       interestChange = result.interestChange;
@@ -1238,8 +1751,6 @@ function App() {
       response = result.response;
       interestChange = result.interestChange;
       newPhase = result.newPhase;
-      isLost = !!result.isLost;
-      dealAccepted = !!result.dealAccepted;
     }
 
     selectedPerson.interest = Math.max(0, Math.min(100, selectedPerson.interest + interestChange));
@@ -1259,20 +1770,17 @@ function App() {
     }
     
     if (dealAccepted) {
-      // Customer is committed to buying! Set agreed price from last offer in conversation so "Close Deal" succeeds.
-      const lastOfferMsg = [...conversation].reverse().find(m => (m as ConversationMessage).offerDetails);
-      const details = lastOfferMsg && (lastOfferMsg as ConversationMessage).offerDetails;
-      if (details && typeof details.price === 'number') {
-        dispatchSession({ type: 'SET_AGREED_OFFER', price: details.price, offerType: (details.type as OfferType) ?? 'otd' });
-      }
-      selectedPerson.committedToBuy = true;
+      // Customer is committed to buying! But don't auto-close.
+      // Set a flag so they auto-accept when user clicks "Close Deal" (if price is right)
+      (selectedPerson as any).committedToBuy = true;
       selectedPerson.conversationPhase = 'closed';
+      // Don't return early - continue to show the response
     }
     
     if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
-      setTimeout(() => setUiPanel('lostDeal'), 1000);
+      setTimeout(() => setShowLostDeal(true), 1000);
     }
     setConversation(prev => [...prev, { sender: 'customer', text: response }]);
     setIsTyping(false);
@@ -1311,7 +1819,7 @@ function App() {
               <div className="feature-icon orange">
                 <Car size={18} />
               </div>
-              <span>100 vehicles in your inventory</span>
+              <span>Up to 100 vehicles (10 in Volume Run)</span>
             </div>
           </div>
 
@@ -1376,8 +1884,7 @@ function App() {
             className="start-button"
             onClick={() => {
               setGameState('playing');
-              setUiPanel('none');
-              dispatchSession({ type: 'RESET_SESSION' });
+              setShowDealClosed(false);
               customersRef.current.forEach(c => c.active = true);
               
               if (settings.gameMode === 'volume') {
@@ -1417,13 +1924,13 @@ function App() {
               width: '100%',
               fontSize: '0.9rem'
             }}
-            onClick={() => setUiPanel('tips')}
+            onClick={() => setShowTips(true)}
           >
             <HelpCircle size={16} /> Tip Sheet & Rules
           </button>
         </div>
         
-        {uiPanel === 'tips' && <TipsModal onClose={() => setUiPanel('none')} />}
+        {showTips && <TipsModal onClose={() => setShowTips(false)} />}
       </div>
     );
   }
@@ -1435,14 +1942,14 @@ function App() {
         <canvas ref={canvasRef} className="game-canvas" />
 
         {/* Stats overlay */}
-        {session.lastSaleAmount > 0 && (
+        {lastSaleAmount > 0 && (
           <div className="stats-overlay">
-            <div className={`profit ${session.lastProfit < 0 ? 'loss' : ''}`}>
-              {session.lastProfit < 0 ? '-' : ''}${Math.abs(session.lastProfit).toLocaleString()} Profit
+            <div className={`profit ${lastProfit < 0 ? 'loss' : ''}`}>
+              {lastProfit < 0 ? '-' : ''}${Math.abs(lastProfit).toLocaleString()} Profit
             </div>
-            <div className="total">Total Sales: ${session.totalSales.toLocaleString()}</div>
-            <div className={`profit ${session.totalProfit < 0 ? 'loss' : ''}`}>
-              Total Profit: {session.totalProfit < 0 ? '-' : ''}${Math.abs(session.totalProfit).toLocaleString()}
+            <div className="total">Total Sales: ${totalSales.toLocaleString()}</div>
+            <div className={`profit ${totalProfit < 0 ? 'loss' : ''}`}>
+              Total Profit: {totalProfit < 0 ? '-' : ''}${Math.abs(totalProfit).toLocaleString()}
             </div>
           </div>
         )}
@@ -1463,26 +1970,26 @@ function App() {
         )}
 
         {/* Settings button */}
-        <button className="settings-btn" onClick={() => setUiPanel('settings')}>
+        <button className="settings-btn" onClick={() => setShowSettings(true)}>
           <Settings size={20} />
         </button>
 
         {/* Deal closed modal */}
-        {uiPanel === 'dealClosed' && currentCar && (
+        {showDealClosed && currentCar && (
           <div className="deal-modal">
             <h2>🎉 SOLD!</h2>
             <p className="price">
-              ${session.agreedPrice.toLocaleString()} {session.agreedType === 'otd' ? 'OTD' : session.agreedType === 'payment' ? '/mo' : 'Selling Price'}
+              ${agreedPrice.toLocaleString()} {agreedType === 'otd' ? 'OTD' : agreedType === 'payment' ? '/mo' : 'Selling Price'}
             </p>
             <p className={`profit-display ${(
-              session.agreedPrice - (session.agreedType === 'otd' ? currentCar.fees + currentCar.tax : 0) - currentCar.invoice
+              agreedPrice - (agreedType === 'otd' ? currentCar.fees + currentCar.tax : 0) - currentCar.invoice
             ) < 0 ? 'loss' : ''}`}>
               Profit: {(
-                session.agreedType === 'otd' 
-                  ? Math.round((session.agreedPrice - currentCar.fees) / 1.07) - currentCar.invoice
-                  : session.agreedType === 'payment'
+                agreedType === 'otd' 
+                  ? Math.round((agreedPrice - currentCar.fees) / 1.07) - currentCar.invoice
+                  : agreedType === 'payment'
                     ? Math.round((customOTDPrice - currentCar.fees) / 1.07) - currentCar.invoice
-                    : session.agreedPrice - currentCar.invoice
+                    : agreedPrice - currentCar.invoice
               ).toLocaleString()}
             </p>
             <button onClick={signDeal}>Sign Deal</button>
@@ -1490,7 +1997,7 @@ function App() {
         )}
 
         {/* Lost deal modal */}
-        {uiPanel === 'lostDeal' && selectedPerson && (
+        {showLostDeal && selectedPerson && (
           <div className="deal-modal lost">
             <h2>❌ DEAL LOST</h2>
             <p className="price">{selectedPerson.name} has left the showroom.</p>
@@ -1548,10 +2055,10 @@ function App() {
                   sendMessage={sendMessage}
                   inputRef={inputRef}
                   onClose={() => setShowInput(false)}
-                  showInventory={uiPanel === 'inventory'}
-                  setShowInventory={(show) => setUiPanel(show ? 'inventory' : 'none')}
-                  showNumbers={uiPanel === 'numbers'}
-                  setShowNumbers={(show) => setUiPanel(show ? 'numbers' : 'none')}
+                  showInventory={showInventory}
+                  setShowInventory={setShowInventory}
+                  showNumbers={showNumbers}
+                  setShowNumbers={setShowNumbers}
                   currentCar={currentCar}
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={false}
@@ -1562,11 +2069,11 @@ function App() {
               </div>
 
               {/* Desktop: Inventory panel next to chat */}
-              {uiPanel === 'inventory' && (
-                <div className="side-panel in-container inventory-panel">
+              {showInventory && (
+                <div className="side-panel in-container">
                   <div className="panel-header">
                     <h3>Inventory ({filteredInventory.length} cars)</h3>
-                    <button className="panel-close" onClick={() => setUiPanel('none')}>×</button>
+                    <button className="panel-close" onClick={() => setShowInventory(false)}>×</button>
                   </div>
                   <div className="panel-search">
                     <input
@@ -1577,7 +2084,7 @@ function App() {
                     />
                   </div>
                   <div className="panel-content">
-                    {filteredInventory.map(car => (
+                    {filteredInventory.slice(0, 20).map(car => (
                       <div key={car.id} className="inventory-item">
                         <div className="inventory-item-info">
                           <h4>{car.model} {car.trim}</h4>
@@ -1587,13 +2094,16 @@ function App() {
                           className="inventory-item-action"
                           onClick={() => {
                             showCarToCustomer(car);
-                            setUiPanel('none');
+                            setShowInventory(false);
                           }}
                         >
                           Show
                         </button>
                       </div>
                     ))}
+                    {filteredInventory.length > 20 && (
+                      <div className="more-items">+{filteredInventory.length - 20} more...</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1601,15 +2111,15 @@ function App() {
               {/* Desktop: Numbers panel next to chat */}
               {/* Desktop: Numbers panel next to chat */}
               <NumbersPanel
-                isOpen={uiPanel === 'numbers' && !!currentCar}
-                onClose={() => setUiPanel('none')}
+                isOpen={showNumbers && !!currentCar}
+                onClose={() => setShowNumbers(false)}
                 currentCar={currentCar}
                 customSellingPrice={customSellingPrice}
                 setCustomSellingPrice={setCustomSellingPrice}
                 customOTDPrice={customOTDPrice}
                 setCustomOTDPrice={setCustomOTDPrice}
                 makeOffer={makeOffer}
-                showDealClosed={uiPanel === 'dealClosed'}
+                showDealClosed={showDealClosed}
                 signDeal={signDeal}
                 downPayment={downPayment}
                 setDownPayment={setDownPayment}
@@ -1642,10 +2152,10 @@ function App() {
                   sendMessage={sendMessage}
                   inputRef={inputRef}
                   onClose={() => setShowInput(false)}
-                  showInventory={uiPanel === 'inventory'}
-                  setShowInventory={(show) => setUiPanel(show ? 'inventory' : 'none')}
-                  showNumbers={uiPanel === 'numbers'}
-                  setShowNumbers={(show) => setUiPanel(show ? 'numbers' : 'none')}
+                  showInventory={showInventory}
+                  setShowInventory={setShowInventory}
+                  showNumbers={showNumbers}
+                  setShowNumbers={setShowNumbers}
                   currentCar={currentCar}
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={true}
@@ -1656,14 +2166,14 @@ function App() {
           </>
         )}
 
-        {/* Mobile-only: Inventory panel as centered modal (does not fill screen) */}
-        {uiPanel === 'inventory' && isMobile && (
+        {/* Mobile-only: Inventory panel as modal */}
+        {showInventory && isMobile && (
           <>
-            <div className="panel-backdrop" onClick={() => setUiPanel('none')} />
-            <div className="side-panel inventory-modal inventory-panel">
+            <div className="panel-backdrop" onClick={() => setShowInventory(false)} />
+            <div className="side-panel">
               <div className="panel-header">
                 <h3>Inventory ({filteredInventory.length} cars)</h3>
-                <button className="panel-close" onClick={() => setUiPanel('none')}>×</button>
+                <button className="panel-close" onClick={() => setShowInventory(false)}>×</button>
               </div>
               <div className="panel-search">
                 <input
@@ -1674,7 +2184,7 @@ function App() {
                 />
               </div>
               <div className="panel-content">
-                {filteredInventory.map(car => (
+                {filteredInventory.slice(0, 20).map(car => (
                   <div key={car.id} className="inventory-item">
                     <div className="inventory-item-info">
                       <h4>{car.model} {car.trim}</h4>
@@ -1684,13 +2194,16 @@ function App() {
                       className="inventory-item-action"
                       onClick={() => {
                         showCarToCustomer(car);
-                        setUiPanel('none');
+                        setShowInventory(false);
                       }}
                     >
                       Show
                     </button>
                   </div>
                 ))}
+                {filteredInventory.length > 20 && (
+                  <div className="more-items">+{filteredInventory.length - 20} more...</div>
+                )}
               </div>
             </div>
           </>
@@ -1699,15 +2212,15 @@ function App() {
         {/* Mobile-only: Numbers panel as modal (when chat is closed) */}
         {/* Mobile-only: Numbers panel as modal (when chat is closed) */}
         <NumbersPanel
-            isOpen={uiPanel === 'numbers' && !!currentCar && isMobile}
-            onClose={() => setUiPanel('none')}
+            isOpen={showNumbers && !!currentCar && isMobile}
+            onClose={() => setShowNumbers(false)}
             currentCar={currentCar}
             customSellingPrice={customSellingPrice}
             setCustomSellingPrice={setCustomSellingPrice}
             customOTDPrice={customOTDPrice}
             setCustomOTDPrice={setCustomOTDPrice}
             makeOffer={makeOffer}
-            showDealClosed={uiPanel === 'dealClosed'}
+            showDealClosed={showDealClosed}
             signDeal={signDeal}
             downPayment={downPayment}
             setDownPayment={setDownPayment}
@@ -1727,9 +2240,9 @@ function App() {
         />
 
         {/* Settings panel */}
-        {uiPanel === 'settings' && (
+        {showSettings && (
           <>
-            <div className="panel-backdrop" onClick={() => setUiPanel('none')} />
+            <div className="panel-backdrop" onClick={() => setShowSettings(false)} />
             <div className="settings-panel">
               <h3>⚙️ Settings</h3>
               <div className="settings-option">
@@ -1889,7 +2402,10 @@ function App() {
                   style={{ background: 'var(--danger)', marginTop: '0', fontSize: '0.9rem', opacity: 0.9 }}
                   onClick={() => {
                     if (confirm('Are you sure you want to reset all sales stats?')) {
-                      dispatchSession({ type: 'RESET_SESSION' });
+                      setTotalSales(0);
+                      setTotalProfit(0);
+                      setLastSaleAmount(0);
+                      setLastProfit(0);
                     }
                   }}
                 >
@@ -1897,7 +2413,7 @@ function App() {
                 </button>
               </div>
 
-              <button className="close-btn" onClick={() => setUiPanel('none')}>
+              <button className="close-btn" onClick={() => setShowSettings(false)}>
                 Done
               </button>
             </div>

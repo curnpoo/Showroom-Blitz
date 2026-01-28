@@ -1,5 +1,15 @@
-import type { Car, Customer, PersonalityType, DesiredFeature, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
-import { CATEGORY_LABELS, FEATURE_LABELS, formatFeatures, TAKE_IT_OR_LEAVE_IT_SUCCESS, TAKE_IT_OR_LEAVE_IT_FAILURE, INVENTORY_ADMISSION_SUCCESS, INVENTORY_ADMISSION_FAILURE } from '../data/dialogue';
+import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
+
+// ============ VEHICLE CATEGORY LABELS ============
+const CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  suv: 'an SUV',
+  sedan: 'a sedan',
+  electric: 'an electric car',
+  hybrid: 'a hybrid',
+  affordable: 'something affordable',
+  luxury: 'something luxury',
+  any: '', // Not used directly, handled separately
+};
 
 
 
@@ -512,6 +522,78 @@ const DEAL_ACCEPTED_GREAT_VALUE: Record<PersonalityType, string[]> = {
   ],
 };
 
+// @ts-ignore - Reserved for future use
+const INVENTORY_ADMISSION_SUCCESS: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Oh, that's a shame! Well, I'm open to suggestions. What do you have?",
+    "No worries! I'm not set in stone. Show me something else nice!",
+    "Ah, bummer. But I trust you - what else is good on the lot?",
+  ],
+  serious: [
+    "Unfortunate. I suppose I can look at alternatives if they are comparable.",
+    "I see. Well, don't waste my time. What DO you have that's worth buying?",
+    "That is disappointing. Show me what is available then.",
+  ],
+  skeptical: [
+    "Of course you don't. Figures. Fine, what IS actually here?",
+    "Typical. Bait and switch? Whatever, show me what you got.",
+    "Ugh. Fine. I'm already here. Show me something else.",
+  ],
+  enthusiastic: [
+    "Aww man! That's okay though! I'm sure you have other awesome cars!",
+    "Oh no! Well, surprise me! What else is cool?!",
+    "That's sad, but I'm still excited to buy a car! What else can I see?",
+  ],
+  analytical: [
+    "Noted. Resetting search parameters. What inventory is currently available?",
+    " unavailability acknowledged. Please present alternative options.",
+    "I will adjust my criteria. Proceed with available inventory.",
+  ],
+};
+
+// @ts-ignore - Reserved for future use
+const INVENTORY_ADMISSION_FAILURE: Record<PersonalityType, string[]> = {
+  friendly: [
+    "Oh... that's really the only car I wanted. I think I'll look somewhere else.",
+    "That's disappointing. I really had my heart set on that. Thanks anyway.",
+  ],
+  serious: [
+    "That was a waste of my trip. I'm leaving.",
+    "If you don't have what I need, we have nothing to discuss.",
+  ],
+  skeptical: [
+    "I knew it. You guys never have anything good. I'm out.",
+    "See? Complete waste of time. I'm walking.",
+  ],
+  enthusiastic: [
+    "Aww, that's literally the only one I wanted! I'm so sad! Bye!",
+    "Noooo! My dream car! I can't look at anything else right now!",
+  ],
+  analytical: [
+    "Specific requirement matching failed. Terminating purchase process.",
+    "Critical criteria not met. Aborting transaction.",
+  ],
+};
+
+// ============ HELPER FUNCTIONS ============
+
+const FEATURE_LABELS: Record<DesiredFeature, string> = {
+  sporty: 'sporty',
+  fuel_efficient: 'fuel efficient',
+  luxury: 'luxurious',
+  family: 'family-friendly',
+  affordable: 'affordable',
+  tech: 'high-tech',
+  spacious: 'spacious',
+  reliable: 'reliable',
+};
+
+function formatFeatures(features: DesiredFeature[]): string {
+  const labels = features.map(f => FEATURE_LABELS[f]);
+  if (labels.length === 1) return labels[0];
+  return labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
+}
+
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -582,6 +664,64 @@ export function isTakeItOrLeaveIt(text: string): boolean {
   
   return patterns.some(regex => regex.test(text));
 }
+
+// @ts-ignore - Reserved for future use
+const TAKE_IT_OR_LEAVE_IT_SUCCESS: Record<PersonalityType, string[]> = {
+  friendly: [
+      "Well... if that's really the only option, I guess I'll take it! It's still a nice car.",
+      "Okay then! I don't want to leave empty handed. Let's do it.",
+      "Fair enough. I trust you. I'll take this one."
+  ],
+  serious: [
+      "I see. Given the market conditions, I will accept this vehicle as the solution.",
+      "Very well. If the inventory is limited, I will proceed with this purchase.",
+      "Understood. Let's finalize the paperwork for this unit then."
+  ],
+  skeptical: [
+      "Fine. I guess I'm stuck with this one. Whatever, let's just get it over with.",
+      "You're lucky I need a car today. I'll take it, but I'm not thrilled.",
+      "Ugh. Fine. I'll take it."
+  ],
+  enthusiastic: [
+      "Okay!!! I just really want a car today! I'll take it!!",
+      "If that's the only one, then it's DESTINY! Let's do it!",
+      "I can't wait any longer! I'll take this one! Yay!"
+  ],
+  analytical: [
+      "Analyzing alternatives... None available. Proceeding with current local optimum.",
+      "Given the constraint of limited inventory, acceptance is the logical path.",
+      "I will acquire this unit rather than restart the search process."
+  ],
+};
+
+// @ts-ignore - Reserved for future use
+const TAKE_IT_OR_LEAVE_IT_FAILURE: Record<PersonalityType, string[]> = {
+  friendly: [
+      "I understand, but I just can't settle for something I don't love. Sorry!",
+      "If that's all you have, I think I better keep looking elsewhere. Thanks anyway!",
+      "Ah that's a shame. I really need something else. Bye!"
+  ],
+  serious: [
+      "Then we have nothing more to discuss. Good day.",
+      "That is unacceptable. I will find a dealership with better stock.",
+      "I am not one to settle. Goodbye."
+  ],
+  skeptical: [
+      "Wow. 'That's all you have'? What a joke. I'm leaving.",
+      "I knew this place was a waste of time. Don't bother calling me back.",
+      "Yeah, right. I'm not buying your leftovers. See ya."
+  ],
+  enthusiastic: [
+      "But I don't want thiiiis one! I'm so sad! I have to go!",
+      "Noooo! I can't believe that's it! I'm leaving!",
+      "Aww! I guess I won't get a car today after all. Bye!"
+  ],
+  analytical: [
+      "Inventory constraints prevent optimal matching. Terminating process.",
+      "Current option does not meet threshold criteria. Aborting.",
+      "Insufficient selection. I will conduct business elsewhere."
+  ],
+};
 
 export function isCreditDenial(text: string): boolean {
   const denialKeywords = [
@@ -687,39 +827,15 @@ function _calculatePayment(price: number, downPayment: number, apr: number, mont
   return Math.round(payment);
 }
 
-// Check if a car matches the customer's desired vehicle category
+// Check if a car matches the customer's desired vehicle category (uses car.category set at creation)
 function carMatchesCategory(car: Car, customer: Customer): boolean {
-  const model = car.model.toLowerCase();
   const category = customer.desiredCategory;
-  
-  // If customer is not picky, any car matches
   if (category === 'any') return true;
-  
-  // SUV models
-  const isSedan = model.includes('elantra') || model.includes('sonata') || model.includes('ioniq 6');
-  const isSuv = model.includes('venue') || model.includes('kona') || model.includes('tucson') || 
-                model.includes('santa fe') || model.includes('palisade') || model.includes('ioniq 5');
-  const isElectric = model.includes('ioniq');
-  const isAffordable = model.includes('venue') || model.includes('elantra') || model.includes('kona');
-  const isLuxury = car.trim.toLowerCase().includes('limited') || car.trim.toLowerCase().includes('calligraphy');
-  
-  switch (category) {
-    case 'suv':
-      return isSuv;
-    case 'sedan':
-      return isSedan;
-    case 'electric':
-      return isElectric;
-    case 'hybrid':
-      // Hyundai has hybrid options in Tucson, Santa Fe, Sonata - simplified for game
-      return model.includes('tucson') || model.includes('santa fe') || model.includes('sonata');
-    case 'affordable':
-      return isAffordable;
-    case 'luxury':
-      return isLuxury;
-    default:
-      return true;
+  if (category === 'hybrid') {
+    // No hybrid segment in DB; treat as sedan or SUV
+    return car.category === 'sedan' || car.category === 'suv';
   }
+  return car.category === category;
 }
 
 interface MatchResult {
@@ -771,8 +887,6 @@ export interface ResponseContext {
   offerTerm?: number;
 }
 
-export type ScenarioData = { offeredDown?: number; desiredDown?: number; budget?: number };
-
 export interface ResponseResult {
   response: string;
   interestChange: number;
@@ -781,52 +895,6 @@ export interface ResponseResult {
   isLost?: boolean;
   customerSentiment: Sentiment;
   playerSentiment: Sentiment;
-}
-
-/** Single source of truth for "take it or leave it" and "inventory admission" special phrases. Returns null if message is not a special phrase. */
-export function resolveSpecialPhrase(message: string, customer: Customer, currentCar: Car | null): ResponseResult | null {
-  const playerSentiment: Sentiment = 'neutral';
-
-  if (isTakeItOrLeaveIt(message)) {
-    let takeItChance = 0.1;
-    if (currentCar) {
-      const catMatch = carMatchesCategory(currentCar, customer);
-      const featMatch = carMatchesFeatures(currentCar, customer.desiredFeatures);
-      if (catMatch) takeItChance += 0.3;
-      if (featMatch.score >= 0.5) takeItChance += 0.3;
-      if (featMatch.score === 1) takeItChance += 0.3;
-    }
-    if (customer.personality === 'friendly') takeItChance += 0.2;
-    if (customer.personality === 'enthusiastic') takeItChance += 0.1;
-    if (customer.personality === 'serious') takeItChance += 0.1;
-    if (customer.personality === 'skeptical') takeItChance -= 0.3;
-
-    if (Math.random() < takeItChance) {
-      const response = pickRandom(TAKE_IT_OR_LEAVE_IT_SUCCESS[customer.personality]);
-      return { response, interestChange: 10, dealAccepted: true, newPhase: 'closed', customerSentiment: detectSentiment(response), playerSentiment };
-    }
-    const response = pickRandom(TAKE_IT_OR_LEAVE_IT_FAILURE[customer.personality]);
-    return { response, interestChange: -100, dealAccepted: false, newPhase: 'closed', isLost: true, customerSentiment: detectSentiment(response), playerSentiment };
-  }
-
-  if (isInventoryAdmission(message)) {
-    let stayChance = 0.5;
-    if (customer.personality === 'friendly') stayChance += 0.2;
-    if (customer.personality === 'enthusiastic') stayChance += 0.2;
-    if (customer.personality === 'skeptical') stayChance -= 0.2;
-    if (customer.personality === 'serious') stayChance -= 0.1;
-
-    if (Math.random() < stayChance) {
-      customer.desiredModel = undefined;
-      customer.desiredCategory = 'any';
-      const response = pickRandom(INVENTORY_ADMISSION_SUCCESS[customer.personality]);
-      return { response, interestChange: 5, dealAccepted: false, newPhase: 'needs_discovery', customerSentiment: detectSentiment(response), playerSentiment };
-    }
-    const response = pickRandom(INVENTORY_ADMISSION_FAILURE[customer.personality]);
-    return { response, interestChange: -100, dealAccepted: false, newPhase: 'closed', isLost: true, customerSentiment: detectSentiment(response), playerSentiment };
-  }
-
-  return null;
 }
 
 export function generateResponse(context: ResponseContext): ResponseResult {
@@ -1182,7 +1250,7 @@ export async function getAIResponse(
   // --- ANALYSIS PHASE ---
   // --- ANALYSIS PHASE ---
   let instructionType: string | undefined;
-  let scenarioData: ScenarioData = {};
+  let scenarioData: any = {};
   
   // Initialize Logic Variables
   let dealQuality: string | undefined;
@@ -1568,7 +1636,7 @@ export async function getAIResponse(
 } // End function
 
 
-function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructionType?: string, scenarioData?: ScenarioData): string {
+function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructionType?: string, scenarioData?: any): string {
   const featureList = customer.desiredFeatures.map(f => FEATURE_LABELS[f]).join(', ');
   
   let matchAnalysis = '';
