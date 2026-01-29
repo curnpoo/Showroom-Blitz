@@ -168,7 +168,6 @@ function App() {
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupTimerRef = useRef<number | null>(null);
   const aiWarmupInFlightRef = useRef(false);
-  const aiWarmupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const useAIRef = useRef(settings.useAI);
 
   useEffect(() => {
@@ -193,62 +192,47 @@ function App() {
       return;
     }
 
-    // Clear any existing poll
-    if (aiWarmupPollRef.current) {
-      clearInterval(aiWarmupPollRef.current);
-      aiWarmupPollRef.current = null;
-    }
-
     setAiWarmupStatus('warming');
     setAiWarmupMessage('Starting AI server... this can take a few minutes.');
 
-    // Use /models endpoint (same as testConnection) - works to trigger Modal cold start
-    const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
+    // Use /chat/completions endpoint - same as the actual game uses
+    let warmupUrl = settings.apiBaseUrl || '/api/ai';
+    if (!warmupUrl.includes('/chat/completions')) {
+      warmupUrl = warmupUrl.replace(/\/+$/, '') + '/chat/completions';
+    }
 
-    // Send initial request to trigger Modal cold start (long timeout, don't abort early)
-    // This request may take 1-2+ minutes for Modal to respond
-    fetch(warmupUrl, { method: 'GET' })
-      .then(response => {
-        if (response.ok && useAIRef.current) {
-          setAiWarmupStatus('ready');
-          setAiWarmupMessage('');
-          if (aiWarmupPollRef.current) {
-            clearInterval(aiWarmupPollRef.current);
-            aiWarmupPollRef.current = null;
-          }
-        }
-      })
-      .catch(() => {
-        // Initial request failed, polling will handle retry
+    // Send ONE request - it will trigger cold start and respond when ready
+    // No polling needed - just wait for this request to complete
+    try {
+      const response = await fetch(warmupUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
+        },
+        body: JSON.stringify({
+          model: settings.modelName || 'local-model',
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 1,
+          temperature: 0,
+        }),
       });
 
-    // Also start polling every 20 seconds as backup detection
-    // (in case the initial request fails but server is actually up)
-    aiWarmupPollRef.current = setInterval(async () => {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+      if (!useAIRef.current) return; // AI was disabled while waiting
 
-      try {
-        const response = await fetch(warmupUrl, {
-          method: 'GET',
-          signal: controller.signal,
-        });
-        window.clearTimeout(timeoutId);
-
-        if (response.ok && useAIRef.current) {
-          setAiWarmupStatus('ready');
-          setAiWarmupMessage('');
-          if (aiWarmupPollRef.current) {
-            clearInterval(aiWarmupPollRef.current);
-            aiWarmupPollRef.current = null;
-          }
-        }
-      } catch {
-        window.clearTimeout(timeoutId);
-        // Poll failed, will retry on next interval
+      if (response.ok) {
+        setAiWarmupStatus('ready');
+        setAiWarmupMessage('');
+      } else {
+        setAiWarmupStatus('error');
+        setAiWarmupMessage('AI server returned an error. Retry or switch to Non-AI.');
       }
-    }, 20000);
-  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.modelName, getModelsUrl]);
+    } catch {
+      if (!useAIRef.current) return; // AI was disabled while waiting
+      setAiWarmupStatus('error');
+      setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
+    }
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.apiKey, settings.modelName]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;
@@ -415,14 +399,6 @@ function App() {
 
     return () => window.clearInterval(interval);
   }, [gameState, aiLoadStartAt, aiWarmupStatus]);
-
-  // Clean up polling when leaving loading state or when AI is disabled
-  useEffect(() => {
-    if ((gameState !== 'loading' || !settings.useAI) && aiWarmupPollRef.current) {
-      clearInterval(aiWarmupPollRef.current);
-      aiWarmupPollRef.current = null;
-    }
-  }, [gameState, settings.useAI]);
 
   useEffect(() => {
     if (gameState !== 'loading') return;
