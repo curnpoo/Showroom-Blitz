@@ -68,7 +68,6 @@ const FEATURE_SEARCH_KEYWORDS: Record<string, DesiredFeature> = {
   fuel_efficient: 'fuel_efficient',
 };
 const INVENTORY_NOTE_KEYS: (keyof Customer['revealedPreferences'])[] = ['budget', 'type', 'features'];
-const DISCOVERY_STAGES: Array<keyof Customer['revealedPreferences']> = ['type', 'features', 'budget', 'model'];
 const MIN_WAITING_CUSTOMERS = 1;
 const MAX_WAITING_CUSTOMERS = 5;
 const STEAL_INTERVAL_MIN = 20;
