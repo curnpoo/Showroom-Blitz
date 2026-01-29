@@ -185,14 +185,6 @@ function App() {
     return `${cleaned}/models`;
   }, []);
 
-  const getChatCompletionsUrl = useCallback((base: string) => {
-    let cleaned = base || 'http://localhost:1234/v1';
-    if (!cleaned.includes('/chat/completions')) {
-      cleaned = cleaned.replace(/\/+$/, '') + '/chat/completions';
-    }
-    return cleaned;
-  }, []);
-
   const warmupAI = useCallback(async (_reason: 'setup' | 'start' | 'customer' | 'retry') => {
     if (!settings.useAI) return;
     if (settings.provider === 'anthropic') {
@@ -210,27 +202,12 @@ function App() {
     setAiWarmupStatus('warming');
     setAiWarmupMessage('Starting AI server... this can take a few minutes.');
 
-    const warmupUrl = getChatCompletionsUrl(settings.apiBaseUrl || '/api/ai');
-
-    const requestBody = JSON.stringify({
-      model: settings.modelName || 'local-model',
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-      temperature: 0,
-    });
-
-    const requestHeaders = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
-    };
+    // Use /models endpoint (same as testConnection) - works to trigger Modal cold start
+    const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
 
     // Send initial request to trigger Modal cold start (long timeout, don't abort early)
     // This request may take 1-2+ minutes for Modal to respond
-    fetch(warmupUrl, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: requestBody,
-    })
+    fetch(warmupUrl, { method: 'GET' })
       .then(response => {
         if (response.ok && useAIRef.current) {
           setAiWarmupStatus('ready');
@@ -253,9 +230,7 @@ function App() {
 
       try {
         const response = await fetch(warmupUrl, {
-          method: 'POST',
-          headers: requestHeaders,
-          body: requestBody,
+          method: 'GET',
           signal: controller.signal,
         });
         window.clearTimeout(timeoutId);
@@ -273,7 +248,7 @@ function App() {
         // Poll failed, will retry on next interval
       }
     }, 20000);
-  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.apiKey, settings.modelName, getChatCompletionsUrl]);
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.modelName, getModelsUrl]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;
