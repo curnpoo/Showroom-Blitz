@@ -195,9 +195,17 @@ function App() {
     setAiWarmupStatus('warming');
     setAiWarmupMessage('Starting AI server... this can take a few minutes.');
 
-    // Use /models endpoint (GET) - triggers Modal cold start
     const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
 
+    // Fire initial request to trigger Modal cold start (don't wait for response)
+    fetch(warmupUrl, { method: 'GET' }).catch(() => {});
+
+    // Wait 90 seconds for Modal to fully start, then verify
+    await new Promise(resolve => setTimeout(resolve, 90000));
+
+    if (!useAIRef.current) return;
+
+    // Now check if server is actually ready
     try {
       const response = await fetch(warmupUrl, { method: 'GET' });
 
@@ -369,8 +377,8 @@ function App() {
 
     const interval = window.setInterval(() => {
       const elapsed = Date.now() - aiLoadStartAt;
-      // Progress over 90 seconds (reasonable for 1.5 min server start)
-      let progress = Math.min(elapsed / 90000, 1);
+      // Progress over 120 seconds (2 min for Modal cold start + model load)
+      let progress = Math.min(elapsed / 120000, 1);
 
       // If already ready, ensure 100%
       if (aiWarmupStatus === 'ready') {
