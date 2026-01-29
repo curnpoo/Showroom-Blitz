@@ -19,7 +19,6 @@ export const FEATURE_LABELS: Record<DesiredFeature, string> = {
   affordable: 'affordable',
   tech: 'high-tech',
   spacious: 'spacious',
-  reliable: 'reliable',
 };
 
 export function formatFeatures(features: DesiredFeature[]): string {

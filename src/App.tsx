@@ -54,7 +54,6 @@ const CATEGORY_SEARCH_KEYWORDS: Record<VehicleCategory, string[]> = {
   any: ['any', 'flexible'],
 };
 const FEATURE_SEARCH_KEYWORDS: Record<string, DesiredFeature> = {
-  reliable: 'reliable',
   'fuel efficient': 'fuel_efficient',
   'fuel-efficient': 'fuel_efficient',
   'family-friendly': 'family',
@@ -66,6 +65,15 @@ const FEATURE_SEARCH_KEYWORDS: Record<string, DesiredFeature> = {
   affordable: 'affordable',
   'high-tech': 'tech',
   fuel_efficient: 'fuel_efficient',
+};
+const FEATURE_NAMES: Record<DesiredFeature, string> = {
+  sporty: 'sporty',
+  fuel_efficient: 'fuel efficient',
+  luxury: 'luxurious',
+  family: 'family-friendly',
+  affordable: 'affordable',
+  tech: 'high-tech',
+  spacious: 'spacious',
 };
 const INVENTORY_NOTE_KEYS: (keyof Customer['revealedPreferences'])[] = ['budget', 'type', 'features'];
 const MIN_WAITING_CUSTOMERS = 1;
@@ -556,8 +564,13 @@ function App() {
 
   const handleNoOtherOptions = () => {
     if (!selectedPerson) return;
+
+    // Find real customer in ref to ensure sync
+    const realCustomer = customersRef.current.find(c => c.id === selectedPerson.id);
+    if (!realCustomer) return;
+
     const playerText = "No other options?";
-    const perfectMatches = findPerfectCars(selectedPerson);
+    const perfectMatches = findPerfectCars(realCustomer);
     if (perfectMatches.length > 0) {
       const response = "Actually, there is a car that fits already. Can we go back to that?";
       setConversation(prev => [
@@ -568,27 +581,104 @@ function App() {
       setIsTyping(false);
       return;
     }
-    if (selectedPerson.openToAlternative) {
-      selectedPerson.desiredModel = undefined;
-      selectedPerson.revealedPreferences.model = false;
-      selectedPerson.revealedPreferences.features = false;
-      selectedPerson.interest = Math.min(100, selectedPerson.interest + 5);
-      selectedPerson.openToAlternative = false;
-      selectedPerson.conversationPhase = 'needs_discovery';
-      setSelectedPerson({ ...selectedPerson });
-      const response = "Alright, I'm open to seeing other models, maybe something with similar features.";
-      setConversation(prev => [
-        ...prev,
-        { sender: 'player', text: playerText },
-        { sender: 'customer', text: response },
-      ]);
-      setIsTyping(false);
-      return;
+
+    // Find cars in inventory that match their budget
+    const budgetMax = realCustomer.buyerType === 'cash'
+      ? realCustomer.budget * 1.1
+      : realCustomer.maxPayment * 72; // Rough estimate for finance
+    const affordableCars = inventoryRef.current.filter((car: CarType) => car.price <= budgetMax);
+
+    // Case 1: Customer has NO specific model - they should provide one
+    if (!realCustomer.desiredModel) {
+      if (affordableCars.length > 0) {
+        // Pick a random affordable car and set it as their desired model
+        const randomCar = affordableCars[Math.floor(Math.random() * affordableCars.length)];
+        // Extract brand and model from the car's model string (e.g., "2026 Ford Explorer" -> "Ford Explorer")
+        const modelParts = randomCar.model.replace(/^\d{4}\s+/, ''); // Remove year prefix
+
+        realCustomer.desiredModel = modelParts;
+        realCustomer.revealedPreferences.model = true;
+        realCustomer.interest = Math.min(100, realCustomer.interest + 5);
+        setSelectedPerson({ ...realCustomer });
+
+        const responses = [
+          `Actually, now that I think about it... I've been eyeing the ${modelParts}.`,
+          `You know what? I've heard good things about the ${modelParts}. Do you have one?`,
+          `Hmm, let me be more specific. I'd really like to see a ${modelParts}.`,
+          `Well, if you're asking... I've always wanted a ${modelParts}.`
+        ];
+        const response = responses[Math.floor(Math.random() * responses.length)];
+        setConversation(prev => [
+          ...prev,
+          { sender: 'player', text: playerText },
+          { sender: 'customer', text: response },
+        ]);
+        setIsTyping(false);
+        return;
+      }
     }
-    selectedPerson.isLost = true;
-    selectedPerson.conversationPhase = 'closed';
-    setSelectedPerson({ ...selectedPerson });
-    const response = "I really needed what I asked for. Without it, I'm out.";
+
+    // Case 2: Customer HAS a specific model - they can accept alternatives or decline
+    if (realCustomer.desiredModel) {
+      if (realCustomer.openToAlternative && affordableCars.length > 0) {
+        // Pick a random affordable car and adjust preferences to match it
+        const randomCar = affordableCars[Math.floor(Math.random() * affordableCars.length)];
+        const newCategory = randomCar.category;
+        const newFeatures = randomCar.features.slice(0, 2) as DesiredFeature[];
+
+        // Update preferences to the new car type
+        realCustomer.desiredModel = undefined;
+        realCustomer.desiredCategory = newCategory;
+        realCustomer.desiredFeatures = newFeatures;
+        // Keep all preferences revealed - customer tells you directly what they want now
+        realCustomer.revealedPreferences = { budget: true, type: true, features: true, model: true };
+        realCustomer.interest = Math.min(100, realCustomer.interest + 10);
+        realCustomer.openToAlternative = false;
+        realCustomer.conversationPhase = 'negotiation';
+        setSelectedPerson({ ...realCustomer });
+
+        // Build response that tells them exactly what they're now open to
+        const categoryLabel = CATEGORY_SEARCH_KEYWORDS[newCategory]?.[0] || newCategory;
+        const featuresList = newFeatures.map(f => FEATURE_NAMES[f] || f).join(' and ');
+        const budgetInfo = realCustomer.buyerType === 'cash'
+          ? `$${realCustomer.budget.toLocaleString()}`
+          : `$${realCustomer.maxPayment}/month`;
+
+        const responses = [
+          `Alright, I'm open to other options. I'd be happy with a ${categoryLabel} that's ${featuresList}. Budget is still ${budgetInfo}.`,
+          `Fine, let's try something else. Show me a ${featuresList} ${categoryLabel} in my ${budgetInfo} range.`,
+          `You know what? I'm flexible. A ${categoryLabel} with ${featuresList} features would work. Keep it under ${budgetInfo}.`,
+        ];
+        const response = responses[Math.floor(Math.random() * responses.length)];
+        setConversation(prev => [
+          ...prev,
+          { sender: 'player', text: playerText },
+          { sender: 'customer', text: response },
+        ]);
+        setIsTyping(false);
+        return;
+      } else {
+        // Customer declines to look at alternatives - they leave
+        realCustomer.isLost = true;
+        realCustomer.conversationPhase = 'closed';
+        setSelectedPerson({ ...realCustomer });
+        const response = `I really had my heart set on the ${realCustomer.desiredModel}. I'll have to look elsewhere.`;
+        setConversation(prev => [
+          ...prev,
+          { sender: 'player', text: playerText },
+          { sender: 'customer', text: response },
+        ]);
+        setTimeout(() => setShowLostDeal(true), 1000);
+        setIsTyping(false);
+        return;
+      }
+    }
+
+    // Fallback: No cars in their budget at all - they leave
+    realCustomer.isLost = true;
+    realCustomer.conversationPhase = 'closed';
+    setSelectedPerson({ ...realCustomer });
+    const response = "I really can't find anything in my budget here. I'll have to look elsewhere.";
     setConversation(prev => [
       ...prev,
       { sender: 'player', text: playerText },
@@ -1393,7 +1483,42 @@ function App() {
 
   const showCarToCustomer = async (car: CarType) => {
     if (!selectedPerson) return;
-    
+
+    // Check if we've discovered their needs (type, features, budget)
+    const needsDiscovered = selectedPerson.revealedPreferences.type &&
+                           selectedPerson.revealedPreferences.features &&
+                           selectedPerson.revealedPreferences.budget;
+
+    // If needs not discovered, customer tells you what they want first
+    if (!needsDiscovered) {
+      const showText = `Let me show you the ${car.model} ${car.trim} in ${car.color}.`;
+      setConversation(prev => [...prev, { sender: 'player', text: showText }]);
+
+      // Reveal all their preferences
+      selectedPerson.revealedPreferences.type = true;
+      selectedPerson.revealedPreferences.features = true;
+      selectedPerson.revealedPreferences.budget = true;
+
+      // Build response about what they actually want
+      const categoryLabel = CATEGORY_SEARCH_KEYWORDS[selectedPerson.desiredCategory]?.[0] || selectedPerson.desiredCategory;
+      const featuresList = selectedPerson.desiredFeatures.map(f => FEATURE_NAMES[f] || f).join(' and ');
+      const budgetInfo = selectedPerson.buyerType === 'cash'
+        ? `around $${selectedPerson.budget.toLocaleString()}`
+        : `$${selectedPerson.maxPayment}/month with $${selectedPerson.desiredDown.toLocaleString()} down`;
+
+      const responses = [
+        `Hold on - before we look at cars, let me tell you what I need. I'm looking for something ${featuresList}, preferably a ${categoryLabel}. My budget is ${budgetInfo}.`,
+        `Wait, let me be upfront about what I want first. I need a ${categoryLabel} that's ${featuresList}. I can spend ${budgetInfo}.`,
+        `Actually, let's back up. I should tell you - I want something ${featuresList} in the ${categoryLabel} category. Budget-wise, I'm at ${budgetInfo}.`,
+      ];
+      const response = responses[Math.floor(Math.random() * responses.length)];
+
+      selectedPerson.interest = Math.max(0, selectedPerson.interest - 5); // Slight penalty for not asking first
+      setSelectedPerson({ ...selectedPerson });
+      setConversation(prev => [...prev, { sender: 'customer', text: response }]);
+      return; // Don't show the car yet - let them pick the right one now
+    }
+
     setCurrentCar(car);
     setCustomSellingPrice(car.price);
     setCustomOTDPrice(car.otd);

@@ -160,7 +160,7 @@ const FIRST_NAMES = ['Alex', 'Sarah', 'Marcus', 'Jessica', 'David', 'Emily', 'Ja
 const LAST_NAMES = ['Rivera', 'Chen', 'Johnson', 'Smith', 'Williams', 'Garcia', 'Martinez', 'Davis', 'Miller', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson'];
 const BUYER_TYPES: BuyerType[] = ['cash', 'payment'];
 const PERSONALITIES: PersonalityType[] = ['friendly', 'serious', 'skeptical', 'enthusiastic', 'analytical'];
-const DESIRED_FEATURES: DesiredFeature[] = ['sporty', 'fuel_efficient', 'luxury', 'family', 'affordable', 'tech', 'spacious', 'reliable'];
+const DESIRED_FEATURES: DesiredFeature[] = ['sporty', 'fuel_efficient', 'luxury', 'family', 'affordable', 'tech', 'spacious'];
 
 // Vehicle category preferences - customers may ask for a specific type or be flexible
 const VEHICLE_CATEGORIES: VehicleCategory[] = ['suv', 'sedan', 'electric', 'affordable', 'luxury', 'any'];
@@ -282,7 +282,7 @@ function getCompatibleFeatures(brandModel?: string, category?: VehicleCategory):
     }
     if (segment === 'compact_sedan') {
       validFeatures = validFeatures.filter(f => f !== 'luxury' && f !== 'spacious');
-      validFeatures.push('affordable', 'reliable', 'sporty');
+      validFeatures.push('affordable', 'sporty');
     }
     if (segment === 'fullsize_suv') {
       validFeatures = validFeatures.filter(f => f !== 'affordable');
@@ -329,11 +329,11 @@ function getVehicleFeaturesFromSegment(
 
   // Segment-based features
   if (segment === 'compact_sedan') {
-    features.push('reliable', 'affordable', 'fuel_efficient');
+    features.push('affordable', 'fuel_efficient');
   } else if (segment === 'midsize_sedan') {
-    features.push('reliable', 'family');
+    features.push('family');
   } else if (segment === 'compact_suv') {
-    features.push('family', 'reliable');
+    features.push('family');
   } else if (segment === 'midsize_suv') {
     features.push('family', 'spacious');
   } else if (segment === 'fullsize_suv') {
@@ -355,7 +355,7 @@ function getVehicleFeaturesFromSegment(
     if (segment === 'compact_sedan' || segment === 'midsize_sedan') features.push('affordable');
   }
 
-  if (features.length < 2) features.push('reliable');
+  if (features.length < 2) features.push('family');
   const isTesla = brand === 'Tesla';
   const normalizedTrim = (trimName || '').toLowerCase();
   if (isTesla && (normalizedTrim.includes('long range') || normalizedTrim.includes('performance'))) {

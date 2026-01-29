@@ -212,6 +212,10 @@ export function ChatInterface({
             model: 'Specific model?',
           };
           const nextStage = order.find(stage => !selectedPerson.revealedPreferences[stage]);
+          // Only show "No other options?" after basic needs (type, features, budget) are discovered
+          const basicNeedsDiscovered = selectedPerson.revealedPreferences.type &&
+                                       selectedPerson.revealedPreferences.features &&
+                                       selectedPerson.revealedPreferences.budget;
           return (
             <>
               {nextStage && (
@@ -222,7 +226,7 @@ export function ChatInterface({
                   {stageLabels[nextStage]}
                 </button>
               )}
-              {!hasPerfectMatch && (
+              {basicNeedsDiscovered && !hasPerfectMatch && (
                 <button
                   onClick={() => sendMessage("No other options?")}
                   className="scripted-reply-btn"

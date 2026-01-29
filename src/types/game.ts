@@ -12,7 +12,7 @@ export type ConversationPhase =
 
 export type Sentiment = 'happy' | 'mad' | 'disinterested' | 'neutral';
 
-export type DesiredFeature = 'sporty' | 'fuel_efficient' | 'luxury' | 'family' | 'affordable' | 'tech' | 'spacious' | 'reliable';
+export type DesiredFeature = 'sporty' | 'fuel_efficient' | 'luxury' | 'family' | 'affordable' | 'tech' | 'spacious';
 
 // Vehicle category types for customer preferences
 export type VehicleCategory = 'suv' | 'sedan' | 'electric' | 'affordable' | 'luxury' | 'any';

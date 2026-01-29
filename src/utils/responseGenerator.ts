@@ -586,7 +586,6 @@ const FEATURE_LABELS: Record<DesiredFeature, string> = {
   affordable: 'affordable',
   tech: 'high-tech',
   spacious: 'spacious',
-  reliable: 'reliable',
 };
 
 function formatFeatures(features: DesiredFeature[]): string {
@@ -1644,7 +1643,7 @@ export async function getAIResponse(
     }
 
     // Check for feature mentions
-    if (/\b(sporty|fuel.efficient|luxury|family|affordable|tech|spacious|reliable|safety)\b/i.test(aiResponse)) {
+    if (/\b(sporty|fuel.efficient|luxury|family|affordable|tech|spacious|safety)\b/i.test(aiResponse)) {
       customer.revealedPreferences.features = true;
     }
 
