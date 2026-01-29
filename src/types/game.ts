@@ -15,7 +15,7 @@ export type Sentiment = 'happy' | 'mad' | 'disinterested' | 'neutral';
 export type DesiredFeature = 'sporty' | 'fuel_efficient' | 'luxury' | 'family' | 'affordable' | 'tech' | 'spacious' | 'reliable';
 
 // Vehicle category types for customer preferences
-export type VehicleCategory = 'suv' | 'sedan' | 'electric' | 'hybrid' | 'affordable' | 'luxury' | 'any';
+export type VehicleCategory = 'suv' | 'sedan' | 'electric' | 'affordable' | 'luxury' | 'any';
 
 export interface Customer {
   id: number;
@@ -63,6 +63,7 @@ export interface Customer {
   creditRevealed: boolean;
   isDifficult: boolean; // Difficult customers won't reveal preferences and have short tempers
   isGuarded: boolean; // Guarded customers initially say "just looking" and reveal info slowly
+  openToAlternative: boolean;
   offerCount: number; // For "attrition" logic (repeatedly offering same deal)
   closeAttempts: number; // Tracks how many times the player has tried to close the deal
 }

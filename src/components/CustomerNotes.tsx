@@ -1,4 +1,5 @@
 
+import { useEffect, useRef, useState } from 'react';
 import { Customer, VehicleCategory } from '../types/game';
 import { Search, DollarSign, List, Car } from 'lucide-react';
 
@@ -7,28 +8,84 @@ interface CustomerNotesProps {
 }
 
 const CATEGORY_LABELS: Record<VehicleCategory, string> = {
-  suv: 'SUV',
-  sedan: 'Sedan',
-  electric: 'Electric',
-  hybrid: 'Hybrid',
-  affordable: 'Economy',
-  luxury: 'Luxury',
+  suv: '⛽️ SUV',
+  sedan: '⛽️ Sedan',
+  electric: '⚡️ Electric',
+  affordable: '⛽️ Economy',
+  luxury: '⛽️ Luxury',
   any: 'Flexible',
 };
 
+const NOTES_POP_STYLES = `
+@keyframes notePopIn {
+  0% { transform: scale(1.3); opacity: 0; }
+  60% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.note-item.pop {
+  animation: notePopIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+`;
+
+type PreferenceKey = 'budget' | 'type' | 'features' | 'model';
+const NOTE_KEYS: PreferenceKey[] = ['budget', 'type', 'features', 'model'];
+
 export function CustomerNotes({ customer }: CustomerNotesProps) {
   const { revealedPreferences, buyerType, budget, maxPayment, desiredDown, desiredCategory, desiredFeatures, desiredModel } = customer;
+  const [popState, setPopState] = useState<Record<PreferenceKey, boolean>>({
+    budget: false,
+    type: false,
+    features: false,
+    model: false,
+  });
+  const prevRevealedRef = useRef(customer.revealedPreferences);
+  const popTimeoutsRef = useRef<Record<PreferenceKey, ReturnType<typeof setTimeout> | null>>({
+    budget: null,
+    type: null,
+    features: null,
+    model: null,
+  });
+
+  useEffect(() => {
+    const prev = prevRevealedRef.current;
+    NOTE_KEYS.forEach(key => {
+      if (!prev[key] && customer.revealedPreferences[key]) {
+        setPopState(state => ({ ...state, [key]: true }));
+        if (popTimeoutsRef.current[key]) {
+          clearTimeout(popTimeoutsRef.current[key]!);
+        }
+        popTimeoutsRef.current[key] = setTimeout(() => {
+          setPopState(state => ({ ...state, [key]: false }));
+          popTimeoutsRef.current[key] = null;
+        }, 350);
+      }
+    });
+    prevRevealedRef.current = customer.revealedPreferences;
+  }, [customer.revealedPreferences]);
+
+  useEffect(() => {
+    return () => {
+      NOTE_KEYS.forEach(key => {
+        const timeout = popTimeoutsRef.current[key];
+        if (timeout) clearTimeout(timeout);
+      });
+    };
+  }, []);
+
+  const getNoteClass = (key: PreferenceKey) => popState[key] ? 'note-item pop' : 'note-item';
 
   return (
-    <div className="customer-notes" style={{
-      background: '#fff9db',
-      border: '1px solid #e6dbb9',
-      borderRadius: '8px',
-      padding: '10px',
-      marginBottom: '10px',
-      fontSize: '0.85rem',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-    }}>
+    <>
+      <style>{NOTES_POP_STYLES}</style>
+      <div className="customer-notes" style={{
+        background: '#fff9db',
+        border: '1px solid #e6dbb9',
+        borderRadius: '8px',
+        padding: '10px',
+        marginBottom: '10px',
+        fontSize: '0.85rem',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+      }}>
       <div style={{ 
         fontSize: '0.75rem', 
         fontWeight: '700', 
@@ -43,7 +100,7 @@ export function CustomerNotes({ customer }: CustomerNotesProps) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         
         {/* BUDGET ITEM */}
-        <div className="note-item">
+        <div className={getNoteClass('budget')}>
           <div style={{ display: 'flex', alignItems: 'center', color: '#666', marginBottom: '2px' }}>
             <DollarSign size={12} style={{ marginRight: '4px' }} />
             <span style={{ fontWeight: '600' }}>Budget</span>
@@ -65,7 +122,7 @@ export function CustomerNotes({ customer }: CustomerNotesProps) {
         </div>
 
         {/* TYPE ITEM */}
-        <div className="note-item">
+        <div className={getNoteClass('type')}>
           <div style={{ display: 'flex', alignItems: 'center', color: '#666', marginBottom: '2px' }}>
             <Car size={12} style={{ marginRight: '4px' }} />
             <span style={{ fontWeight: '600' }}>Type</span>
@@ -80,7 +137,7 @@ export function CustomerNotes({ customer }: CustomerNotesProps) {
         </div>
 
         {/* FEATURES ITEM */}
-        <div className="note-item" style={{ gridColumn: 'span 2' }}>
+        <div className={getNoteClass('features')} style={{ gridColumn: 'span 2' }}>
           <div style={{ display: 'flex', alignItems: 'center', color: '#666', marginBottom: '2px' }}>
             <List size={12} style={{ marginRight: '4px' }} />
             <span style={{ fontWeight: '600' }}>Must Haves</span>
@@ -95,7 +152,7 @@ export function CustomerNotes({ customer }: CustomerNotesProps) {
         </div>
 
         {/* MODEL ITEM */}
-        <div className="note-item" style={{ gridColumn: 'span 2' }}>
+        <div className={getNoteClass('model')} style={{ gridColumn: 'span 2' }}>
           <div style={{ display: 'flex', alignItems: 'center', color: '#666', marginBottom: '2px' }}>
             <Search size={12} style={{ marginRight: '4px' }} />
             <span style={{ fontWeight: '600' }}>Specific Model</span>
@@ -111,5 +168,6 @@ export function CustomerNotes({ customer }: CustomerNotesProps) {
 
       </div>
     </div>
+    </>
   );
 }

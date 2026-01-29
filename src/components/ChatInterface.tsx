@@ -23,6 +23,7 @@ interface ChatInterfaceProps {
   onDiscoveryAction: (type: 'budget' | 'type' | 'features' | 'model') => void;
   showNotes?: boolean;
   useAI?: boolean;
+  hasPerfectMatch: boolean;
 }
 
 export function ChatInterface({
@@ -44,6 +45,7 @@ export function ChatInterface({
   onDiscoveryAction,
   showNotes = true,
   useAI = false,
+  hasPerfectMatch,
 }: ChatInterfaceProps) {
   
   const getInterestColor = (interest: number) => {
@@ -193,39 +195,45 @@ export function ChatInterface({
           />
         ) : (
           <div className="scripted-replies">
-            {conversation.length === 0 && (
-              <button
-                onClick={() => sendMessage('Hello!')}
-                className="scripted-reply-btn"
-              >
-                👋 Say Hello
-              </button>
-            )}
-            <button
-              onClick={() => onDiscoveryAction('type')}
-              className="scripted-reply-btn"
-            >
-              Looking For?
-            </button>
-            <button
-              onClick={() => onDiscoveryAction('budget')}
-              className="scripted-reply-btn"
-            >
-              Budget?
-            </button>
-            <button
-              onClick={() => onDiscoveryAction('features')}
-              className="scripted-reply-btn"
-            >
-              Needs?
-            </button>
-            <button
-              onClick={() => sendMessage("No other options?")}
-              className="scripted-reply-btn"
-            >
-              No Other Options?
-            </button>
-          </div>
+        {conversation.length === 0 && (
+          <button
+            onClick={() => sendMessage('Hello!')}
+            className="scripted-reply-btn"
+          >
+            👋 Say Hello
+          </button>
+        )}
+        {conversation.length > 0 && (() => {
+          const order: Array<'type' | 'features' | 'budget' | 'model'> = ['type', 'features', 'budget', 'model'];
+          const stageLabels: Record<typeof order[number], string> = {
+            type: 'Looking For?',
+            features: 'Needs?',
+            budget: 'Budget?',
+            model: 'Specific model?',
+          };
+          const nextStage = order.find(stage => !selectedPerson.revealedPreferences[stage]);
+          return (
+            <>
+              {nextStage && (
+                <button
+                  onClick={() => onDiscoveryAction(nextStage)}
+                  className="scripted-reply-btn"
+                >
+                  {stageLabels[nextStage]}
+                </button>
+              )}
+              {!hasPerfectMatch && (
+                <button
+                  onClick={() => sendMessage("No other options?")}
+                  className="scripted-reply-btn"
+                >
+                  No Other Options?
+                </button>
+              )}
+            </>
+          );
+        })()}
+      </div>
         )}
       </div>
 

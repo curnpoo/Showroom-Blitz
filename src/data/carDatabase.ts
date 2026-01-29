@@ -86,16 +86,6 @@ export const CAR_DATABASE: CarDbEntry[] = [
   { brand: 'Subaru', model: 'Ascent', category: 'suv', basePrice: 36800, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['family', 'spacious', 'reliable'] },
   { brand: 'Volkswagen', model: 'Atlas', category: 'suv', basePrice: 38500, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['family', 'spacious', 'reliable'] },
 
-  // === Hybrid (sedan/SUV — category hybrid where applicable) ===
-  { brand: 'Toyota', model: 'Camry Hybrid', category: 'hybrid', basePrice: 31800, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'reliable', 'family'] },
-  { brand: 'Toyota', model: 'RAV4 Hybrid', category: 'hybrid', basePrice: 35200, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'reliable'] },
-  { brand: 'Honda', model: 'Accord Hybrid', category: 'hybrid', basePrice: 33200, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'reliable', 'family'] },
-  { brand: 'Honda', model: 'CR-V Hybrid', category: 'hybrid', basePrice: 35800, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'spacious'] },
-  { brand: 'Hyundai', model: 'Tucson Hybrid', category: 'hybrid', basePrice: 34800, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'reliable'] },
-  { brand: 'Hyundai', model: 'Santa Fe Hybrid', category: 'hybrid', basePrice: 40200, trims: ['Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'spacious'] },
-  { brand: 'Kia', model: 'Sportage Hybrid', category: 'hybrid', basePrice: 33100, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'reliable'] },
-  { brand: 'Ford', model: 'Escape Hybrid', category: 'hybrid', basePrice: 33800, trims: ['Base', 'Sport', 'Luxury', 'Premium'], modelFeatures: ['fuel_efficient', 'family', 'reliable'] },
-
   // === Electric ===
   { brand: 'Hyundai', model: 'Ioniq 5', category: 'electric', basePrice: 44500, trims: ['Base', 'Sport', 'Luxury'], modelFeatures: ['fuel_efficient', 'tech', 'spacious', 'family'] },
   { brand: 'Hyundai', model: 'Ioniq 6', category: 'electric', basePrice: 46500, trims: ['Base', 'Sport', 'Luxury'], modelFeatures: ['fuel_efficient', 'tech', 'sporty'] },

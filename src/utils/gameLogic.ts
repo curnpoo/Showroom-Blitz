@@ -96,6 +96,23 @@ const CAR_DATABASE: BrandSpec[] = [
       { model: 'Rogue', basePrice: 32200, segment: 'compact_suv', trims: [{ name: 'S', trimClass: 'base', priceMultiplier: 1.0 }, { name: 'SV', trimClass: 'base', priceMultiplier: 1.06 }, { name: 'SL', trimClass: 's_luxury', priceMultiplier: 1.14 }, { name: 'Platinum', trimClass: 'luxury', priceMultiplier: 1.22 }] },
     ],
   },
+  {
+    brand: 'Tesla',
+    models: [
+      { model: 'Model S Base', basePrice: 89500, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
+      { model: 'Model S Long Range', basePrice: 104000, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
+      { model: 'Model S Performance', basePrice: 112000, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
+      { model: 'Model 3 Base', basePrice: 41990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
+      { model: 'Model 3 Long Range', basePrice: 51990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
+      { model: 'Model 3 Performance', basePrice: 56990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
+      { model: 'Model X Base', basePrice: 104990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
+      { model: 'Model X Long Range', basePrice: 109990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
+      { model: 'Model X Performance', basePrice: 119990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
+      { model: 'Model Y Base', basePrice: 51990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
+      { model: 'Model Y Long Range', basePrice: 58990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
+      { model: 'Model Y Performance', basePrice: 62990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
+    ],
+  },
 ];
 
 // Flatten to "Brand Model" for desiredModel and for lookups
@@ -118,7 +135,7 @@ const PERSONALITIES: PersonalityType[] = ['friendly', 'serious', 'skeptical', 'e
 const DESIRED_FEATURES: DesiredFeature[] = ['sporty', 'fuel_efficient', 'luxury', 'family', 'affordable', 'tech', 'spacious', 'reliable'];
 
 // Vehicle category preferences - customers may ask for a specific type or be flexible
-const VEHICLE_CATEGORIES: VehicleCategory[] = ['suv', 'sedan', 'electric', 'hybrid', 'affordable', 'luxury'];
+const VEHICLE_CATEGORIES: VehicleCategory[] = ['suv', 'sedan', 'electric', 'affordable', 'luxury', 'any'];
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -215,11 +232,6 @@ function getBudgetMultiplier(): number {
   return 0.99 + Math.random() * 0.03; // 0.99 - 1.02
 }
 
-function normalizeCategoryForBudget(category: VehicleCategory): VehicleCategory {
-  if (category === 'hybrid') return Math.random() < 0.5 ? 'sedan' : 'suv';
-  return category;
-}
-
 // Helper to get features that actually exist for a given "Brand Model" or category
 function getCompatibleFeatures(brandModel?: string, category?: VehicleCategory): DesiredFeature[] {
   let validFeatures = [...DESIRED_FEATURES];
@@ -231,7 +243,10 @@ function getCompatibleFeatures(brandModel?: string, category?: VehicleCategory):
       validFeatures = validFeatures.filter(f => f !== 'spacious');
     }
     if (segment === 'electric') {
-      validFeatures = validFeatures.filter(f => f !== 'affordable');
+      const normalizedModel = brandModel?.toLowerCase() ?? '';
+      if (!normalizedModel.includes('base')) {
+        validFeatures = validFeatures.filter(f => f !== 'affordable');
+      }
       validFeatures.push('tech', 'fuel_efficient');
     }
     if (segment === 'compact_suv' || segment === 'midsize_suv' || segment === 'fullsize_suv') {
@@ -276,7 +291,12 @@ function getVehicleCategoryFromSegment(segment: VehicleSegment, price: number): 
 }
 
 // Assign features from segment + trimClass. Single source of truth for vehicle features.
-function getVehicleFeaturesFromSegment(segment: VehicleSegment, trimClass: TrimClass): DesiredFeature[] {
+function getVehicleFeaturesFromSegment(
+  segment: VehicleSegment,
+  trimClass: TrimClass,
+  brand?: string,
+  trimName?: string
+): DesiredFeature[] {
   const features: DesiredFeature[] = [];
 
   // Segment-based features
@@ -308,6 +328,12 @@ function getVehicleFeaturesFromSegment(segment: VehicleSegment, trimClass: TrimC
   }
 
   if (features.length < 2) features.push('reliable');
+  const isTesla = brand === 'Tesla';
+  const normalizedTrim = (trimName || '').toLowerCase();
+  if (isTesla && (normalizedTrim.includes('long range') || normalizedTrim.includes('performance'))) {
+    features.push('luxury', 'sporty');
+  }
+
   return [...new Set(features)];
 }
 
@@ -336,7 +362,7 @@ export function generateInventory(count: number = 100): Car[] {
       otd: msrp + 1000 + tax,
       mileage: 0,
       vin: `${brandSpec.brand.slice(0, 2).toUpperCase()}${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
-      features: getVehicleFeaturesFromSegment(modelSpec.segment, trimSpec.trimClass),
+      features: getVehicleFeaturesFromSegment(modelSpec.segment, trimSpec.trimClass, brandSpec.brand, trimSpec.name),
       category: getVehicleCategoryFromSegment(modelSpec.segment, msrp),
     });
   }
@@ -373,7 +399,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   const creditScore = Math.floor(450 + Math.random() * 400); // Range: 450-850
   const creditTier = getCreditTier(creditScore);
 
-  const budgetCategory = normalizeCategoryForBudget(desiredCategory);
+  const budgetCategory = desiredCategory;
   const modelRange = desiredModel ? getModelPriceRange(desiredModel) : null;
   const baseRange = modelRange ?? getCategoryPriceRange(budgetCategory);
   const targetPrice = pickTargetPrice(baseRange);
@@ -404,10 +430,24 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   const isDifficult = false;
   // Less common guarded customers who reveal info slowly
   const isGuarded = Math.random() < 0.15;
-  
+  const openToAlternative = Math.random() < (personality === 'skeptical' ? 0.45 : 0.7);
+ 
   // Difficult customers have very low temper (10-30) and higher stubbornness
   const finalTemper = isDifficult ? Math.floor(10 + Math.random() * 20) : temper;
   const finalStubbornness = isDifficult ? Math.min(5, stubbornness + 2) : Math.min(5, stubbornness);
+
+  const desiredFeaturesBase = pickRandomFeatures(desiredModel, desiredCategory);
+  const teslaSportyLuxury: DesiredFeature[] = ['sporty', 'luxury'];
+  const teslaBaseFeatures: DesiredFeature[] = ['affordable', 'tech'];
+  const normalizedDesiredModel = desiredModel?.toLowerCase() ?? '';
+  const isTeslaModel = normalizedDesiredModel.includes('tesla');
+  const desiredFeatures = (() => {
+    if (!isTeslaModel) return desiredFeaturesBase;
+    if (normalizedDesiredModel.includes('performance')) return teslaSportyLuxury;
+    if (normalizedDesiredModel.includes('long range')) return teslaSportyLuxury;
+    if (normalizedDesiredModel.includes('base')) return teslaBaseFeatures;
+    return desiredFeaturesBase;
+  })();
 
   return {
     id,
@@ -431,7 +471,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     conversationPhase: 'greeting',
     desiredCategory,
     desiredModel,
-    desiredFeatures: pickRandomFeatures(desiredModel, desiredCategory),
+    desiredFeatures,
     desiredColor,
     dealBreakers,
     stubbornness: finalStubbornness,
@@ -452,6 +492,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     creditRevealed: false,
     isDifficult,
     isGuarded,
+    openToAlternative,
     offerCount: 0,
     closeAttempts: 0,
   };

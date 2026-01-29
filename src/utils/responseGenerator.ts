@@ -7,7 +7,6 @@ const CATEGORY_LABELS: Record<VehicleCategory, string> = {
   suv: 'an SUV',
   sedan: 'a sedan',
   electric: 'an electric car',
-  hybrid: 'a hybrid',
   affordable: 'something affordable',
   luxury: 'something luxury',
   any: '', // Not used directly, handled separately
@@ -833,10 +832,6 @@ function _calculatePayment(price: number, downPayment: number, apr: number, mont
 function carMatchesCategory(car: Car, customer: Customer): boolean {
   const category = customer.desiredCategory;
   if (category === 'any') return true;
-  if (category === 'hybrid') {
-    // No hybrid segment in DB; treat as sedan or SUV
-    return car.category === 'sedan' || car.category === 'suv';
-  }
   return car.category === category;
 }
 
@@ -932,8 +927,8 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_budget': {
-      // Difficult/Guarded customers refuse to reveal their budget
-      if (customer.isDifficult || customer.isGuarded) {
+      // Difficult customers refuse to reveal their budget
+      if (customer.isDifficult) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.budget[personality]());
         interestChange = -5; // They're annoyed you asked
       } else {
@@ -945,21 +940,26 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_type': {
-      // Difficult/Guarded customers refuse to reveal their type preference
-      if (customer.isDifficult || customer.isGuarded) {
+      // Difficult customers refuse to reveal their type preference
+      if (customer.isDifficult) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.type[personality]());
         interestChange = -5; // They're annoyed you asked
       } else {
-        response = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
+        const typeText = pickRandom(DISCOVERY_RESPONSES.type[personality](customer));
+        const featuresText = pickRandom(DISCOVERY_RESPONSES.features[personality](customer));
+        const modelText = pickRandom(DISCOVERY_RESPONSES.model[personality](customer));
+        response = `${typeText} ${featuresText} ${modelText}`;
         customer.revealedPreferences.type = true;
+        customer.revealedPreferences.features = true;
+        customer.revealedPreferences.model = true;
         interestChange = 5;
       }
       break;
     }
 
     case 'ask_features': {
-      // Difficult/Guarded customers refuse to reveal their feature preferences
-      if (customer.isDifficult || customer.isGuarded) {
+      // Difficult customers refuse to reveal their feature preferences
+      if (customer.isDifficult) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.features[personality]());
         interestChange = -5; // They're annoyed you asked
       } else {
@@ -971,8 +971,8 @@ export function generateResponse(context: ResponseContext): ResponseResult {
     }
 
     case 'ask_model': {
-      // Difficult/Guarded customers refuse to reveal their model preference
-      if (customer.isDifficult || customer.isGuarded) {
+      // Difficult customers refuse to reveal their model preference
+      if (customer.isDifficult) {
         response = pickRandom(DIFFICULT_CUSTOMER_RESPONSES.model[personality]());
         interestChange = -5; // They're annoyed you asked
       } else {
@@ -1265,11 +1265,14 @@ export async function getAIResponse(
   // This allows the AI to answer naturally while we update the game state
   // We use the same regex patterns or check if contextOverrides passed a specific messageType
   
-  // Discovery questions only reveal for non-guarded/non-difficult customers
-  // Unless we decide guarded customers can be "cracked" via direct questioning (currently they refuse)
-  if (!customer.isGuarded && !customer.isDifficult) {
+  // Discovery questions reveal even for guarded customers (nobody fully refuses)
+  if (!customer.isDifficult) {
     if (contextOverrides?.messageType === 'ask_budget') customer.revealedPreferences.budget = true;
-    if (contextOverrides?.messageType === 'ask_type') customer.revealedPreferences.type = true;
+    if (contextOverrides?.messageType === 'ask_type') {
+      customer.revealedPreferences.type = true;
+      customer.revealedPreferences.features = true;
+      customer.revealedPreferences.model = true;
+    }
     if (contextOverrides?.messageType === 'ask_features') customer.revealedPreferences.features = true;
     if (contextOverrides?.messageType === 'ask_model') customer.revealedPreferences.model = true;
   }
@@ -1636,7 +1639,7 @@ export async function getAIResponse(
     }
 
     // Check for type/category mentions (SUV, sedan, etc.)
-    if (/\b(suv|sedan|truck|electric|hybrid|coupe|wagon|van|minivan)\b/i.test(aiResponse)) {
+    if (/\b(suv|sedan|truck|electric|coupe|wagon|van|minivan)\b/i.test(aiResponse)) {
       customer.revealedPreferences.type = true;
     }
 

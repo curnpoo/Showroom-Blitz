@@ -6,7 +6,6 @@ export const CATEGORY_LABELS: Record<VehicleCategory, string> = {
   suv: 'an SUV',
   sedan: 'a sedan',
   electric: 'an electric car',
-  hybrid: 'a hybrid',
   affordable: 'something affordable',
   luxury: 'something luxury',
   any: '',

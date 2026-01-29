@@ -11,7 +11,9 @@ import type {
   ConversationMessage,
   GameSettings,
   OfferType,
-  SessionStats
+  SessionStats,
+  VehicleCategory,
+  DesiredFeature
 } from './types/game';
 import { 
   generateInventory, 
@@ -33,6 +35,39 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
+
+const CATEGORY_UI_LABELS: Record<VehicleCategory, string> = {
+  suv: '⛽️ SUV',
+  sedan: '⛽️ Sedan',
+  electric: '⚡️ Electric',
+  affordable: '⛽️ Economy',
+  luxury: '⛽️ Luxury',
+  any: 'Flexible',
+};
+
+const CATEGORY_SEARCH_KEYWORDS: Record<VehicleCategory, string[]> = {
+  suv: ['suv', 'sport utility', 'sport-utility', 'sport-utility vehicle'],
+  sedan: ['sedan', 'car', 'coupe'],
+  electric: ['electric', 'ev', 'battery', '⚡️ electric'],
+  affordable: ['affordable', 'economy', 'budget'],
+  luxury: ['luxury', 'premium', 'luxe'],
+  any: ['any', 'flexible'],
+};
+const FEATURE_SEARCH_KEYWORDS: Record<string, DesiredFeature> = {
+  reliable: 'reliable',
+  'fuel efficient': 'fuel_efficient',
+  'fuel-efficient': 'fuel_efficient',
+  'family-friendly': 'family',
+  family: 'family',
+  luxury: 'luxury',
+  sporty: 'sporty',
+  tech: 'tech',
+  spacious: 'spacious',
+  affordable: 'affordable',
+  'high-tech': 'tech',
+  fuel_efficient: 'fuel_efficient',
+};
+const INVENTORY_NOTE_KEYS: (keyof Customer['revealedPreferences'])[] = ['budget', 'type', 'features'];
 const MIN_WAITING_CUSTOMERS = 1;
 const MAX_WAITING_CUSTOMERS = 5;
 const STEAL_INTERVAL_MIN = 20;
@@ -456,6 +491,12 @@ function App() {
     }
   }, [showInput, isMobile]);
 
+  useEffect(() => {
+    if (!showInventory) {
+      setInventorySearch('');
+    }
+  }, [showInventory]);
+
   // Get canvas scale factor for responsive sizing
   const getCanvasScale = useCallback(() => {
     const canvas = canvasRef.current;
@@ -499,6 +540,61 @@ function App() {
     customersRef.current = [...customersRef.current, newCustomer];
     return newCustomer;
   }, [isMobile]);
+
+  const findPerfectCars = (customer: Customer | null) => {
+    if (!customer) return [];
+    return inventoryRef.current.filter(car => {
+      const categoryMatch = customer.desiredCategory === 'any' || car.category === customer.desiredCategory;
+      const featureMatch = customer.desiredFeatures.every(feature => car.features.includes(feature));
+      const needModelMatch = customer.revealedPreferences.model && customer.desiredModel;
+      const modelMatch = needModelMatch
+        ? car.model.toLowerCase().includes(customer.desiredModel!.toLowerCase())
+        : true;
+      return categoryMatch && featureMatch && modelMatch;
+    });
+  };
+
+  const handleNoOtherOptions = () => {
+    if (!selectedPerson) return;
+    const playerText = "No other options?";
+    const perfectMatches = findPerfectCars(selectedPerson);
+    if (perfectMatches.length > 0) {
+      const response = "Actually, there is a car that fits already. Can we go back to that?";
+      setConversation(prev => [
+        ...prev,
+        { sender: 'player', text: playerText },
+        { sender: 'customer', text: response },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+    if (selectedPerson.openToAlternative) {
+      selectedPerson.desiredModel = undefined;
+      selectedPerson.revealedPreferences.model = false;
+      selectedPerson.revealedPreferences.features = false;
+      selectedPerson.interest = Math.min(100, selectedPerson.interest + 5);
+      setSelectedPerson({ ...selectedPerson });
+      const response = "Alright, I'm open to seeing other models, maybe something with similar features.";
+      setConversation(prev => [
+        ...prev,
+        { sender: 'player', text: playerText },
+        { sender: 'customer', text: response },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+    selectedPerson.isLost = true;
+    selectedPerson.conversationPhase = 'closed';
+    setSelectedPerson({ ...selectedPerson });
+    const response = "I really needed what I asked for. Without it, I'm out.";
+    setConversation(prev => [
+      ...prev,
+      { sender: 'player', text: playerText },
+      { sender: 'customer', text: response },
+    ]);
+    setTimeout(() => setShowLostDeal(true), 1000);
+    setIsTyping(false);
+  };
 
   // Timer logic
   useEffect(() => {
@@ -1900,6 +1996,11 @@ function App() {
     if (!msgToSend.trim() || isTyping || !selectedPerson) return;
 
     const userMsg = msgToSend.trim();
+    if (userMsg === "No other options?") {
+      if (typeof contentOrEvent !== 'string') setInputMessage('');
+      handleNoOtherOptions();
+      return;
+    }
     if (typeof contentOrEvent !== 'string') setInputMessage(''); // Only clear input if we used the input field
     setConversation(prev => [...prev, { sender: 'player', text: userMsg }]);
     setIsTyping(true);
@@ -2027,10 +2128,55 @@ function App() {
     setIsTyping(false);
   };
 
-  const filteredInventory = inventoryRef.current.filter(car =>
-    car.model.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-    car.color.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-    car.trim.toLowerCase().includes(inventorySearch.toLowerCase())
+  const normalizedSearch = inventorySearch.trim().toLowerCase();
+  const matchesFeatureKeyword = (car: CarType) => {
+    return Object.entries(FEATURE_SEARCH_KEYWORDS).some(([keyword, feature]) => 
+      normalizedSearch.includes(keyword) && car.features.includes(feature)
+    );
+  };
+  const filteredInventory = inventoryRef.current.filter(car => {
+    if (!normalizedSearch) return true;
+    const matchesModel = car.model.toLowerCase().includes(normalizedSearch);
+    const matchesColor = car.color.toLowerCase().includes(normalizedSearch);
+    const matchesTrim = car.trim.toLowerCase().includes(normalizedSearch);
+    const categoryKeywords = CATEGORY_SEARCH_KEYWORDS[car.category] ?? [car.category];
+    const matchesCategory = categoryKeywords.some(keyword => keyword.includes(normalizedSearch));
+    const matchesFeature = matchesFeatureKeyword(car);
+    return matchesModel || matchesColor || matchesTrim || matchesCategory || matchesFeature;
+  });
+  const allNotesRevealed = selectedPerson ? INVENTORY_NOTE_KEYS.every(key => selectedPerson.revealedPreferences[key]) : false;
+  const perfectCars = allNotesRevealed ? findPerfectCars(selectedPerson) : [];
+  const inventoryForList = filteredInventory.filter(car => !perfectCars.some(pc => pc.id === car.id));
+
+  const buildPerfectCard = (car: CarType) => (
+    <div
+      key={`perfect-${car.id}`}
+      className="perfect-car-card"
+      style={{
+        padding: '12px',
+        borderRadius: '12px',
+        border: '2px solid #f5c518',
+        background: 'linear-gradient(135deg, rgba(245,197,24,0.15), rgba(253,230,138,0.1))',
+        marginBottom: '12px',
+      }}
+    >
+      <div style={{ fontSize: '0.75rem', color: '#f7d785', fontWeight: 600 }}>Perfect Match</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+        <h4 style={{ margin: 0 }}>{car.model} {car.trim}</h4>
+        <span style={{ fontSize: '0.8rem', color: '#f7d785' }}>{CATEGORY_UI_LABELS[car.category] ?? ''}</span>
+      </div>
+      <p style={{ margin: 0, fontSize: '0.8rem', color: '#fff' }}>{car.color} • ${car.price.toLocaleString()}</p>
+      <button
+        className="inventory-item-action"
+        style={{ marginTop: '8px', background: '#f5c518', borderColor: '#f5c518', color: '#2c3e50' }}
+        onClick={() => {
+          showCarToCustomer(car);
+          setShowInventory(false);
+        }}
+      >
+        Show Perfect Match
+      </button>
+    </div>
   );
 
 
@@ -2444,6 +2590,7 @@ function App() {
                   onDiscoveryAction={handleDiscoveryAction}
                   showNotes={false}
                   useAI={settings.useAI}
+                  hasPerfectMatch={perfectCars.length > 0}
                 />
               </div>
 
@@ -2463,25 +2610,29 @@ function App() {
                     />
                   </div>
                   <div className="panel-content">
-                    {filteredInventory.slice(0, 20).map(car => (
-                      <div key={car.id} className="inventory-item">
-                        <div className="inventory-item-info">
-                          <h4>{car.model} {car.trim}</h4>
-                          <p>{car.color} • ${car.price.toLocaleString()}</p>
+                    {perfectCars.map(buildPerfectCard)}
+                    {inventoryForList.slice(0, 20).map(car => {
+                      const categoryLabel = CATEGORY_UI_LABELS[car.category] ?? CATEGORY_UI_LABELS.any;
+                      return (
+                        <div key={car.id} className="inventory-item">
+                          <div className="inventory-item-info">
+                            <h4>{car.model} {car.trim}</h4>
+                            <p>{car.color} • {categoryLabel} • ${car.price.toLocaleString()}</p>
+                          </div>
+                          <button
+                            className="inventory-item-action"
+                            onClick={() => {
+                              showCarToCustomer(car);
+                              setShowInventory(false);
+                            }}
+                          >
+                            Show
+                          </button>
                         </div>
-                        <button
-                          className="inventory-item-action"
-                          onClick={() => {
-                            showCarToCustomer(car);
-                            setShowInventory(false);
-                          }}
-                        >
-                          Show
-                        </button>
-                      </div>
-                    ))}
-                    {filteredInventory.length > 20 && (
-                      <div className="more-items">+{filteredInventory.length - 20} more...</div>
+                      );
+                    })}
+                    {inventoryForList.length > 20 && (
+                      <div className="more-items">+{inventoryForList.length - 20} more...</div>
                     )}
                   </div>
                 </div>
@@ -2540,6 +2691,7 @@ function App() {
                   isMobile={true}
                   onDiscoveryAction={handleDiscoveryAction}
                   useAI={settings.useAI}
+                  hasPerfectMatch={perfectCars.length > 0}
                 />
               </div>
             )}
@@ -2564,25 +2716,29 @@ function App() {
                 />
               </div>
               <div className="panel-content">
-                {filteredInventory.slice(0, 20).map(car => (
-                  <div key={car.id} className="inventory-item">
-                    <div className="inventory-item-info">
-                      <h4>{car.model} {car.trim}</h4>
-                      <p>{car.color} • ${car.price.toLocaleString()}</p>
+                {perfectCars.map(buildPerfectCard)}
+                {inventoryForList.slice(0, 20).map(car => {
+                  const categoryLabel = CATEGORY_UI_LABELS[car.category] ?? CATEGORY_UI_LABELS.any;
+                  return (
+                    <div key={car.id} className="inventory-item">
+                      <div className="inventory-item-info">
+                        <h4>{car.model} {car.trim}</h4>
+                        <p>{car.color} • {categoryLabel} • ${car.price.toLocaleString()}</p>
+                      </div>
+                      <button
+                        className="inventory-item-action"
+                        onClick={() => {
+                          showCarToCustomer(car);
+                          setShowInventory(false);
+                        }}
+                      >
+                        Show
+                      </button>
                     </div>
-                    <button
-                      className="inventory-item-action"
-                      onClick={() => {
-                        showCarToCustomer(car);
-                        setShowInventory(false);
-                      }}
-                    >
-                      Show
-                    </button>
-                  </div>
-                ))}
-                {filteredInventory.length > 20 && (
-                  <div className="more-items">+{filteredInventory.length - 20} more...</div>
+                  );
+                })}
+                {inventoryForList.length > 20 && (
+                  <div className="more-items">+{inventoryForList.length - 20} more...</div>
                 )}
               </div>
             </div>

@@ -1,6 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Car, OfferType, Customer } from '../types/game';
 import { calculatePayment, calculateOTDFromPayment, getCreditTier } from '../utils/gameLogic';
+
+const formatNumberForDisplay = (value: number) => {
+  if (value === 0) return '';
+  const str = value.toString();
+  if (str.startsWith('0.')) {
+    return str.replace(/^0(?=\.)/, '');
+  }
+  return str;
+};
+
+const sanitizeIntegerDisplayValue = (raw: string) => {
+  if (!raw) return '';
+  const sanitized = raw.replace(/^0+(?=\d)/, '');
+  if (sanitized === '' && raw.startsWith('0')) {
+    return '0';
+  }
+  return sanitized;
+};
+
+const parseIntegerFromDisplay = (display: string) => {
+  if (!display) return 0;
+  const parsed = parseInt(display, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sanitizeDecimalDisplayValue = (raw: string) => {
+  if (!raw) return '';
+  const parts = raw.split('.');
+  const decimalPart = parts.length > 1 ? '.' + parts.slice(1).join('.') : '';
+  const integerPart = parts[0].replace(/^0+(?=\d)/, '');
+  if (!decimalPart && raw.startsWith('0') && integerPart === '') {
+    return '0';
+  }
+  return integerPart + decimalPart;
+};
+
+const parseDecimalFromDisplay = (display: string) => {
+  if (!display || display === '.') return 0;
+  const normalized = display.startsWith('.') ? `0${display}` : display;
+  const parsed = parseFloat(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 interface NumbersPanelProps {
   isOpen: boolean;
@@ -150,6 +192,32 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
     const [activeTab, setActiveTab] = useState<'cash' | 'finance'>(customer?.buyerType === 'payment' ? 'finance' : 'cash');
     const [isSubmittingApp, setIsSubmittingApp] = useState(false);
 
+    const [sellingInputValue, setSellingInputValue] = useState(() => formatNumberForDisplay(customSellingPrice));
+    const [otdInputValue, setOtdInputValue] = useState(() => formatNumberForDisplay(customOTDPrice));
+    const [downPaymentInputValue, setDownPaymentInputValue] = useState(() => formatNumberForDisplay(downPayment));
+    const [paymentAPRInputValue, setPaymentAPRInputValue] = useState(() => formatNumberForDisplay(paymentAPR));
+    const [paymentInputValue, setPaymentInputValue] = useState(() => formatNumberForDisplay(customPayment));
+
+    useEffect(() => {
+        setSellingInputValue(formatNumberForDisplay(customSellingPrice));
+    }, [customSellingPrice]);
+
+    useEffect(() => {
+        setOtdInputValue(formatNumberForDisplay(customOTDPrice));
+    }, [customOTDPrice]);
+
+    useEffect(() => {
+        setDownPaymentInputValue(formatNumberForDisplay(downPayment));
+    }, [downPayment]);
+
+    useEffect(() => {
+        setPaymentAPRInputValue(formatNumberForDisplay(paymentAPR));
+    }, [paymentAPR]);
+
+    useEffect(() => {
+        setPaymentInputValue(formatNumberForDisplay(customPayment));
+    }, [customPayment]);
+
     const runCreditCheck = () => {
         if (!customer) return;
         
@@ -247,9 +315,12 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                     <div className="input-group">
                       <input
                         type="number"
-                        value={customSellingPrice}
+                        placeholder="0"
+                        value={sellingInputValue}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
+                          const sanitized = sanitizeIntegerDisplayValue(e.target.value);
+                          setSellingInputValue(sanitized);
+                          const val = parseIntegerFromDisplay(sanitized);
                           setCustomSellingPrice(val);
                           setCustomOTDPrice(val + Math.round(val * 0.07) + currentCar.fees);
                         }}
@@ -261,11 +332,13 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                     <div className="input-group">
                       <input
                         type="number"
-                        value={customOTDPrice}
+                        placeholder="0"
+                        value={otdInputValue}
                         onChange={(e) => {
-                          const otd = parseInt(e.target.value) || 0;
+                          const sanitized = sanitizeIntegerDisplayValue(e.target.value);
+                          setOtdInputValue(sanitized);
+                          const otd = parseIntegerFromDisplay(sanitized);
                           setCustomOTDPrice(otd);
-                          // Back-calculate selling price from OTD
                           const sellingPrice = Math.round((otd - currentCar.fees) / 1.07);
                           setCustomSellingPrice(sellingPrice);
                         }}
@@ -377,9 +450,12 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                       <label>Down:</label>
                       <input
                         type="number"
-                        value={downPayment}
+                        placeholder="0"
+                        value={downPaymentInputValue}
                         onChange={(e) => {
-                          const dp = parseInt(e.target.value) || 0;
+                          const sanitized = sanitizeIntegerDisplayValue(e.target.value);
+                          setDownPaymentInputValue(sanitized);
+                          const dp = parseIntegerFromDisplay(sanitized);
                           setDownPayment(dp);
                           setCustomPayment(calculatePayment(customOTDPrice, dp, paymentAPR, paymentTerm));
                         }}
@@ -391,13 +467,17 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                         type="number"
                         step="0.1"
                         min={customer?.creditRevealed ? getCreditTier(customer.creditScore)?.minAPR : 0}
-                        value={paymentAPR}
+                        placeholder="0.0"
+                        value={paymentAPRInputValue}
                         onChange={(e) => {
-                          let apr = parseFloat(e.target.value) || 0;
+                          const sanitized = sanitizeDecimalDisplayValue(e.target.value);
+                          setPaymentAPRInputValue(sanitized);
+                          let apr = parseDecimalFromDisplay(sanitized);
                           if (customer?.creditRevealed) {
                               const tier = getCreditTier(customer.creditScore);
                               if (tier && apr < tier.minAPR) {
                                   apr = tier.minAPR;
+                                  setPaymentAPRInputValue(formatNumberForDisplay(apr));
                               }
                           }
                           setPaymentAPR(apr);
@@ -429,9 +509,12 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                     <div className="input-group">
                       <input
                         type="number"
-                        value={customPayment}
+                        placeholder="0"
+                        value={paymentInputValue}
                         onChange={(e) => {
-                          const payment = parseInt(e.target.value) || 0;
+                          const sanitized = sanitizeIntegerDisplayValue(e.target.value);
+                          setPaymentInputValue(sanitized);
+                          const payment = parseIntegerFromDisplay(sanitized);
                           setCustomPayment(payment);
                           const newOTD = calculateOTDFromPayment(payment, downPayment, paymentAPR, paymentTerm);
                           setCustomOTDPrice(newOTD);
