@@ -2153,7 +2153,6 @@ function App() {
 
   const hasPerfectMatch = perfectCars.length > 0;
   const allDiscoveryButtonsUsed = selectedPerson ? DISCOVERY_STAGES.every(stage => selectedPerson.revealedPreferences[stage]) : false;
-  const showNoOptionsButton = !hasPerfectMatch && allDiscoveryButtonsUsed;
 
   const buildPerfectCard = (car: CarType) => (
     <div
@@ -2598,7 +2597,6 @@ function App() {
                   showNotes={false}
                   useAI={settings.useAI}
                   hasPerfectMatch={hasPerfectMatch}
-                  showNoOptionsButton={showNoOptionsButton}
                 />
               </div>
 
@@ -2700,7 +2698,6 @@ function App() {
                   onDiscoveryAction={handleDiscoveryAction}
                   useAI={settings.useAI}
                   hasPerfectMatch={hasPerfectMatch}
-                  showNoOptionsButton={showNoOptionsButton}
                 />
               </div>
             )}
