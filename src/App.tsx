@@ -1629,6 +1629,10 @@ function App() {
       interestChange = result.interestChange;
       dealAccepted = result.dealAccepted;
       isLost = !!result.isLost;
+      if (!dealAccepted && hasCommitmentIntent(response)) {
+        dealAccepted = true;
+        (selectedPerson as any).committedToBuy = true;
+      }
       selectedPerson.conversationHistory.push(
         { role: 'user', content: offerText },
         { role: 'assistant', content: response }
@@ -1639,6 +1643,10 @@ function App() {
       interestChange = result.interestChange;
       dealAccepted = result.dealAccepted;
       isLost = !!result.isLost;
+      if (!dealAccepted && hasCommitmentIntent(response)) {
+        dealAccepted = true;
+        (selectedPerson as any).committedToBuy = true;
+      }
     }
 
 
@@ -1722,6 +1730,13 @@ function App() {
     return agreedPrice <= effectiveBudget;
   };
 
+  const hasCommitmentIntent = (text: string): boolean => {
+    const normalized = text.toLowerCase();
+    const hasPositive = /\b(buy|purchase|deal|take it|sign|ready|prepared|accept|lock it in|lock it|let's do it|lets do it|move forward|i'll take it|i will take it|we have a deal)\b/.test(normalized);
+    const hasNegation = /\b(not|n't|won't|can't|dont|don't)\s+(ready|buy|purchase|deal|sign|take|accept|lock|move)\b/.test(normalized);
+    return hasPositive && !hasNegation;
+  };
+
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
 
@@ -1741,12 +1756,12 @@ function App() {
 
     const priceForEvaluation = agreedPrice || customSellingPrice;
 
-    // Check if customer already committed via "take it or leave it"
+    // Check if customer already committed via "take it or leave it" or explicit agreement
     const isCommitted = (selectedPerson as any).committedToBuy === true;
 
     // FIRST: Check if customer likes the car AND the price
     const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
-    const likesThePrice = customerLikesThePrice(selectedPerson, priceForEvaluation);
+    const likesThePrice = isCommitted || customerLikesThePrice(selectedPerson, priceForEvaluation);
 
     // ATTRITION / PRESSURE SALE LOGIC
     // If we've tried 3+ times and price is within 20% of base budget, give a small extra chance
@@ -1754,8 +1769,8 @@ function App() {
     const isWithin20Percent = priceForEvaluation > 0 && (priceForEvaluation <= baseBudget * 1.2);
     const isAttritionSuccess = selectedPerson.closeAttempts >= 3 && isWithin20Percent && Math.random() < 0.15;
     const priceWithinBaseBudget = priceForEvaluation > 0 && baseBudget > 0 && priceForEvaluation <= baseBudget;
-    const forceHappyDeal = priceWithinBaseBudget && likesTheCar && likesThePrice;
-    const shouldFailBecausePrice = !priceWithinBaseBudget && !likesThePrice;
+    const forceHappyDeal = isCommitted || (priceWithinBaseBudget && likesTheCar && likesThePrice);
+    const shouldFailBecausePrice = !isCommitted && !priceWithinBaseBudget && !likesThePrice;
 
     // If either condition fails, provide specific feedback
     if (!isAttritionSuccess && (!likesTheCar || shouldFailBecausePrice)) {
@@ -1848,10 +1863,7 @@ function App() {
       const text = lastCustomerMsg.text.toLowerCase();
       // If they literally just said they want to buy, guarantee success
       // Check for buy keywords AND ensure they aren't negated closely (e.g. "not ready", "won't buy")
-      const hasBuyWord = /\b(buy|purchase|deal|take it|sign|ready|prepared|accept)\b/.test(text);
-      const hasNegation = /\b(not|n't|won't|can't)\s+(ready|buy|purchase|deal|sign|take|accept)\b/.test(text);
-
-      if (hasBuyWord && !hasNegation) {
+      if (hasCommitmentIntent(text)) {
         contextBonus = 2.0; // Guaranteed
       }
     }

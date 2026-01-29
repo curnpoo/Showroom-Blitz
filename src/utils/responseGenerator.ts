@@ -1471,6 +1471,19 @@ export async function getAIResponse(
     const THINK_SECTION_REGEX = /<think\b[^>]*>[\s\S]*?<\/think>/gi;
     aiResponse = aiResponse.replace(THINK_SECTION_REGEX, ' ').replace(/\s{2,}/g, ' ').trim();
 
+    // Enforce buyer type language constraints (AI sometimes drifts)
+    if (customer.buyerType === 'cash') {
+      const mentionsPayment = /\b(month|monthly|\/mo|apr|term|months|down payment|down)\b/i.test(aiResponse);
+      if (mentionsPayment) {
+        aiResponse = pickRandom(WRONG_PAYMENT_TYPE.cash);
+      }
+    } else {
+      const mentionsTotalPrice = /\b(otd|out[- ]?the[- ]?door|total|selling price|full price|price)\b/i.test(aiResponse);
+      if (mentionsTotalPrice) {
+        aiResponse = pickRandom(WRONG_PAYMENT_TYPE.payment);
+      }
+    }
+
     // --- OUTCOME PROCESSING ---
     switch (instructionType) {
         case 'take_it_success':
@@ -1828,6 +1841,8 @@ CRITICAL: You are the CUSTOMER, not the salesperson!
 - You ANSWER questions, you don't ask them
 - Say things like "I need..." or "I'm looking for..." NOT "What can I help you with?"
 - NEVER mention used cars or wanting a used car - this dealership only sells NEW cars
+- If you are a CASH buyer: talk ONLY about total price/OTD/cash budget. NEVER mention monthly payments, APR, terms, or down payment.
+- If you are a PAYMENT buyer: talk ONLY about monthly payment and down payment. NEVER mention total price/OTD/selling price.
 
 Personality: ${customer.personality} - ${PERSONALITY_GUIDE[customer.personality]}
 ${difficultNote}
