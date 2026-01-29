@@ -212,58 +212,67 @@ function App() {
 
     const warmupUrl = getChatCompletionsUrl(settings.apiBaseUrl || '/api/ai');
 
-    // Helper to ping server
-    const pingServer = async (): Promise<boolean> => {
+    const requestBody = JSON.stringify({
+      model: settings.modelName || 'local-model',
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+      temperature: 0,
+    });
+
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
+    };
+
+    // Send initial request to trigger Modal cold start (long timeout, don't abort early)
+    // This request may take 1-2+ minutes for Modal to respond
+    fetch(warmupUrl, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: requestBody,
+    })
+      .then(response => {
+        if (response.ok && useAIRef.current) {
+          setAiWarmupStatus('ready');
+          setAiWarmupMessage('');
+          if (aiWarmupPollRef.current) {
+            clearInterval(aiWarmupPollRef.current);
+            aiWarmupPollRef.current = null;
+          }
+        }
+      })
+      .catch(() => {
+        // Initial request failed, polling will handle retry
+      });
+
+    // Also start polling every 20 seconds as backup detection
+    // (in case the initial request fails but server is actually up)
+    aiWarmupPollRef.current = setInterval(async () => {
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 10000);
 
       try {
         const response = await fetch(warmupUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
-          },
-          body: JSON.stringify({
-            model: settings.modelName || 'local-model',
-            messages: [{ role: 'user', content: 'ping' }],
-            max_tokens: 1,
-            temperature: 0,
-          }),
+          headers: requestHeaders,
+          body: requestBody,
           signal: controller.signal,
         });
         window.clearTimeout(timeoutId);
-        return response.ok;
+
+        if (response.ok && useAIRef.current) {
+          setAiWarmupStatus('ready');
+          setAiWarmupMessage('');
+          if (aiWarmupPollRef.current) {
+            clearInterval(aiWarmupPollRef.current);
+            aiWarmupPollRef.current = null;
+          }
+        }
       } catch {
         window.clearTimeout(timeoutId);
-        return false;
+        // Poll failed, will retry on next interval
       }
-    };
-
-    // First ping to trigger server startup (don't wait for success)
-    pingServer().then(success => {
-      if (success && useAIRef.current) {
-        setAiWarmupStatus('ready');
-        setAiWarmupMessage('');
-        if (aiWarmupPollRef.current) {
-          clearInterval(aiWarmupPollRef.current);
-          aiWarmupPollRef.current = null;
-        }
-      }
-    });
-
-    // Start polling every 15 seconds
-    aiWarmupPollRef.current = setInterval(async () => {
-      const success = await pingServer();
-      if (success && useAIRef.current) {
-        setAiWarmupStatus('ready');
-        setAiWarmupMessage('');
-        if (aiWarmupPollRef.current) {
-          clearInterval(aiWarmupPollRef.current);
-          aiWarmupPollRef.current = null;
-        }
-      }
-    }, 15000);
+    }, 20000);
   }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.apiKey, settings.modelName, getChatCompletionsUrl]);
 
   const testConnection = async () => {
