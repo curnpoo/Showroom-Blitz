@@ -416,13 +416,13 @@ function App() {
     return () => window.clearInterval(interval);
   }, [gameState, aiLoadStartAt, aiWarmupStatus]);
 
-  // Clean up polling when leaving loading state
+  // Clean up polling when leaving loading state or when AI is disabled
   useEffect(() => {
-    if (gameState !== 'loading' && aiWarmupPollRef.current) {
+    if ((gameState !== 'loading' || !settings.useAI) && aiWarmupPollRef.current) {
       clearInterval(aiWarmupPollRef.current);
       aiWarmupPollRef.current = null;
     }
-  }, [gameState]);
+  }, [gameState, settings.useAI]);
 
   useEffect(() => {
     if (gameState !== 'loading') return;
