@@ -184,8 +184,8 @@ function App() {
     return `${cleaned}/models`;
   }, []);
 
-  const getAuthHeaders = useCallback(() => {
-    if (!settings.apiKey) return {};
+  const getAuthHeaders = useCallback((): HeadersInit | undefined => {
+    if (!settings.apiKey) return undefined;
     return { Authorization: `Bearer ${settings.apiKey}` };
   }, [settings.apiKey]);
 
