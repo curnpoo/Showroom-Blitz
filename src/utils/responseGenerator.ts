@@ -1435,18 +1435,23 @@ export async function getAIResponse(
       aiResponse = data.content?.[0]?.text || '';
     } else {
       // Local / OpenAI Compatible
-      let baseUrl = settings.apiBaseUrl || 'http://localhost:1234/v1';
+      const baseUrlInput = settings.apiBaseUrl || 'http://localhost:1234/v1';
+      const isProxy = baseUrlInput.trim().startsWith('/api/ai');
+      let baseUrl = baseUrlInput;
       // Ensure specific endpoint is targeted if just base URL is provided
       if (!baseUrl.includes('/chat/completions')) {
          baseUrl = baseUrl.replace(/\/+$/, '') + '/chat/completions';
       }
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const authValue = isProxy
+        ? (settings.apiKey ? `Bearer ${settings.apiKey}` : '')
+        : `Bearer ${settings.apiKey || 'lm-studio'}`;
+      if (authValue) headers.Authorization = authValue;
+
       const response = await fetch(baseUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
-        },
+        headers,
         body: JSON.stringify({
           model: settings.modelName || 'local-model',
           messages: [

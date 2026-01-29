@@ -9,6 +9,7 @@ This app uses a private proxy so the AI server URL never ships to the browser bu
    ```bash
    AI_SERVER_URL=https://your-private-ai-server.example.com/v1
    AI_SERVER_API_KEY=optional
+   AI_CLIENT_KEY=optional
    AI_RATE_LIMIT_WINDOW_MS=3600000
    AI_RATE_LIMIT_MAX=250
    UPSTASH_REDIS_REST_URL=optional
@@ -33,6 +34,7 @@ The client calls the proxy at `/api/ai`, which forwards to `AI_SERVER_URL`.
 1. Add these environment variables in Vercel:
    - `AI_SERVER_URL`
    - `AI_SERVER_API_KEY` (optional)
+   - `AI_CLIENT_KEY` (optional, required if you want to lock down public access)
    - `AI_RATE_LIMIT_WINDOW_MS`
    - `AI_RATE_LIMIT_MAX`
    - `UPSTASH_REDIS_REST_URL`
@@ -42,4 +44,5 @@ The client calls the proxy at `/api/ai`, which forwards to `AI_SERVER_URL`.
 ## Notes
 
 - The AI base URL is no longer stored in the frontend or GitHub.
+- If you set `AI_CLIENT_KEY`, the proxy requires `Authorization: Bearer <key>` (or `X-AI-Client-Key`).
 - Rate limiting is enforced in the proxy and can be tuned via env vars.

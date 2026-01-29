@@ -184,6 +184,11 @@ function App() {
     return `${cleaned}/models`;
   }, []);
 
+  const getAuthHeaders = useCallback(() => {
+    if (!settings.apiKey) return {};
+    return { Authorization: `Bearer ${settings.apiKey}` };
+  }, [settings.apiKey]);
+
   const warmupAI = useCallback(async (_reason: 'setup' | 'start' | 'customer' | 'retry') => {
     if (!settings.useAI) return;
     if (settings.provider === 'anthropic') {
@@ -200,9 +205,10 @@ function App() {
     setAiWarmupSuccess(false);
 
     const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
+    const authHeaders = getAuthHeaders();
 
     // Fire initial request to trigger Modal cold start (don't wait for response)
-    fetch(warmupUrl, { method: 'GET' }).catch(() => {});
+    fetch(warmupUrl, { method: 'GET', headers: authHeaders }).catch(() => {});
 
     const deadline = Date.now() + 90000;
     let delayMs = 250;
@@ -210,7 +216,7 @@ function App() {
 
     const checkReady = async () => {
       try {
-        const response = await fetch(warmupUrl, { method: 'GET' });
+        const response = await fetch(warmupUrl, { method: 'GET', headers: authHeaders });
         if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return false;
         if (response.ok) {
           setAiWarmupStatus('ready');
@@ -244,7 +250,7 @@ function App() {
     if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return;
     setAiWarmupStatus('error');
     setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
-  }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl]);
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl, getAuthHeaders]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;
@@ -259,9 +265,7 @@ function App() {
       
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-           // Some CORS setups need minimal headers
-        }
+        headers: getAuthHeaders(),
       });
       
       if (response.ok) {

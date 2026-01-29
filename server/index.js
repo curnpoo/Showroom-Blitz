@@ -12,6 +12,7 @@ dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
 const aiServerUrl = process.env.AI_SERVER_URL;
 const aiServerApiKey = process.env.AI_SERVER_API_KEY;
+const aiClientKey = process.env.AI_CLIENT_KEY;
 const rateWindowMs = Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
 const rateMax = Number(process.env.AI_RATE_LIMIT_MAX || 250);
 
@@ -26,7 +27,23 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use('/api/ai', limiter);
+const requireClientKey = (req, res, next) => {
+  if (!aiClientKey) return next();
+  const authHeader = req.headers.authorization || '';
+  let token = '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    token = authHeader.slice(7).trim();
+  }
+  if (!token && req.headers['x-ai-client-key']) {
+    token = String(req.headers['x-ai-client-key']).trim();
+  }
+  if (token !== aiClientKey) {
+    return res.status(401).json({ error: { message: 'Unauthorized' } });
+  }
+  return next();
+};
+
+app.use('/api/ai', requireClientKey, limiter);
 
 const buildTarget = (pathname) => {
   const base = (aiServerUrl || '').replace(/\/+$/, '');

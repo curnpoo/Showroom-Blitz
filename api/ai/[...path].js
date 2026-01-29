@@ -5,6 +5,7 @@ export const config = { runtime: 'edge' };
 
 const aiServerUrl = process.env.AI_SERVER_URL;
 const aiServerApiKey = process.env.AI_SERVER_API_KEY || '';
+const aiClientKey = process.env.AI_CLIENT_KEY || '';
 const rateWindowMs = Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
 const rateMax = Number(process.env.AI_RATE_LIMIT_MAX || 250);
 const rateWindowSeconds = Math.max(1, Math.ceil(rateWindowMs / 1000));
@@ -45,7 +46,17 @@ const filterHeaders = (headers) => {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-AI-Client-Key',
+};
+
+const getClientKey = (request) => {
+  const auth = request.headers.get('authorization') || '';
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim();
+  }
+  const headerKey = request.headers.get('x-ai-client-key');
+  if (headerKey) return headerKey.trim();
+  return '';
 };
 
 export default async function handler(request, context) {
@@ -59,6 +70,16 @@ export default async function handler(request, context) {
       status: 503,
       headers: { 'content-type': 'application/json', ...corsHeaders },
     });
+  }
+
+  if (aiClientKey) {
+    const clientKey = getClientKey(request);
+    if (clientKey !== aiClientKey) {
+      return new Response(JSON.stringify({ error: { message: 'Unauthorized' } }), {
+        status: 401,
+        headers: { 'content-type': 'application/json', ...corsHeaders },
+      });
+    }
   }
 
   const ip = getClientIp(request);
