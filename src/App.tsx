@@ -161,13 +161,13 @@ function App() {
   const [aiLoadProgress, setAiLoadProgress] = useState(0);
   const [aiLoadStartAt, setAiLoadStartAt] = useState<number | null>(null);
   const [aiPendingStart, setAiPendingStart] = useState(false);
+  const [aiWarmupSuccess, setAiWarmupSuccess] = useState(false);
 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [aiWarmupStatus, setAiWarmupStatus] = useState<'idle' | 'warming' | 'ready' | 'error'>('idle');
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
-  const aiWarmupTimerRef = useRef<number | null>(null);
-  const aiWarmupInFlightRef = useRef(false);
+  const aiWarmupAttemptRef = useRef(0);
   const useAIRef = useRef(settings.useAI);
 
   useEffect(() => {
@@ -189,40 +189,61 @@ function App() {
     if (settings.provider === 'anthropic') {
       setAiWarmupStatus('ready');
       setAiWarmupMessage('');
+      setAiWarmupSuccess(true);
+      setAiLoadProgress(1);
       return;
     }
 
+    const attemptId = ++aiWarmupAttemptRef.current;
     setAiWarmupStatus('warming');
     setAiWarmupMessage('Starting AI server... this can take a few minutes.');
+    setAiWarmupSuccess(false);
 
     const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
 
     // Fire initial request to trigger Modal cold start (don't wait for response)
     fetch(warmupUrl, { method: 'GET' }).catch(() => {});
 
-    // Wait 90 seconds for Modal to fully start, then verify
-    await new Promise(resolve => setTimeout(resolve, 90000));
+    const deadline = Date.now() + 90000;
+    let delayMs = 250;
+    let attempts = 0;
 
-    if (!useAIRef.current) return;
-
-    // Now check if server is actually ready
-    try {
-      const response = await fetch(warmupUrl, { method: 'GET' });
-
-      if (!useAIRef.current) return;
-
-      if (response.ok) {
-        setAiWarmupStatus('ready');
-        setAiWarmupMessage('');
-      } else {
-        setAiWarmupStatus('error');
-        setAiWarmupMessage('AI server returned an error. Retry or switch to Non-AI.');
+    const checkReady = async () => {
+      try {
+        const response = await fetch(warmupUrl, { method: 'GET' });
+        if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return false;
+        if (response.ok) {
+          setAiWarmupStatus('ready');
+          setAiWarmupMessage('');
+          setAiWarmupSuccess(true);
+          setAiLoadProgress(1);
+          return true;
+        }
+      } catch {
+        if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return false;
       }
-    } catch {
-      if (!useAIRef.current) return;
-      setAiWarmupStatus('error');
-      setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
+      return false;
+    };
+
+    // Try immediately in case the server is already warm.
+    if (await checkReady()) return;
+
+    while (Date.now() < deadline) {
+      if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return;
+
+      if (await checkReady()) return;
+
+      attempts += 1;
+      if (attempts >= 8) {
+        delayMs = Math.min(delayMs + 750, 5000);
+      }
     }
+
+    if (!useAIRef.current || attemptId !== aiWarmupAttemptRef.current) return;
+    setAiWarmupStatus('error');
+    setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
   }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl]);
 
   const testConnection = async () => {
@@ -324,17 +345,17 @@ function App() {
 
   useEffect(() => {
     if (!settings.useAI) {
-      if (aiWarmupTimerRef.current) window.clearTimeout(aiWarmupTimerRef.current);
-      aiWarmupTimerRef.current = null;
-      aiWarmupInFlightRef.current = false;
+      aiWarmupAttemptRef.current += 1;
       setAiWarmupStatus('idle');
       setAiWarmupMessage('');
+      setAiWarmupSuccess(false);
       return;
     }
 
     if (settings.provider === 'anthropic') {
       setAiWarmupStatus('ready');
       setAiWarmupMessage('');
+      setAiWarmupSuccess(true);
       return;
     }
 
@@ -362,6 +383,7 @@ function App() {
       setAiLoadProgress(0);
       setAiLoadStartAt(Date.now());
       setAiPendingStart(true);
+      setAiWarmupSuccess(false);
       setGameState('loading');
       warmupAI('start');
       return;
@@ -370,6 +392,16 @@ function App() {
     setGameState('playing');
     startShowroom();
   }, [settings.useAI, startShowroom, warmupAI]);
+
+  const retryWarmup = useCallback((context: 'loading' | 'overlay') => {
+    if (context === 'loading') {
+      setAiLoadProgress(0);
+      setAiLoadStartAt(Date.now());
+      setAiPendingStart(true);
+    }
+    setAiWarmupSuccess(false);
+    warmupAI('retry');
+  }, [warmupAI]);
 
   useEffect(() => {
     if (gameState !== 'loading') return;
@@ -395,17 +427,19 @@ function App() {
     if (gameState !== 'loading') return;
     if (aiWarmupStatus !== 'ready') return;
     if (!aiPendingStart) return;
+    if (aiLoadProgress < 1) return;
+    if (!aiWarmupSuccess) return;
 
     setAiLoadProgress(1);
-    // Wait 500ms to show "Ready!" before transitioning
+    // Fast transition once ready
     const timeout = window.setTimeout(() => {
       setAiPendingStart(false);
       setGameState('playing');
       startShowroom();
-    }, 500);
+    }, 100);
 
     return () => window.clearTimeout(timeout);
-  }, [gameState, aiWarmupStatus, aiPendingStart, startShowroom]);
+  }, [gameState, aiWarmupStatus, aiPendingStart, aiLoadProgress, aiWarmupSuccess, startShowroom]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
@@ -2514,7 +2548,7 @@ function App() {
             </button>
             <button
               className="start-button"
-              onClick={() => warmupAI('retry')}
+              onClick={() => retryWarmup('loading')}
             >
               Retry Warmup
             </button>
@@ -2544,7 +2578,7 @@ function App() {
               </button>
               <button
                 className="ai-warmup-btn primary"
-                onClick={() => warmupAI('retry')}
+                onClick={() => retryWarmup('overlay')}
               >
                 Retry Now
               </button>
