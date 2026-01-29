@@ -5,6 +5,12 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
+const MIN_WAITING_CUSTOMERS = 1;
+const MAX_WAITING_CUSTOMERS = 5;
+const STEAL_INTERVAL_MIN = 20;
+const STEAL_INTERVAL_MAX = 45;
+const COWORKER_DEAL_MIN = 60;
+const COWORKER_DEAL_MAX = 120;
 
 export interface UseGameLoopParams {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -251,10 +257,17 @@ export function useGameLoop({
         }
       });
 
+      const waitingCount = customersRef.current.filter(
+        (c) => c.active && !c.isStolen && c.conversationPhase === 'greeting'
+      ).length;
+      if (waitingCount < MIN_WAITING_CUSTOMERS && waitingCount < MAX_WAITING_CUSTOMERS) {
+        spawnNewCustomer();
+      }
+
       const salesCoworkers = coworkersRef.current.filter((c) => c.department === 'sales');
       salesCoworkers.forEach((coworker) => {
         if (coworker.nextStealTime === undefined) {
-          coworker.nextStealTime = 5 + Math.random() * 25;
+          coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
         }
         if (coworker.pendingCustomerSpawn !== undefined && coworker.pendingCustomerSpawn > 0) {
           coworker.pendingCustomerSpawn -= deltaTime;
@@ -265,6 +278,13 @@ export function useGameLoop({
         }
         if (coworker.workingWithCustomerId !== undefined) {
           const customer = customersRef.current.find((c) => c.id === coworker.workingWithCustomerId);
+          if (!customer || !customer.active) {
+            coworker.workingWithCustomerId = undefined;
+            coworker.workingTimer = 0;
+            coworker.stealPhase = undefined;
+            coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+            return;
+          }
           if (customer) {
             if (coworker.stealPhase === 'walking') {
               const dx = customer.x - coworker.x;
@@ -278,7 +298,7 @@ export function useGameLoop({
                 if (isIntercepted || !customer.active || customer.isLost) {
                   coworker.stealPhase = 'returning';
                   coworker.workingWithCustomerId = undefined;
-                  coworker.nextStealTime = 5;
+                  coworker.nextStealTime = STEAL_INTERVAL_MIN;
                   coworker.pendingCustomerSpawn = undefined;
                 }
               } else {
@@ -286,13 +306,13 @@ export function useGameLoop({
                 if (isIntercepted) {
                   coworker.stealPhase = 'returning';
                   coworker.workingWithCustomerId = undefined;
-                  coworker.nextStealTime = 5;
+                  coworker.nextStealTime = STEAL_INTERVAL_MIN;
                   coworker.pendingCustomerSpawn = undefined;
                 } else {
                   customer.isStolen = true;
                   customer.stolenByCoworkerId = coworker.id;
                   customer.stolenDealTimer = 0;
-                  customer.stolenDealDuration = 15 + Math.random() * 15;
+                  customer.stolenDealDuration = COWORKER_DEAL_MIN + Math.random() * (COWORKER_DEAL_MAX - COWORKER_DEAL_MIN);
                   coworker.stealPhase = 'greeting';
                   coworker.workingTimer = 0;
                 }
@@ -348,11 +368,12 @@ export function useGameLoop({
                 coworker.workingWithCustomerId = undefined;
                 coworker.workingTimer = 0;
                 coworker.stealPhase = undefined;
-                coworker.nextStealTime = 5 + Math.random() * 25;
+                coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
                 customer.isStolen = false;
                 customer.stolenByCoworkerId = undefined;
                 customer.stolenDealTimer = undefined;
                 customer.stolenDealDuration = undefined;
+                customersRef.current = customersRef.current.filter((c) => c.id !== customer.id);
               }
               const pencilBob = Math.sin(Date.now() / 200) * 3;
               ctx.save();
@@ -388,7 +409,7 @@ export function useGameLoop({
               coworker.stealPhase = 'walking';
               coworker.pendingCustomerSpawn = 3 + Math.random() * 2;
             } else {
-              coworker.nextStealTime = 5 + Math.random() * 25;
+              coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
             }
           }
         }

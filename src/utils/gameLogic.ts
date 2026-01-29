@@ -400,10 +400,10 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   if (personality === 'serious' || personality === 'analytical') stubbornness += 2;
   if (personality === 'skeptical') stubbornness += 1;
 
-  // ~20% chance for a difficult customer who won't reveal preferences
-  const isDifficult = Math.random() < 0.2;
-  // ~30% chance for a guarded customer who reveals info slowly
-  const isGuarded = !isDifficult && Math.random() < 0.3;
+  // No customers who refuse to reveal preferences
+  const isDifficult = false;
+  // Less common guarded customers who reveal info slowly
+  const isGuarded = Math.random() < 0.15;
   
   // Difficult customers have very low temper (10-30) and higher stubbornness
   const finalTemper = isDifficult ? Math.floor(10 + Math.random() * 20) : temper;
@@ -514,14 +514,14 @@ export const INITIAL_COWORKERS: Coworker[] = [
   
   // Row 1 (y=340)
   { id: 101, name: 'Mike', title: 'GSM', department: 'management', x: 125, y: 375, type: 'coworker', color: '#f39c12', originalX: 125, originalY: 375 },
-  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 285, y: 375, type: 'coworker', color: '#3498db', originalX: 285, originalY: 375, nextStealTime: 5 + Math.random() * 25 },
+  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 285, y: 375, type: 'coworker', color: '#3498db', originalX: 285, originalY: 375, nextStealTime: 20 + Math.random() * 25 },
   { id: 102, name: 'Sarah', title: 'Finance', department: 'management', x: 445, y: 375, type: 'coworker', color: '#e67e22', originalX: 445, originalY: 375 },
-  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 605, y: 375, type: 'coworker', color: '#2980b9', originalX: 605, originalY: 375, nextStealTime: 5 + Math.random() * 25 },
+  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 605, y: 375, type: 'coworker', color: '#2980b9', originalX: 605, originalY: 375, nextStealTime: 20 + Math.random() * 25 },
   
   // Row 2 (y=600) - desk at 240 is EMPTY for player
-  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 125, y: 635, type: 'coworker', color: '#1abc9c', originalX: 125, originalY: 635, nextStealTime: 5 + Math.random() * 25 },
-  { id: 111, name: 'Tom', title: 'Sales', department: 'sales', x: 445, y: 635, type: 'coworker', color: '#16a085', originalX: 445, originalY: 635, nextStealTime: 5 + Math.random() * 25 },
-  { id: 112, name: 'Amy', title: 'Sales', department: 'sales', x: 605, y: 635, type: 'coworker', color: '#3498db', originalX: 605, originalY: 635, nextStealTime: 5 + Math.random() * 25 },
+  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 125, y: 635, type: 'coworker', color: '#1abc9c', originalX: 125, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
+  { id: 111, name: 'Tom', title: 'Sales', department: 'sales', x: 445, y: 635, type: 'coworker', color: '#16a085', originalX: 445, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
+  { id: 112, name: 'Amy', title: 'Sales', department: 'sales', x: 605, y: 635, type: 'coworker', color: '#3498db', originalX: 605, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
 ];
 
 // Mobile Layout Constants (Portrait Mode: 400px wide, 800px tall)
@@ -555,9 +555,9 @@ export const MOBILE_COWORKERS: Coworker[] = [
   // Row 1 desks (y=420)
   { id: 101, name: 'Mike', title: 'GSM', department: 'management', x: 90, y: 460, type: 'coworker', color: '#f39c12', originalX: 90, originalY: 460 },
   { id: 102, name: 'Sarah', title: 'Finance', department: 'management', x: 210, y: 460, type: 'coworker', color: '#e67e22', originalX: 210, originalY: 460 },
-  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 330, y: 460, type: 'coworker', color: '#3498db', originalX: 330, originalY: 460, nextStealTime: 5 + Math.random() * 25 },
+  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 330, y: 460, type: 'coworker', color: '#3498db', originalX: 330, originalY: 460, nextStealTime: 20 + Math.random() * 25 },
   
   // Row 2 desks (y=640) - first desk (x=40) is EMPTY for player
-  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 210, y: 680, type: 'coworker', color: '#2980b9', originalX: 210, originalY: 680, nextStealTime: 5 + Math.random() * 25 },
-  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 330, y: 680, type: 'coworker', color: '#1abc9c', originalX: 330, originalY: 680, nextStealTime: 5 + Math.random() * 25 },
+  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 210, y: 680, type: 'coworker', color: '#2980b9', originalX: 210, originalY: 680, nextStealTime: 20 + Math.random() * 25 },
+  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 330, y: 680, type: 'coworker', color: '#1abc9c', originalX: 330, originalY: 680, nextStealTime: 20 + Math.random() * 25 },
 ];

@@ -24,11 +24,11 @@ const getClientIp = (request) => {
   return 'unknown';
 };
 
-const buildTargetUrl = (request, pathParam) => {
+const buildTargetUrl = (request) => {
   const base = (aiServerUrl || '').replace(/\/+$/, '');
   const incoming = new URL(request.url);
-  const path = Array.isArray(pathParam) ? pathParam.join('/') : pathParam || '';
-  const normalized = path ? `/${path.replace(/^\/+/, '')}` : '';
+  const stripped = incoming.pathname.replace(/^\/api\/ai/, '');
+  const normalized = stripped ? stripped : '';
   return new URL(`${base}${normalized}${incoming.search}`);
 };
 
@@ -65,7 +65,7 @@ export default async function handler(request, context) {
     });
   }
 
-  const targetUrl = buildTargetUrl(request, context.params?.path);
+  const targetUrl = buildTargetUrl(request);
   const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.text();
 
   const upstream = await fetch(targetUrl, {

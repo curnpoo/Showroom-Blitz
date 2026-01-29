@@ -33,6 +33,12 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
+const MIN_WAITING_CUSTOMERS = 1;
+const MAX_WAITING_CUSTOMERS = 5;
+const STEAL_INTERVAL_MIN = 20;
+const STEAL_INTERVAL_MAX = 45;
+const COWORKER_DEAL_MIN = 60;
+const COWORKER_DEAL_MAX = 120;
 
 function App() {
   const [gameState, setGameState] = useState<GameState>('intro');
@@ -468,6 +474,11 @@ function App() {
   }, [isMobile]);
 
   const spawnNewCustomer = useCallback(() => {
+    const waitingCount = customersRef.current.filter(c => 
+      c.active && !c.isStolen && c.conversationPhase === 'greeting'
+    ).length;
+    if (waitingCount >= MAX_WAITING_CUSTOMERS) return;
+
     const spawnLocs = isMobile ? MOBILE_SPAWN_LOCATIONS : SPAWN_LOCATIONS;
     const desks = desksRef.current;
     
@@ -893,7 +904,7 @@ function App() {
       ctx.fillText('YOU', player.x, player.y - 25);
 
       // Proactive Coworker Steal Mechanic
-      // Sales coworkers randomly steal customers every 5-30 seconds
+      // Sales coworkers steal less frequently to reduce pressure
       const salesCoworkers = coworkersRef.current.filter(c => c.department === 'sales');
 
       // Track unattended customers and despawn after 60 seconds
@@ -923,11 +934,18 @@ function App() {
           customer.unattendedTimer = 0;
         }
       });
+
+      const waitingCount = customersRef.current.filter(c => 
+        c.active && !c.isStolen && c.conversationPhase === 'greeting'
+      ).length;
+      if (waitingCount < MIN_WAITING_CUSTOMERS && waitingCount < MAX_WAITING_CUSTOMERS) {
+        spawnNewCustomer();
+      }
       
       salesCoworkers.forEach(coworker => {
         // Initialize steal timer if not set
         if (coworker.nextStealTime === undefined) {
-          coworker.nextStealTime = 5 + Math.random() * 25; // 5-30 seconds
+          coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
         }
         
         // Handle pending customer spawn (delayed 3-5 seconds after steal)
@@ -942,6 +960,13 @@ function App() {
         // If coworker is working with a stolen customer
         if (coworker.workingWithCustomerId !== undefined) {
           const customer = customersRef.current.find(c => c.id === coworker.workingWithCustomerId);
+          if (!customer || !customer.active) {
+            coworker.workingWithCustomerId = undefined;
+            coworker.workingTimer = 0;
+            coworker.stealPhase = undefined;
+            coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+            return;
+          }
           if (customer) {
             
               // PHASE 1: Walking to customer
@@ -964,7 +989,7 @@ function App() {
                      // Abort steal!
                      coworker.stealPhase = 'returning';
                      coworker.workingWithCustomerId = undefined;
-                     coworker.nextStealTime = 5; // Try again soon
+                     coworker.nextStealTime = STEAL_INTERVAL_MIN;
                      coworker.pendingCustomerSpawn = undefined;
                   }
 
@@ -977,7 +1002,7 @@ function App() {
                      // Abort steal!
                      coworker.stealPhase = 'returning';
                      coworker.workingWithCustomerId = undefined;
-                     coworker.nextStealTime = 5; 
+                     coworker.nextStealTime = STEAL_INTERVAL_MIN; 
                      coworker.pendingCustomerSpawn = undefined;
                   } else {
                     // SUCCESSFUL STEAL
@@ -985,7 +1010,7 @@ function App() {
                     customer.stolenByCoworkerId = coworker.id;
                     // Set these now, not at start
                     customer.stolenDealTimer = 0;
-                    customer.stolenDealDuration = 15 + Math.random() * 15;
+                    customer.stolenDealDuration = COWORKER_DEAL_MIN + Math.random() * (COWORKER_DEAL_MAX - COWORKER_DEAL_MIN);
 
                     coworker.stealPhase = 'greeting';
                     coworker.workingTimer = 0; // Use workingTimer for greeting duration
@@ -1084,13 +1109,14 @@ function App() {
                 coworker.workingWithCustomerId = undefined;
                 coworker.workingTimer = 0;
                 coworker.stealPhase = undefined;
-                coworker.nextStealTime = 5 + Math.random() * 25; // Next steal in 5-30 seconds
+                coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
                 
                 // Reset customer stolen state
                 customer.isStolen = false;
                 customer.stolenByCoworkerId = undefined;
                 customer.stolenDealTimer = undefined;
                 customer.stolenDealDuration = undefined;
+                customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
               }
               
               // Draw pencil/working animation on the coworker
@@ -1146,8 +1172,8 @@ function App() {
               // Schedule a new customer to spawn after 3-5 second delay
               coworker.pendingCustomerSpawn = 3 + Math.random() * 2;
             } else {
-              // No customers to steal, try again in 5-30 seconds
-              coworker.nextStealTime = 5 + Math.random() * 25;
+              // No customers to steal, try again later
+              coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
             }
           }
         }
