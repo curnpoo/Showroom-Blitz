@@ -147,8 +147,8 @@ export interface GameSettings {
   useAI: boolean;
   apiKey: string;
   provider: 'anthropic' | 'openai' | 'local';
-  apiBaseUrl?: string; // For local/custom OpenAI compatible endpoints
-  modelName: string;   // e.g., 'claude-3-sonnet', 'gpt-4', 'local-model'
+  apiBaseUrl?: string; // For custom/local AI server endpoints
+  modelName: string;   // e.g., 'claude-3-sonnet', 'local-model'
   timer: TimerSettings;
   gameMode: 'standard' | 'volume';
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Package, Calculator, TrendingUp } from 'lucide-react';
+import { Package, Calculator, TrendingUp } from 'lucide-react';
 import { Customer, ConversationMessage, Car } from '../types/game';
 import { CustomerNotes } from './CustomerNotes';
 
@@ -172,126 +172,60 @@ export function ChatInterface({
             {msg.text}
           </div>
         ))}
-        {isTyping && <div className="typing-indicator">typing...</div>}
+        {isTyping && (
+          <div className="typing-indicator">
+            {useAI ? 'loading ai modal, one sec...' : 'typing...'}
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="chat-input-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {/* Discovery Action Bar */}
-        {/* Discovery Action Bar - Hide in AI mode */}
-        {!useAI && (selectedPerson.conversationPhase === 'greeting' || selectedPerson.conversationPhase === 'needs_discovery') && (
-          <div className="discovery-actions" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', width: '100%' }}>
-            {!selectedPerson.revealedPreferences.budget && (
-              <button 
-                onClick={() => onDiscoveryAction('budget')}
-                style={{ 
-                  flex: 1, 
-                  whiteSpace: 'nowrap', 
-                  fontSize: '0.75rem', 
-                  padding: '6px 8px', 
-                  background: '#e0f2fe', 
-                  color: '#0284c7', 
-                  border: '1px solid #bae6fd', 
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Ask Budget
-              </button>
-            )}
-            {!selectedPerson.revealedPreferences.type && (
-              <button 
-                onClick={() => onDiscoveryAction('type')}
-                style={{ 
-                  flex: 1, 
-                  whiteSpace: 'nowrap', 
-                  fontSize: '0.75rem', 
-                  padding: '6px 8px', 
-                  background: '#f0fdf4', 
-                  color: '#16a34a', 
-                  border: '1px solid #bbf7d0', 
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Ask Type
-              </button>
-            )}
-            {!selectedPerson.revealedPreferences.features && (
-              <button 
-                onClick={() => onDiscoveryAction('features')}
-                style={{ 
-                  flex: 1, 
-                  whiteSpace: 'nowrap', 
-                  fontSize: '0.75rem', 
-                  padding: '6px 8px', 
-                  background: '#fdf4ff', 
-                  color: '#c026d3', 
-                  border: '1px solid #f5d0fe', 
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Ask Needs
-              </button>
-            )}
-            {!selectedPerson.revealedPreferences.model && (
-              <button 
-                onClick={() => onDiscoveryAction('model')}
-                style={{ 
-                  flex: 1, 
-                  whiteSpace: 'nowrap', 
-                  fontSize: '0.75rem', 
-                  padding: '6px 8px', 
-                  background: '#fff7ed', 
-                  color: '#ea580c', 
-                  border: '1px solid #fed7aa', 
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Ask Model
-              </button>
-            )}
-          </div>
-        )}
-        {conversation.length === 0 ? (
-          <button 
-            onClick={() => sendMessage('Hello!')}
-            className="chat-greet-btn"
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '1rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            👋 Say Hello
-          </button>
+        {useAI ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            className="chat-input"
+            placeholder="Type message..."
+          />
         ) : (
-          <>
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-              className="chat-input"
-              placeholder="Type message..."
-            />
-            <button onClick={() => sendMessage()} className="chat-send-btn">
-              <Send size={18} />
+          <div className="scripted-replies">
+            {conversation.length === 0 && (
+              <button
+                onClick={() => sendMessage('Hello!')}
+                className="scripted-reply-btn"
+              >
+                👋 Say Hello
+              </button>
+            )}
+            <button
+              onClick={() => onDiscoveryAction('type')}
+              className="scripted-reply-btn"
+            >
+              Looking For?
             </button>
-          </>
+            <button
+              onClick={() => onDiscoveryAction('budget')}
+              className="scripted-reply-btn"
+            >
+              Budget?
+            </button>
+            <button
+              onClick={() => onDiscoveryAction('features')}
+              className="scripted-reply-btn"
+            >
+              Needs?
+            </button>
+            <button
+              onClick={() => sendMessage("No other options?")}
+              className="scripted-reply-btn"
+            >
+              No Other Options?
+            </button>
+          </div>
         )}
       </div>
 

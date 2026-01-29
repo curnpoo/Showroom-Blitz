@@ -65,9 +65,9 @@ function App() {
     const defaults = {
       useAI: false,
       apiKey: '',
-      provider: 'anthropic' as const,
-      apiBaseUrl: import.meta.env.VITE_AI_API_URL || 'https://e5e3db2e421c.ngrok-free.app/v1',
-      modelName: 'claude-3-sonnet-20240229',
+      provider: 'local' as const,
+      apiBaseUrl: import.meta.env.VITE_AI_API_URL || '',
+      modelName: '',
       timer: {
         enabled: false,
         duration: 5 as 3 | 5 | 10,
@@ -113,8 +113,8 @@ function App() {
     setTestMessage('');
     
     try {
-      // LM Studio / OpenAI compatible check
-      // We try to fetch the /models endpoint which is standard
+      // AI server check
+      // We try to fetch the /models endpoint when available
       let baseUrl = settings.apiBaseUrl;
       
       // Clean up URL if it has /chat/completions at the end
@@ -983,19 +983,19 @@ function App() {
 
     switch (type) {
       case 'budget':
-        question = "What is your budget for this purchase?";
+        question = "Budget?";
         messageType = 'ask_budget';
         break;
       case 'type':
-        question = "What type of vehicle are you looking for?";
+        question = "Looking for?";
         messageType = 'ask_type';
         break;
       case 'features':
-        question = "Are there any specific features you need?";
+        question = "Needs?";
         messageType = 'ask_features';
         break;
       case 'model':
-        question = "Do you have a specific model in mind?";
+        question = "Specific model?";
         messageType = 'ask_model';
         break;
     }
@@ -2229,6 +2229,7 @@ function App() {
                   attemptCloseDeal={attemptCloseDeal}
                   isMobile={true}
                   onDiscoveryAction={handleDiscoveryAction}
+                  useAI={settings.useAI}
                 />
               </div>
             )}
@@ -2332,8 +2333,8 @@ function App() {
                         value={settings.provider}
                         onChange={(e) => setSettings(prev => ({ ...prev, provider: e.target.value as any }))}
                       >
+                        <option value="local">Local Models / Server URL</option>
                         <option value="anthropic">Anthropic (Claude)</option>
-                        <option value="local">Local / OpenAI Compatible</option>
                       </select>
                     </div>
 
@@ -2351,23 +2352,14 @@ function App() {
                       <>
                         <div className="ai-field">
                           <label>API Base URL</label>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <input
-                              type="text"
-                              placeholder="https://e5e3db2e421c.ngrok-free.app/v1"
-                              value={settings.apiBaseUrl}
-                              onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
-                            />
-                            <button
-                                style={{ padding: '0 12px', background: '#334155', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}
-                                onClick={() => setSettings(prev => ({ ...prev, apiBaseUrl: '/api/lm-studio' }))}
-                                title="Use Safe Proxy"
-                            >
-                              Use Proxy
-                            </button>
-                          </div>
+                          <input
+                            type="text"
+                            placeholder="https://your-ai-server.example.com"
+                            value={settings.apiBaseUrl}
+                            onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
+                          />
                           <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
-                            Default: https://e5e3db2e421c.ngrok-free.app/v1 (Fixes CORS issues)
+                            Connect to an AI server.
                           </div>
                           
                           {/* Cloud-to-Local Warning */}
@@ -2387,8 +2379,7 @@ function App() {
                               <strong>⚠️ Connection Warning</strong><br/>
                               You are running this app from the cloud ({window.location.hostname}), but trying to connect to a local server ({settings.apiBaseUrl}).<br/><br/>
                               The cloud cannot "see" your computer's localhost.<br/><br/>
-                              <strong>Fix:</strong> Use <a href="https://ngrok.com" target="_blank" rel="noreferrer">ngrok</a> to create a public URL for your local server:<br/>
-                              <code>ngrok http 1234</code>
+                              <strong>Fix:</strong> Use a publicly reachable AI server URL.
                             </div>
                           )}
                         </div>
@@ -2436,21 +2427,12 @@ function App() {
                         </div>
 
                         <div className="ai-field">
-                          <label>Model Name</label>
+                          <label>Model Name (Optional)</label>
                           <input
                             type="text"
                             placeholder="local-model"
                             value={settings.modelName}
                             onChange={(e) => setSettings(prev => ({ ...prev, modelName: e.target.value }))}
-                          />
-                        </div>
-                        <div className="ai-field">
-                          <label>API Key (Optional)</label>
-                          <input
-                            type="password"
-                            placeholder="lm-studio"
-                            value={settings.apiKey}
-                            onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
                           />
                         </div>
                       </>
@@ -2462,7 +2444,7 @@ function App() {
                 {settings.useAI
                   ? settings.provider === 'anthropic' 
                     ? 'Using Claude for dynamic conversations'
-                    : 'Using Local/Compatible model'
+                    : 'Using a local AI server'
                   : 'Using smart scripted responses (works offline)'}
               </p>
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
