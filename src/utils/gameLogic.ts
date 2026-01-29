@@ -99,18 +99,46 @@ const CAR_DATABASE: BrandSpec[] = [
   {
     brand: 'Tesla',
     models: [
-      { model: 'Model S Base', basePrice: 89500, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
-      { model: 'Model S Long Range', basePrice: 104000, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
-      { model: 'Model S Performance', basePrice: 112000, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
-      { model: 'Model 3 Base', basePrice: 41990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
-      { model: 'Model 3 Long Range', basePrice: 51990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
-      { model: 'Model 3 Performance', basePrice: 56990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
-      { model: 'Model X Base', basePrice: 104990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
-      { model: 'Model X Long Range', basePrice: 109990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
-      { model: 'Model X Performance', basePrice: 119990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
-      { model: 'Model Y Base', basePrice: 51990, segment: 'electric', trims: [{ name: 'Base', trimClass: 'base', priceMultiplier: 1.0 }] },
-      { model: 'Model Y Long Range', basePrice: 58990, segment: 'electric', trims: [{ name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.0 }] },
-      { model: 'Model Y Performance', basePrice: 62990, segment: 'electric', trims: [{ name: 'Performance', trimClass: 'sport', priceMultiplier: 1.0 }] },
+      {
+        model: 'Model S',
+        basePrice: 89500,
+        segment: 'electric',
+        trims: [
+          { name: 'Base', trimClass: 'base', priceMultiplier: 1.0 },
+          { name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.17 },
+          { name: 'Performance', trimClass: 'sport', priceMultiplier: 1.25 },
+        ],
+      },
+      {
+        model: 'Model 3',
+        basePrice: 42990,
+        segment: 'electric',
+        trims: [
+          { name: 'Base', trimClass: 'base', priceMultiplier: 1.0 },
+          { name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.21 },
+          { name: 'Performance', trimClass: 'sport', priceMultiplier: 1.33 },
+        ],
+      },
+      {
+        model: 'Model X',
+        basePrice: 104990,
+        segment: 'electric',
+        trims: [
+          { name: 'Base', trimClass: 'base', priceMultiplier: 1.0 },
+          { name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.05 },
+          { name: 'Performance', trimClass: 'sport', priceMultiplier: 1.15 },
+        ],
+      },
+      {
+        model: 'Model Y',
+        basePrice: 51990,
+        segment: 'electric',
+        trims: [
+          { name: 'Base', trimClass: 'base', priceMultiplier: 1.0 },
+          { name: 'Long Range', trimClass: 's_luxury', priceMultiplier: 1.13 },
+          { name: 'Performance', trimClass: 'sport', priceMultiplier: 1.21 },
+        ],
+      },
     ],
   },
 ];

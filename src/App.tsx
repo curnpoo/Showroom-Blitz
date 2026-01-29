@@ -68,6 +68,7 @@ const FEATURE_SEARCH_KEYWORDS: Record<string, DesiredFeature> = {
   fuel_efficient: 'fuel_efficient',
 };
 const INVENTORY_NOTE_KEYS: (keyof Customer['revealedPreferences'])[] = ['budget', 'type', 'features'];
+const DISCOVERY_STAGES: Array<keyof Customer['revealedPreferences']> = ['type', 'features', 'budget', 'model'];
 const MIN_WAITING_CUSTOMERS = 1;
 const MAX_WAITING_CUSTOMERS = 5;
 const STEAL_INTERVAL_MIN = 20;
@@ -573,6 +574,8 @@ function App() {
       selectedPerson.revealedPreferences.model = false;
       selectedPerson.revealedPreferences.features = false;
       selectedPerson.interest = Math.min(100, selectedPerson.interest + 5);
+      selectedPerson.openToAlternative = false;
+      selectedPerson.conversationPhase = 'needs_discovery';
       setSelectedPerson({ ...selectedPerson });
       const response = "Alright, I'm open to seeing other models, maybe something with similar features.";
       setConversation(prev => [
@@ -2148,6 +2151,10 @@ function App() {
   const perfectCars = allNotesRevealed ? findPerfectCars(selectedPerson) : [];
   const inventoryForList = filteredInventory.filter(car => !perfectCars.some(pc => pc.id === car.id));
 
+  const hasPerfectMatch = perfectCars.length > 0;
+  const allDiscoveryButtonsUsed = selectedPerson ? DISCOVERY_STAGES.every(stage => selectedPerson.revealedPreferences[stage]) : false;
+  const showNoOptionsButton = !hasPerfectMatch && allDiscoveryButtonsUsed;
+
   const buildPerfectCard = (car: CarType) => (
     <div
       key={`perfect-${car.id}`}
@@ -2590,7 +2597,8 @@ function App() {
                   onDiscoveryAction={handleDiscoveryAction}
                   showNotes={false}
                   useAI={settings.useAI}
-                  hasPerfectMatch={perfectCars.length > 0}
+                  hasPerfectMatch={hasPerfectMatch}
+                  showNoOptionsButton={showNoOptionsButton}
                 />
               </div>
 
@@ -2691,7 +2699,8 @@ function App() {
                   isMobile={true}
                   onDiscoveryAction={handleDiscoveryAction}
                   useAI={settings.useAI}
-                  hasPerfectMatch={perfectCars.length > 0}
+                  hasPerfectMatch={hasPerfectMatch}
+                  showNoOptionsButton={showNoOptionsButton}
                 />
               </div>
             )}

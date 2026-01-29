@@ -18,12 +18,42 @@ const CATEGORY_LABELS: Record<VehicleCategory, string> = {
 
 const NOTES_POP_STYLES = `
 @keyframes notePopIn {
-  0% { transform: scale(1.3); opacity: 0; }
-  60% { transform: scale(1.02); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.8) translateY(-10px);
+    opacity: 0;
+    filter: brightness(1.5);
+  }
+  50% {
+    transform: scale(1.08) translateY(0);
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
 .note-item.pop {
-  animation: notePopIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: notePopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 215, 0, 0.15) 0%,
+    rgba(255, 140, 0, 0.25) 50%,
+    rgba(255, 215, 0, 0.15) 100%
+  );
+  background-size: 200% 100%;
+  animation: notePopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+             shimmer 1s ease-in-out;
+  border: 2px solid rgba(255, 140, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3),
+              0 0 20px rgba(255, 215, 0, 0.2);
+  border-radius: 6px;
+  padding: 8px;
 }
 `;
 

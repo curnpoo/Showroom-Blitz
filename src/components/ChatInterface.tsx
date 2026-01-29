@@ -222,7 +222,7 @@ export function ChatInterface({
                   {stageLabels[nextStage]}
                 </button>
               )}
-              {!hasPerfectMatch && (
+              {nextStage && !hasPerfectMatch && (
                 <button
                   onClick={() => sendMessage("No other options?")}
                   className="scripted-reply-btn"
