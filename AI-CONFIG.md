@@ -1,66 +1,45 @@
 # AI Configuration Quick Guide
 
-## Quick Steps to Update AI URL
+This app uses a private proxy so the AI server URL never ships to the browser bundle.
 
-### When Starting ngrok Tunnel
+## Setup (Local Server)
 
-1. Start your ngrok tunnel (get the URL)
-2. Open `.env.local`
-3. Update the line:
+1. Copy `.env.example` to `.env.local`
+2. Set:
    ```bash
-   VITE_AI_API_URL=https://YOUR-NEW-NGROK-URL.ngrok-free.app/v1
+   AI_SERVER_URL=https://your-private-ai-server.example.com/v1
+   AI_SERVER_API_KEY=optional
+   AI_RATE_LIMIT_WINDOW_MS=3600000
+   AI_RATE_LIMIT_MAX=250
+   UPSTASH_REDIS_REST_URL=optional
+   UPSTASH_REDIS_REST_TOKEN=optional
    ```
-4. Restart the dev server:
+3. Start the local proxy server:
    ```bash
-   npm run dev
+   npm run dev:server
    ```
 
-### When Turning AI Off
+## Setup (Client)
 
-1. Open `.env.local`
-2. Comment out or empty the line:
-   ```bash
-   # VITE_AI_API_URL=
-   ```
-   Or:
-   ```bash
-   VITE_AI_API_URL=
-   ```
-3. Restart the dev server
-
-## Current Configuration
-
-Your AI URL is currently set to:
-```
-https://e5e3db2e421c.ngrok-free.app/v1
-```
-
-## Checking Current Settings
-
-The AI URL is loaded from `.env.local` when the dev server starts. To see what's currently configured:
-
+Run the Vite dev server as usual:
 ```bash
-cat .env.local | grep VITE_AI_API_URL
+npm run dev
 ```
 
-## Troubleshooting
+The client calls the proxy at `/api/ai`, which forwards to `AI_SERVER_URL`.
 
-**Problem**: Changed `.env.local` but app still uses old URL
-- **Solution**: Restart the dev server (`Ctrl+C`, then `npm run dev`)
+## Setup (Vercel)
 
-**Problem**: AI requests failing
-- **Solution**:
-  1. Check if your ngrok tunnel is still running
-  2. Verify the URL in `.env.local` matches your ngrok URL
-  3. Make sure the URL ends with `/v1`
-  4. Restart the dev server
+1. Add these environment variables in Vercel:
+   - `AI_SERVER_URL`
+   - `AI_SERVER_API_KEY` (optional)
+   - `AI_RATE_LIMIT_WINDOW_MS`
+   - `AI_RATE_LIMIT_MAX`
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+2. Deploy as usual. The Edge function at `/api/ai/*` will proxy requests.
 
-**Problem**: Want to use local LM Studio instead
-- **Solution**: Set `VITE_AI_API_URL=/api/lm-studio` in `.env.local`
+## Notes
 
-## Default Behavior
-
-If `VITE_AI_API_URL` is not set or empty, the app defaults to:
-- `/api/lm-studio` (proxied to `http://127.0.0.1:1234/v1`)
-
-This allows local-only AI with LM Studio running on port 1234.
+- The AI base URL is no longer stored in the frontend or GitHub.
+- Rate limiting is enforced in the proxy and can be tuned via env vars.

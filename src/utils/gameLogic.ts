@@ -164,6 +164,62 @@ function getSegmentForBrandModel(brandModel: string): VehicleSegment | null {
   return getSpecForBrandModel(brandModel)?.segment ?? null;
 }
 
+function getModelPriceRange(brandModel: string): { min: number; max: number; mid: number } | null {
+  const pair = BRAND_MODEL_PAIRS.find(p => p.brandModel === brandModel);
+  if (!pair) return null;
+  const brandSpec = CAR_DATABASE.find(b => b.brand === pair.brand);
+  const modelSpec = brandSpec?.models.find(m => m.model === pair.model);
+  if (!modelSpec) return null;
+  const multipliers = modelSpec.trims.map(t => t.priceMultiplier);
+  const min = Math.round(modelSpec.basePrice * Math.min(...multipliers));
+  const max = Math.round(modelSpec.basePrice * Math.max(...multipliers));
+  const mid = Math.round((min + max) / 2);
+  return { min, max, mid };
+}
+
+function getCategoryPriceRange(category: VehicleCategory): { min: number; max: number; mid: number } {
+  const prices: number[] = [];
+  for (const brand of CAR_DATABASE) {
+    for (const model of brand.models) {
+      for (const trim of model.trims) {
+        const price = Math.round(model.basePrice * trim.priceMultiplier);
+        const cat = getVehicleCategoryFromSegment(model.segment, price);
+        if (category === 'any' || cat === category) prices.push(price);
+      }
+    }
+  }
+  if (prices.length === 0) {
+    for (const brand of CAR_DATABASE) {
+      for (const model of brand.models) {
+        for (const trim of model.trims) {
+          prices.push(Math.round(model.basePrice * trim.priceMultiplier));
+        }
+      }
+    }
+  }
+  prices.sort((a, b) => a - b);
+  const min = prices[0];
+  const max = prices[prices.length - 1];
+  const mid = prices[Math.floor(prices.length / 2)];
+  return { min, max, mid };
+}
+
+function pickTargetPrice(range: { min: number; max: number }): number {
+  const t = (Math.random() + Math.random()) / 2; // weighted toward middle
+  return Math.round(range.min + (range.max - range.min) * t);
+}
+
+function getBudgetMultiplier(): number {
+  const roll = Math.random();
+  if (roll < 0.8) return 0.9 + Math.random() * 0.09; // 0.90 - 0.99
+  return 0.99 + Math.random() * 0.03; // 0.99 - 1.02
+}
+
+function normalizeCategoryForBudget(category: VehicleCategory): VehicleCategory {
+  if (category === 'hybrid') return Math.random() < 0.5 ? 'sedan' : 'suv';
+  return category;
+}
+
 // Helper to get features that actually exist for a given "Brand Model" or category
 function getCompatibleFeatures(brandModel?: string, category?: VehicleCategory): DesiredFeature[] {
   let validFeatures = [...DESIRED_FEATURES];
@@ -314,6 +370,17 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   const hasSpecificColor = Math.random() > 0.6;
   const desiredColor = hasSpecificColor ? pickRandom(COLORS) : undefined;
 
+  const creditScore = Math.floor(450 + Math.random() * 400); // Range: 450-850
+  const creditTier = getCreditTier(creditScore);
+
+  const budgetCategory = normalizeCategoryForBudget(desiredCategory);
+  const modelRange = desiredModel ? getModelPriceRange(desiredModel) : null;
+  const baseRange = modelRange ?? getCategoryPriceRange(budgetCategory);
+  const targetPrice = pickTargetPrice(baseRange);
+  const desiredDown = buyerType === 'payment'
+    ? (creditTier?.minDown ?? 0) + Math.floor(Math.random() * 3000)
+    : 0;
+
   // Generate deal breakers
   const allDealBreakers = [
     "Over MSRP Pricing",
@@ -352,22 +419,14 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     personality,
     temper: finalTemper,
     interest: baseInterest,
-    budget: buyerType === 'cash' ? (() => {
-      const rand = Math.random();
-      // ~20% high rollers — way more budget so deals are easier to close
-      if (rand < 0.2) return 80000 + Math.floor(Math.random() * 70000); // $80k - $150k
-      // ~80% normal range
-      return 15000 + Math.floor(Math.random() * 55000); // $15k - $70k
-    })() : 0,
+    budget: buyerType === 'cash' ? Math.round(targetPrice * getBudgetMultiplier()) : 0,
     maxPayment: buyerType === 'payment' ? (() => {
-      const rand = Math.random();
-      // Wider range so we can "double" payments and still close: 40% low, 30% mid, 20% higher, 10% high
-      if (rand < 0.4) return 250 + Math.floor(Math.random() * 200); // $250 - $450
-      if (rand < 0.7) return 450 + Math.floor(Math.random() * 450); // $450 - $900 (can double from low)
-      if (rand < 0.9) return 700 + Math.floor(Math.random() * 700); // $700 - $1400
-      return 1000 + Math.floor(Math.random() * 1400); // $1000 - $2400 (way more headroom)
+      const otd = Math.round(targetPrice * 1.07 + 1000);
+      const apr = (creditTier?.minAPR ?? 6.9) + Math.random() * 2.5;
+      const payment = calculatePayment(otd, desiredDown, apr, 72);
+      return Math.round(payment * getBudgetMultiplier());
     })() : 0,
-    desiredDown: buyerType === 'payment' ? (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 5000)) : 0,
+    desiredDown,
     conversationHistory: [],
     conversationPhase: 'greeting',
     desiredCategory,
@@ -389,7 +448,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
       model: false,
     },
     inventoryDenials: 0,
-    creditScore: Math.floor(450 + Math.random() * 400), // Range: 450-850
+    creditScore,
     creditRevealed: false,
     isDifficult,
     isGuarded,
@@ -502,4 +561,3 @@ export const MOBILE_COWORKERS: Coworker[] = [
   { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 210, y: 680, type: 'coworker', color: '#2980b9', originalX: 210, originalY: 680, nextStealTime: 5 + Math.random() * 25 },
   { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 330, y: 680, type: 'coworker', color: '#1abc9c', originalX: 330, originalY: 680, nextStealTime: 5 + Math.random() * 25 },
 ];
-

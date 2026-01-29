@@ -11,20 +11,23 @@ This project includes password protection for the development server to prevent 
    - Change `VITE_ACCESS_PASSWORD` to your desired password
    - Example: `VITE_ACCESS_PASSWORD=MySecurePass123!`
 
-2. **Configure AI API URL** (if using AI features)
+2. **Configure AI Server Proxy** (if using AI features)
    - Open `.env.local`
-   - Update `VITE_AI_API_URL` with your ngrok tunnel URL
-   - Example: `VITE_AI_API_URL=https://abc123.ngrok-free.app/v1`
-   - **When AI is OFF**: Set to empty string or comment out: `# VITE_AI_API_URL=`
-   - **When AI is ON**: Update with your current ngrok URL
-   - **Note**: You need to restart the dev server after changing this
+   - Set `AI_SERVER_URL` to your private AI server URL
+   - Optional: set `AI_SERVER_API_KEY`, `AI_RATE_LIMIT_WINDOW_MS`, `AI_RATE_LIMIT_MAX`
+   - **Note**: Restart the proxy server after changing this
 
 3. **Run the Dev Server**
    ```bash
    npm run dev
    ```
 
-4. **Access the Server**
+4. **Run the AI Proxy (if AI is on)**
+   ```bash
+   npm run dev:server
+   ```
+
+5. **Access the Server**
    - When someone visits your server URL, they'll see a browser login prompt
    - **Username**: Can be anything (ignored)
    - **Password**: The password you set in `.env.local`
@@ -64,12 +67,17 @@ To disable password protection (for solo local development):
 - Remove or empty the `VITE_ACCESS_PASSWORD` in `.env.local`
 - Restart the dev server
 
-## Rate Limiting (Optional)
+## Rate Limiting
 
-To prevent overload, consider:
-1. Limiting the number of concurrent users
-2. Setting up a reverse proxy with rate limiting (nginx, Caddy)
-3. Using a cloud service if you need many users
+The AI proxy includes built-in rate limiting. Tune via:
+- `AI_RATE_LIMIT_WINDOW_MS`
+- `AI_RATE_LIMIT_MAX`
+
+## Vercel Deployments
+
+When deploying on Vercel:
+- The `/api/ai/*` Edge function handles proxying.
+- Add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for global rate limiting.
 
 ## Firewall Recommendations
 

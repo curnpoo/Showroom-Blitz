@@ -60,7 +60,6 @@ function App() {
   const [paymentTerm, setPaymentTerm] = useState(72);
   const [paymentAPR, setPaymentAPR] = useState(6.9);
   const [downPayment, setDownPayment] = useState(0);
-  const currenServerUrl = '<redacted>';
   const currenServerModel = 'mistralai/Ministral-3-3B-Instruct-2512';
   const [settings, setSettings] = useState<GameSettings>(() => {
     const saved = localStorage.getItem('showroom_settings');
@@ -68,7 +67,7 @@ function App() {
       useAI: false,
       apiKey: '',
       provider: 'local' as const,
-      apiBaseUrl: currenServerUrl || import.meta.env.VITE_AI_API_URL || '',
+      apiBaseUrl: '/api/ai',
       modelName: currenServerModel,
       timer: {
         enabled: false,
@@ -91,9 +90,8 @@ function App() {
         },
       };
 
-      // If they're using Curren's server, force the correct model name.
-      if (merged.apiBaseUrl === currenServerUrl) {
-        merged.modelName = currenServerModel;
+      if (merged.apiBaseUrl?.startsWith('http')) {
+        merged.apiBaseUrl = '/api/ai';
       }
 
       return merged;
@@ -111,9 +109,111 @@ function App() {
     profit: 0,
     salesCount: 0,
   });
+  const [aiLoadProgress, setAiLoadProgress] = useState(0);
+  const [aiLoadStartAt, setAiLoadStartAt] = useState<number | null>(null);
+  const [aiPendingStart, setAiPendingStart] = useState(false);
 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [aiWarmupStatus, setAiWarmupStatus] = useState<'idle' | 'warming' | 'ready' | 'error'>('idle');
+  const [aiWarmupMessage, setAiWarmupMessage] = useState('');
+  const aiWarmupTimerRef = useRef<number | null>(null);
+  const aiWarmupInFlightRef = useRef(false);
+
+  const getModelsUrl = useCallback((base: string) => {
+    let cleaned = base;
+    if (!cleaned) cleaned = 'http://localhost:1234/v1';
+    if (cleaned.endsWith('/chat/completions')) {
+      cleaned = cleaned.replace('/chat/completions', '');
+    }
+    cleaned = cleaned.replace(/\/+$/, '');
+    return `${cleaned}/models`;
+  }, []);
+
+  const getChatCompletionsUrl = useCallback((base: string) => {
+    let cleaned = base || 'http://localhost:1234/v1';
+    if (!cleaned.includes('/chat/completions')) {
+      cleaned = cleaned.replace(/\/+$/, '') + '/chat/completions';
+    }
+    return cleaned;
+  }, []);
+
+  const warmupAI = useCallback(async (reason: 'setup' | 'start' | 'customer' | 'retry') => {
+    if (!settings.useAI) return;
+    if (settings.provider === 'anthropic') {
+      setAiWarmupStatus('ready');
+      setAiWarmupMessage('');
+      return;
+    }
+    if (aiWarmupStatus === 'ready' || aiWarmupInFlightRef.current) return;
+
+    aiWarmupInFlightRef.current = true;
+    setAiWarmupStatus('warming');
+    setAiWarmupMessage(
+      reason === 'customer'
+        ? 'Warming up AI for this customer...'
+        : 'Starting AI server... this can take a few minutes.'
+    );
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const modelsUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
+      const warmupUrl = getChatCompletionsUrl(settings.apiBaseUrl || '/api/ai');
+
+      try {
+        await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+      } catch {
+        // Ignore; some servers don't expose /models or are still booting.
+      }
+
+      const response = await fetch(warmupUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
+        },
+        body: JSON.stringify({
+          model: settings.modelName || 'local-model',
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Warmup failed: ${response.status}`);
+      }
+
+      setAiWarmupStatus('ready');
+      setAiWarmupMessage('');
+    } catch (e) {
+      setAiWarmupStatus('warming');
+      setAiWarmupMessage('Starting AI server... this can take a few minutes.');
+      if (aiWarmupTimerRef.current) window.clearTimeout(aiWarmupTimerRef.current);
+      aiWarmupTimerRef.current = window.setTimeout(() => warmupAI('retry'), 10000);
+    } finally {
+      window.clearTimeout(timeoutId);
+      aiWarmupInFlightRef.current = false;
+    }
+  }, [
+    settings.useAI,
+    settings.provider,
+    settings.apiBaseUrl,
+    settings.apiKey,
+    settings.modelName,
+    aiWarmupStatus,
+    getChatCompletionsUrl,
+    getModelsUrl
+  ]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;
@@ -124,16 +224,7 @@ function App() {
     try {
       // AI server check
       // We try to fetch the /models endpoint when available
-      let baseUrl = settings.apiBaseUrl;
-      
-      // Clean up URL if it has /chat/completions at the end
-      if (baseUrl.endsWith('/chat/completions')) {
-        baseUrl = baseUrl.replace('/chat/completions', '');
-      }
-      // Remove trailing slash
-      baseUrl = baseUrl.replace(/\/+$/, '');
-      
-      const url = `${baseUrl}/models`;
+      const url = getModelsUrl(settings.apiBaseUrl);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -220,6 +311,102 @@ function App() {
   useEffect(() => {
     localStorage.setItem('showroom_settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+    if (!settings.useAI) return;
+    warmupAI('start');
+  }, [gameState, settings.useAI, warmupAI]);
+
+  useEffect(() => {
+    if (!settings.useAI) return;
+    if (!selectedPerson) return;
+    if (aiWarmupStatus === 'ready') return;
+    warmupAI('customer');
+  }, [selectedPerson, settings.useAI, aiWarmupStatus, warmupAI]);
+
+  useEffect(() => {
+    if (!settings.useAI) {
+      if (aiWarmupTimerRef.current) window.clearTimeout(aiWarmupTimerRef.current);
+      aiWarmupTimerRef.current = null;
+      aiWarmupInFlightRef.current = false;
+      setAiWarmupStatus('idle');
+      setAiWarmupMessage('');
+      return;
+    }
+
+    if (settings.provider === 'anthropic') {
+      setAiWarmupStatus('ready');
+      setAiWarmupMessage('');
+      return;
+    }
+
+    warmupAI('setup');
+  }, [settings.useAI, settings.provider, warmupAI]);
+
+  const startShowroom = useCallback(() => {
+    setShowDealClosed(false);
+    customersRef.current.forEach(c => c.active = true);
+
+    if (settings.gameMode === 'volume') {
+      inventoryRef.current = generateInventory(10);
+      setTimeLeft(0);
+      setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
+    } else if (settings.timer.enabled) {
+      inventoryRef.current = generateInventory(100);
+      setTimeLeft(settings.timer.duration * 60);
+      setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
+    } else {
+      inventoryRef.current = generateInventory(100);
+    }
+  }, [settings.gameMode, settings.timer.enabled, settings.timer.duration]);
+
+  const beginGameStart = useCallback(() => {
+    if (settings.useAI) {
+      setAiLoadProgress(0);
+      setAiLoadStartAt(Date.now());
+      setAiPendingStart(true);
+      setGameState('loading');
+      warmupAI('start');
+      return;
+    }
+
+    setGameState('playing');
+    startShowroom();
+  }, [settings.useAI, startShowroom, warmupAI]);
+
+  useEffect(() => {
+    if (gameState !== 'loading') return;
+    if (!aiLoadStartAt) return;
+
+    const interval = window.setInterval(() => {
+      const elapsed = Date.now() - aiLoadStartAt;
+      let progress = Math.min(elapsed / 120000, 1);
+
+      if (aiWarmupStatus !== 'ready') {
+        progress = Math.min(progress, 0.9);
+      }
+
+      setAiLoadProgress(progress);
+    }, 250);
+
+    return () => window.clearInterval(interval);
+  }, [gameState, aiLoadStartAt, aiWarmupStatus]);
+
+  useEffect(() => {
+    if (gameState !== 'loading') return;
+    if (aiWarmupStatus !== 'ready') return;
+    if (!aiPendingStart) return;
+
+    setAiLoadProgress(1);
+    const timeout = window.setTimeout(() => {
+      setAiPendingStart(false);
+      setGameState('playing');
+      startShowroom();
+    }, 600);
+
+    return () => window.clearTimeout(timeout);
+  }, [gameState, aiWarmupStatus, aiPendingStart, startShowroom]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
@@ -1930,6 +2117,41 @@ function App() {
               </div>
             </div>
 
+            <div className="setting-section">
+              <div className="ai-toggle-header">
+                <h3>AI Mode</h3>
+                <span className="ai-recommend">Highly recommended</span>
+              </div>
+              <div className="ai-toggle-buttons">
+                <button
+                  className={`timer-btn ${!settings.useAI ? 'active' : ''}`}
+                  onClick={() => setSettings(prev => ({ ...prev, useAI: false }))}
+                >
+                  Off
+                </button>
+                <button
+                  className={`timer-btn ${settings.useAI ? 'active' : ''}`}
+                  onClick={() => setSettings(prev => ({
+                    ...prev,
+                    useAI: true,
+                    provider: 'local',
+                    apiBaseUrl: '/api/ai',
+                    modelName: currenServerModel,
+                  }))}
+                >
+                  On
+                </button>
+              </div>
+              <div className="mode-description">
+                <div className={`mode-info ${settings.useAI ? 'visible' : 'hidden'}`}>
+                  Uses Curren&apos;s server by default
+                </div>
+                <div className={`mode-info ${!settings.useAI ? 'visible' : 'hidden'}`}>
+                  Smart scripted responses (offline)
+                </div>
+              </div>
+            </div>
+
             {settings.gameMode === 'standard' && (
               <div className="setting-section">
                 <h3>Timed Session</h3>
@@ -1977,23 +2199,7 @@ function App() {
 
           <button
             className="start-button"
-            onClick={() => {
-              setGameState('playing');
-              setShowDealClosed(false);
-              customersRef.current.forEach(c => c.active = true);
-
-              if (settings.gameMode === 'volume') {
-                inventoryRef.current = generateInventory(10);
-                setTimeLeft(0);
-                setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
-              } else if (settings.timer.enabled) {
-                inventoryRef.current = generateInventory(100);
-                setTimeLeft(settings.timer.duration * 60);
-                setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
-              } else {
-                inventoryRef.current = generateInventory(100);
-              }
-            }}
+            onClick={beginGameStart}
           >
             Open Showroom
           </button>
@@ -2013,9 +2219,87 @@ function App() {
     );
   }
 
+  // Loading screen (AI warmup)
+  if (gameState === 'loading') {
+    const progressPercent = Math.round(aiLoadProgress * 100);
+    const isReady = aiWarmupStatus === 'ready';
+    return (
+      <div className="intro-screen">
+        <div className="intro-card setup-card loading-card">
+          <h2 className="setup-title">
+            {isReady ? 'Ready!' : 'Starting AI Server'}
+          </h2>
+          <p className="setup-subtitle">
+            {isReady ? 'Loading into the showroom...' : 'This can take a few minutes the first time'}
+          </p>
+
+          <div className="loading-progress">
+            <div className="loading-progress-bar">
+              <div
+                className="loading-progress-fill"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="loading-progress-text">
+              {isReady ? 'Ready!' : `${progressPercent}%`}
+            </div>
+          </div>
+
+          <div className="loading-actions">
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setSettings(prev => ({ ...prev, useAI: false }));
+                setAiPendingStart(false);
+                setGameState('playing');
+                startShowroom();
+              }}
+            >
+              Switch to Non-AI
+            </button>
+            <button
+              className="start-button"
+              onClick={() => warmupAI('retry')}
+            >
+              Retry Warmup
+            </button>
+          </div>
+
+          <p className="made-by-footer">Made by Curren</p>
+        </div>
+      </div>
+    );
+  }
+
   // Game screen
   return (
     <div className="game-container">
+      {settings.useAI && aiWarmupStatus !== 'ready' && (
+        <div className="ai-warmup-overlay">
+          <div className="ai-warmup-card">
+            <div className="ai-warmup-spinner" />
+            <h2>Starting AI server</h2>
+            <p>{aiWarmupMessage || 'Preparing AI responses. This can take a few minutes.'}</p>
+            <div className="ai-warmup-actions">
+              <button
+                className="ai-warmup-btn secondary"
+                onClick={() => setSettings(prev => ({ ...prev, useAI: false }))}
+              >
+                Switch to Non-AI
+              </button>
+              <button
+                className="ai-warmup-btn primary"
+                onClick={() => warmupAI('retry')}
+              >
+                Retry Now
+              </button>
+            </div>
+            <div className="ai-warmup-hint">
+              You can continue instantly with scripted customers if you don&apos;t want to wait.
+            </div>
+          </div>
+        </div>
+      )}
       <div className="canvas-wrapper">
         <canvas ref={canvasRef} className="game-canvas" />
 
@@ -2342,7 +2626,7 @@ function App() {
                         value={settings.provider}
                         onChange={(e) => setSettings(prev => ({ ...prev, provider: e.target.value as any }))}
                       >
-                        <option value="local">Local Models / Server URL</option>
+                        <option value="local">Server Proxy (private)</option>
                         <option value="anthropic">Anthropic (Claude)</option>
                       </select>
                     </div>
@@ -2360,54 +2644,10 @@ function App() {
                     ) : (
                       <>
                         <div className="ai-field">
-                          <label>API Base URL</label>
-                          <div style={{ marginBottom: '6px' }}>
-                            <select
-                              value={settings.apiBaseUrl === currenServerUrl ? 'curren' : 'custom'}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setSettings(prev => ({
-                                  ...prev,
-                                  apiBaseUrl: value === 'curren' ? currenServerUrl : prev.apiBaseUrl,
-                                  modelName: value === 'curren' ? currenServerModel : prev.modelName,
-                                }));
-                              }}
-                              style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ccc' }}
-                            >
-                              <option value="curren">Curren&apos;s Server</option>
-                              <option value="custom">Custom URL</option>
-                            </select>
+                          <label>AI Server</label>
+                          <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                            Using the private server proxy configured on the backend.
                           </div>
-                          <input
-                            type="text"
-                            placeholder="https://your-ai-server.example.com"
-                            value={settings.apiBaseUrl}
-                            onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
-                          />
-                          <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '4px' }}>
-                            Connect to an AI server.
-                          </div>
-                          
-                          {/* Cloud-to-Local Warning */}
-                          {window.location.hostname !== 'localhost' && 
-                           window.location.hostname !== '127.0.0.1' && 
-                           settings.apiBaseUrl && 
-                           (settings.apiBaseUrl.includes('localhost') || settings.apiBaseUrl.includes('127.0.0.1')) && (
-                            <div style={{ 
-                              marginTop: '12px', 
-                              padding: '10px', 
-                              background: '#fff3cd', 
-                              color: '#856404', 
-                              borderRadius: '6px',
-                              fontSize: '0.8rem',
-                              border: '1px solid #ffeeba'
-                            }}>
-                              <strong>⚠️ Connection Warning</strong><br/>
-                              You are running this app from the cloud ({window.location.hostname}), but trying to connect to a local server ({settings.apiBaseUrl}).<br/><br/>
-                              The cloud cannot "see" your computer's localhost.<br/><br/>
-                              <strong>Fix:</strong> Use a publicly reachable AI server URL.
-                            </div>
-                          )}
                         </div>
                         <div className="ai-field">
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -2470,7 +2710,7 @@ function App() {
                 {settings.useAI
                   ? settings.provider === 'anthropic' 
                     ? 'Using Claude for dynamic conversations'
-                    : 'Using a local AI server'
+                    : 'Using the private AI server proxy'
                   : 'Using smart scripted responses (works offline)'}
               </p>
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
