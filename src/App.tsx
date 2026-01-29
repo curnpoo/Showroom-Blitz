@@ -125,6 +125,11 @@ function App() {
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupTimerRef = useRef<number | null>(null);
   const aiWarmupInFlightRef = useRef(false);
+  const useAIRef = useRef(settings.useAI);
+
+  useEffect(() => {
+    useAIRef.current = settings.useAI;
+  }, [settings.useAI]);
 
   const getModelsUrl = useCallback((base: string) => {
     let cleaned = base;
@@ -199,13 +204,13 @@ function App() {
         throw new Error(`Warmup failed: ${response.status}`);
       }
 
+      if (!useAIRef.current) return;
       setAiWarmupStatus('ready');
       setAiWarmupMessage('');
     } catch (e) {
-      setAiWarmupStatus('warming');
-      setAiWarmupMessage('Starting AI server... this can take a few minutes.');
-      if (aiWarmupTimerRef.current) window.clearTimeout(aiWarmupTimerRef.current);
-      aiWarmupTimerRef.current = window.setTimeout(() => warmupAI('retry'), 10000);
+      if (!useAIRef.current) return;
+      setAiWarmupStatus('error');
+      setAiWarmupMessage('AI server did not respond. Retry or switch to Non-AI.');
     } finally {
       window.clearTimeout(timeoutId);
       aiWarmupInFlightRef.current = false;
@@ -319,19 +324,6 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    if (gameState !== 'playing') return;
-    if (!settings.useAI) return;
-    warmupAI('start');
-  }, [gameState, settings.useAI, warmupAI]);
-
-  useEffect(() => {
-    if (!settings.useAI) return;
-    if (!selectedPerson) return;
-    if (aiWarmupStatus === 'ready') return;
-    warmupAI('customer');
-  }, [selectedPerson, settings.useAI, aiWarmupStatus, warmupAI]);
-
-  useEffect(() => {
     if (!settings.useAI) {
       if (aiWarmupTimerRef.current) window.clearTimeout(aiWarmupTimerRef.current);
       aiWarmupTimerRef.current = null;
@@ -347,7 +339,6 @@ function App() {
       return;
     }
 
-    warmupAI('setup');
   }, [settings.useAI, settings.provider, warmupAI]);
 
   const startShowroom = useCallback(() => {
@@ -2300,7 +2291,7 @@ function App() {
   // Game screen
   return (
     <div className="game-container">
-      {settings.useAI && aiWarmupStatus !== 'ready' && (
+      {settings.useAI && aiWarmupStatus === 'warming' && (
         <div className="ai-warmup-overlay">
           <div className="ai-warmup-card">
             <div className="ai-warmup-spinner" />
