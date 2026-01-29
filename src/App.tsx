@@ -60,14 +60,16 @@ function App() {
   const [paymentTerm, setPaymentTerm] = useState(72);
   const [paymentAPR, setPaymentAPR] = useState(6.9);
   const [downPayment, setDownPayment] = useState(0);
+  const currenServerUrl = '<redacted>';
+  const currenServerModel = 'mistralai/Ministral-3-3B-Instruct-2512';
   const [settings, setSettings] = useState<GameSettings>(() => {
     const saved = localStorage.getItem('showroom_settings');
     const defaults = {
       useAI: false,
       apiKey: '',
       provider: 'local' as const,
-      apiBaseUrl: import.meta.env.VITE_AI_API_URL || '',
-      modelName: '',
+      apiBaseUrl: currenServerUrl || import.meta.env.VITE_AI_API_URL || '',
+      modelName: currenServerModel,
       timer: {
         enabled: false,
         duration: 5 as 3 | 5 | 10,
@@ -80,7 +82,7 @@ function App() {
     try {
       const parsed = JSON.parse(saved);
       // Ensure timer property exists with defaults
-      return {
+      const merged = {
         ...defaults,
         ...parsed,
         timer: {
@@ -88,6 +90,13 @@ function App() {
           ...(parsed.timer || {}),
         },
       };
+
+      // If they're using Curren's server, force the correct model name.
+      if (merged.apiBaseUrl === currenServerUrl) {
+        merged.modelName = currenServerModel;
+      }
+
+      return merged;
     } catch (e) {
       console.error('Failed to parse settings:', e);
       return defaults;
@@ -2352,6 +2361,23 @@ function App() {
                       <>
                         <div className="ai-field">
                           <label>API Base URL</label>
+                          <div style={{ marginBottom: '6px' }}>
+                            <select
+                              value={settings.apiBaseUrl === currenServerUrl ? 'curren' : 'custom'}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setSettings(prev => ({
+                                  ...prev,
+                                  apiBaseUrl: value === 'curren' ? currenServerUrl : prev.apiBaseUrl,
+                                  modelName: value === 'curren' ? currenServerModel : prev.modelName,
+                                }));
+                              }}
+                              style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ccc' }}
+                            >
+                              <option value="curren">Curren&apos;s Server</option>
+                              <option value="custom">Custom URL</option>
+                            </select>
+                          </div>
                           <input
                             type="text"
                             placeholder="https://your-ai-server.example.com"
