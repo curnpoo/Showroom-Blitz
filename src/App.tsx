@@ -168,6 +168,7 @@ function App() {
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupTimerRef = useRef<number | null>(null);
   const aiWarmupInFlightRef = useRef(false);
+  const aiWarmupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const useAIRef = useRef(settings.useAI);
 
   useEffect(() => {
@@ -192,82 +193,78 @@ function App() {
     return cleaned;
   }, []);
 
-  const warmupAI = useCallback(async (reason: 'setup' | 'start' | 'customer' | 'retry') => {
+  const warmupAI = useCallback(async (_reason: 'setup' | 'start' | 'customer' | 'retry') => {
     if (!settings.useAI) return;
     if (settings.provider === 'anthropic') {
       setAiWarmupStatus('ready');
       setAiWarmupMessage('');
       return;
     }
-    if (aiWarmupStatus === 'ready' || aiWarmupInFlightRef.current) return;
 
-    aiWarmupInFlightRef.current = true;
+    // Clear any existing poll
+    if (aiWarmupPollRef.current) {
+      clearInterval(aiWarmupPollRef.current);
+      aiWarmupPollRef.current = null;
+    }
+
     setAiWarmupStatus('warming');
-    setAiWarmupMessage(
-      reason === 'customer'
-        ? 'Warming up AI for this customer...'
-        : 'Starting AI server... this can take a few minutes.'
-    );
+    setAiWarmupMessage('Starting AI server... this can take a few minutes.');
 
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+    const warmupUrl = getChatCompletionsUrl(settings.apiBaseUrl || '/api/ai');
 
-    try {
-      const modelsUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
-      const warmupUrl = getChatCompletionsUrl(settings.apiBaseUrl || '/api/ai');
+    // Helper to ping server
+    const pingServer = async (): Promise<boolean> => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
       try {
-        await fetch(modelsUrl, {
-          method: 'GET',
+        const response = await fetch(warmupUrl, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
           },
+          body: JSON.stringify({
+            model: settings.modelName || 'local-model',
+            messages: [{ role: 'user', content: 'ping' }],
+            max_tokens: 1,
+            temperature: 0,
+          }),
           signal: controller.signal,
         });
+        window.clearTimeout(timeoutId);
+        return response.ok;
       } catch {
-        // Ignore; some servers don't expose /models or are still booting.
+        window.clearTimeout(timeoutId);
+        return false;
       }
+    };
 
-      const response = await fetch(warmupUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
-        },
-        body: JSON.stringify({
-          model: settings.modelName || 'local-model',
-          messages: [{ role: 'user', content: 'ping' }],
-          max_tokens: 1,
-          temperature: 0,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Warmup failed: ${response.status}`);
+    // First ping to trigger server startup (don't wait for success)
+    pingServer().then(success => {
+      if (success && useAIRef.current) {
+        setAiWarmupStatus('ready');
+        setAiWarmupMessage('');
+        if (aiWarmupPollRef.current) {
+          clearInterval(aiWarmupPollRef.current);
+          aiWarmupPollRef.current = null;
+        }
       }
+    });
 
-      if (!useAIRef.current) return;
-      setAiWarmupStatus('ready');
-      setAiWarmupMessage('');
-    } catch (e) {
-      if (!useAIRef.current) return;
-      setAiWarmupStatus('error');
-      setAiWarmupMessage('AI server did not respond. Retry or switch to Non-AI.');
-    } finally {
-      window.clearTimeout(timeoutId);
-      aiWarmupInFlightRef.current = false;
-    }
-  }, [
-    settings.useAI,
-    settings.provider,
-    settings.apiBaseUrl,
-    settings.apiKey,
-    settings.modelName,
-    aiWarmupStatus,
-    getChatCompletionsUrl,
-    getModelsUrl
-  ]);
+    // Start polling every 15 seconds
+    aiWarmupPollRef.current = setInterval(async () => {
+      const success = await pingServer();
+      if (success && useAIRef.current) {
+        setAiWarmupStatus('ready');
+        setAiWarmupMessage('');
+        if (aiWarmupPollRef.current) {
+          clearInterval(aiWarmupPollRef.current);
+          aiWarmupPollRef.current = null;
+        }
+      }
+    }, 15000);
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.apiKey, settings.modelName, getChatCompletionsUrl]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;
@@ -421,10 +418,12 @@ function App() {
 
     const interval = window.setInterval(() => {
       const elapsed = Date.now() - aiLoadStartAt;
-      let progress = Math.min(elapsed / 120000, 1);
+      // Progress over 90 seconds (reasonable for 1.5 min server start)
+      let progress = Math.min(elapsed / 90000, 1);
 
-      if (aiWarmupStatus !== 'ready') {
-        progress = Math.min(progress, 0.9);
+      // If already ready, ensure 100%
+      if (aiWarmupStatus === 'ready') {
+        progress = 1;
       }
 
       setAiLoadProgress(progress);
@@ -433,17 +432,26 @@ function App() {
     return () => window.clearInterval(interval);
   }, [gameState, aiLoadStartAt, aiWarmupStatus]);
 
+  // Clean up polling when leaving loading state
+  useEffect(() => {
+    if (gameState !== 'loading' && aiWarmupPollRef.current) {
+      clearInterval(aiWarmupPollRef.current);
+      aiWarmupPollRef.current = null;
+    }
+  }, [gameState]);
+
   useEffect(() => {
     if (gameState !== 'loading') return;
     if (aiWarmupStatus !== 'ready') return;
     if (!aiPendingStart) return;
 
     setAiLoadProgress(1);
+    // Wait 500ms to show "Ready!" before transitioning
     const timeout = window.setTimeout(() => {
       setAiPendingStart(false);
       setGameState('playing');
       startShowroom();
-    }, 600);
+    }, 500);
 
     return () => window.clearTimeout(timeout);
   }, [gameState, aiWarmupStatus, aiPendingStart, startShowroom]);
