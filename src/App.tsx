@@ -2152,7 +2152,6 @@ function App() {
   const inventoryForList = filteredInventory.filter(car => !perfectCars.some(pc => pc.id === car.id));
 
   const hasPerfectMatch = perfectCars.length > 0;
-  const allDiscoveryButtonsUsed = selectedPerson ? DISCOVERY_STAGES.every(stage => selectedPerson.revealedPreferences[stage]) : false;
 
   const buildPerfectCard = (car: CarType) => (
     <div
