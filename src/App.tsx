@@ -2204,12 +2204,16 @@ function App() {
       selectedPerson.conversationPhase = 'closed';
       // Don't return early - continue to show the response
     }
-    
+
     if (isLost) {
       selectedPerson.isLost = true;
       selectedPerson.conversationPhase = 'closed';
       setTimeout(() => setShowLostDeal(true), 1000);
     }
+
+    // Force React re-render with updated customer state (revealedPreferences, interest, etc.)
+    setSelectedPerson({ ...selectedPerson });
+
     setConversation(prev => [...prev, { sender: 'customer', text: response }]);
     setIsTyping(false);
   };
@@ -2883,11 +2887,21 @@ function App() {
                   <div className="ai-settings">
                     <div className="ai-field">
                       <label>AI Provider</label>
-                      <select 
-                        value={settings.provider}
-                        onChange={(e) => setSettings(prev => ({ ...prev, provider: e.target.value as any }))}
+                      <select
+                        value={settings.provider === 'local' && settings.apiBaseUrl === '/api/ai' ? 'proxy' : settings.provider === 'local' ? 'local' : settings.provider}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'proxy') {
+                            setSettings(prev => ({ ...prev, provider: 'local', apiBaseUrl: '/api/ai' }));
+                          } else if (val === 'local') {
+                            setSettings(prev => ({ ...prev, provider: 'local', apiBaseUrl: 'http://localhost:1234/v1' }));
+                          } else {
+                            setSettings(prev => ({ ...prev, provider: val as any }));
+                          }
+                        }}
                       >
-                        <option value="local">Server Proxy (private)</option>
+                        <option value="proxy">Curren&apos;s Server</option>
+                        <option value="local">Local Model</option>
                         <option value="anthropic">Anthropic (Claude)</option>
                       </select>
                     </div>
@@ -2902,12 +2916,69 @@ function App() {
                           onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
                         />
                       </div>
-                    ) : (
+                    ) : settings.apiBaseUrl === '/api/ai' ? (
                       <>
                         <div className="ai-field">
                           <label>AI Server</label>
                           <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                            Using the private server proxy configured on the backend.
+                            Using Curren&apos;s private server proxy.
+                          </div>
+                        </div>
+                        <div className="ai-field">
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                             <label style={{ margin: 0 }}>Connection Test</label>
+                             {testStatus !== 'idle' && (
+                               <span style={{
+                                 fontSize: '0.75rem',
+                                 color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12'
+                               }}>
+                                 {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
+                               </span>
+                             )}
+                           </div>
+                           <button
+                             onClick={testConnection}
+                             disabled={testStatus === 'testing'}
+                             style={{
+                               width: '100%',
+                               padding: '8px',
+                               background: testStatus === 'success' ? '#2ecc71' : '#3498db',
+                               color: 'white',
+                               border: 'none',
+                               borderRadius: '6px',
+                               cursor: testStatus === 'testing' ? 'not-allowed' : 'pointer',
+                               opacity: testStatus === 'testing' ? 0.7 : 1,
+                               marginBottom: '8px'
+                             }}
+                           >
+                             {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
+                           </button>
+                           {testMessage && (
+                             <div style={{
+                               fontSize: '0.75rem',
+                               padding: '8px',
+                               borderRadius: '4px',
+                               background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                               color: testStatus === 'success' ? '#27ae60' : '#c0392b',
+                               border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`
+                             }}>
+                               {testMessage}
+                             </div>
+                           )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="ai-field">
+                          <label>Local Server URL</label>
+                          <input
+                            type="text"
+                            placeholder="http://localhost:1234/v1"
+                            value={settings.apiBaseUrl}
+                            onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
+                          />
+                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
+                            OpenAI-compatible endpoint (LM Studio, Ollama, etc.)
                           </div>
                         </div>
                         <div className="ai-field">
@@ -2969,9 +3040,11 @@ function App() {
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                 {settings.useAI
-                  ? settings.provider === 'anthropic' 
+                  ? settings.provider === 'anthropic'
                     ? 'Using Claude for dynamic conversations'
-                    : 'Using the private AI server proxy'
+                    : settings.apiBaseUrl === '/api/ai'
+                      ? 'Using Curren\'s private AI server'
+                      : 'Using local model on your hardware'
                   : 'Using smart scripted responses (works offline)'}
               </p>
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>

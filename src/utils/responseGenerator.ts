@@ -1,4 +1,13 @@
 import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
+import { CAR_DATABASE } from '../data/carDatabase';
+
+// Build a set of known model names for detection
+const KNOWN_MODEL_NAMES = new Set(
+  CAR_DATABASE.flatMap(car => [
+    car.model.toLowerCase(),                    // "CR-V", "RAV4"
+    `${car.brand} ${car.model}`.toLowerCase(), // "Honda CR-V", "Toyota RAV4"
+  ])
+);
 
 const AI_RESPONSE_MAX_TOKENS = 512;
 
@@ -425,33 +434,6 @@ const FRUSTRATED_WALKING: Record<PersonalityType, string[]> = {
   ],
 };
 
-const WILD_INPUT_RESPONSES: Record<PersonalityType, string[]> = {
-  friendly: [
-    "Whoa, that's uncalled for. I think I'll just head out.",
-    "I don't appreciate that kind of talk. Goodbye.",
-    "I'm looking for a car, not an argument or... whatever that was. I'm leaving.",
-  ],
-  serious: [
-    "I don't have time for this nonsense. We're done.",
-    "Inappropriate. I'm taking my business elsewhere.",
-    "That is highly unprofessional. Goodbye.",
-  ],
-  skeptical: [
-    "I knew this place was weird. I'm out of here.",
-    "Are you serious? You're crazy. I'm leaving.",
-    "Typical. I'm not dealing with someone like you. Bye.",
-  ],
-  enthusiastic: [
-    "Oh my gosh! That's so mean! I'm leaving!",
-    "Wait, what?! Why would you say that? I don't want to be here anymore!",
-    "That's not nice at all! I'm going to another dealership!",
-  ],
-  analytical: [
-    "Communication detected as hostile or irrational. Terminating interaction immediately.",
-    "Interaction parameters have exceeded acceptable social boundaries. Goodbye.",
-    "Nonsensical or offensive input received. Transaction aborted.",
-  ],
-};
 
 const WRONG_PAYMENT_TYPE: Record<string, string[]> = {
   cash: [
@@ -598,18 +580,6 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function isWildInput(text: string): boolean {
-  const wildKeywords = [
-    /\b(stupid|idiot|dumb|shut up|hate you|you suck|garbage|trash|moron|loser)\b/i,
-    /\b(kill|die|hurt|punch|hit)\b/i,
-    /\b(fucking|fuck you|shit)\b/i, // Only extreme profanity, not mild words
-    /\$(0|1)(?![0-9,])|\bfree\b|\bzero dollars\b/i, // Only explicit $0, $1, or "free" - not just "0" (matches $1 but not $1,000)
-    /^[asdfghjkl\s]{15,}$/i, // Keyboard mashing (increased threshold)
-    /(.)\1{10,}/, // Repeats like aaaaaaaaaaa
-  ];
-
-  return wildKeywords.some(regex => regex.test(text));
-}
 
 export function isNeedsInquiry(text: string): boolean {
   const needsKeywords = [
@@ -739,25 +709,29 @@ export function isPlayerClosingAttempt(text: string): boolean {
   const closingPhrases = [
     'look good', 'looks good', 'good enough', 'put your name on it',
     'ready to sign', 'sign the', 'finalize', 'wrap this up', 'we have a deal',
-    'do we have a deal', 'shall we', 'next steps', 'where do i sign',
+    'do we have a deal', 'have a deal', 'shall we', 'next steps', 'where do i sign',
     'ready to make it official', 'make it official', 'finalize everything',
+    'sound good', 'sounds good', 'work for you', 'agree', 'agreed',
   ];
   if (closingPhrases.some(p => lower.includes(p))) return true;
-  return /\b(deal|sign|close)\b.*\?/i.test(text) || /ready\s+to\s+(sign|close|finalize)/i.test(text);
+  // Also match "deal?" or questions about the deal
+  return /\bdeal\s*\?/i.test(text) || /ready\s+to\s+(sign|close|finalize)/i.test(text);
 }
 
 /** Customer's last message indicated they accepted (deal, next steps, etc.) */
 function lastAssistantIndicatedAcceptance(content: string): boolean {
-  const lower = content.toLowerCase();
+  // Remove markdown formatting (**, *, etc.) before checking
+  const cleaned = content.replace(/\*+/g, '').toLowerCase();
   const acceptPhrases = [
     "i'll take it", "i'll take", "i will take", "let's do it", "lets do it",
-    "deal", "sold", "where do i sign", "next steps", "we have a deal",
+    "deal!", "deal.", "deal,", " deal ", "sold", "where do i sign", "next steps", "we have a deal",
     "accept", "agreed", "done", "ready to sign", "let's go", "lets go",
-    "take it at", "must-have features confirmed",
+    "take it at", "sounds good", "that works", "i'm in", "count me in",
   ];
-  if (acceptPhrases.some(p => lower.includes(p))) return true;
+  if (acceptPhrases.some(p => cleaned.includes(p))) return true;
   if (/\bat \$\d/i.test(content)) return true; // "at $38,000" etc.
-  return /\b(deal|sold|accept|agreed)\b/i.test(lower);
+  // Match "deal" as a standalone word
+  return /\bdeal\b/i.test(cleaned);
 }
 
 // @ts-ignore - Reserved for future use
@@ -1234,27 +1208,12 @@ export async function getAIResponse(
 ): Promise<ResponseResult> {
   const playerSentiment = detectSentiment(message);
   const messageType = contextOverrides?.messageType;
-  
-  // Check for wild input first
-  if (isWildInput(message)) {
-    return {
-      response: pickRandom(WILD_INPUT_RESPONSES[customer.personality]),
-      interestChange: -100,
-      dealAccepted: false,
-      newPhase: 'closed',
-      isLost: true,
-      customerSentiment: 'mad',
-      playerSentiment: playerSentiment
-    };
-  }
 
-  // --- ANALYSIS PHASE ---
   // --- ANALYSIS PHASE ---
   let instructionType: string | undefined;
   let scenarioData: any = {};
-  
+
   // Initialize Logic Variables
-  let dealQuality: string | undefined;
   let interestChange = 0;
   let dealAccepted = false;
   let isLost = false;
@@ -1351,12 +1310,26 @@ export async function getAIResponse(
       }
   }
 
-  // Also check natural language questions if no explicit type passed
-  if (!customer.isGuarded && !messageType) {
-    if (/\b(budget|spend|cost|price|money)\b/i.test(message)) customer.revealedPreferences.budget = true;
-    if (/\b(type|kind|style|suv|sedan)\b/i.test(message)) customer.revealedPreferences.type = true;
-    if (/\b(feature|looking for|need|want|prefer)\b/i.test(message)) customer.revealedPreferences.features = true;
-    if (/\b(what|specific|which)\b.*\b(model|brand|make)\b/i.test(message)) customer.revealedPreferences.model = true;
+  // Detect when player asks about preferences (reveal based on question, not AI response)
+  // This works even for guarded customers - asking directly gets an answer
+  if (!messageType) {
+    // Budget questions: "budget?", "how much", "what can you spend", etc.
+    if (/\b(budget|spend|afford|pay|money|price|cost)\b.*\?|^budget\??$/i.test(message)) {
+      customer.revealedPreferences.budget = true;
+    }
+    // Type questions: "type?", "what kind", "suv or sedan", etc.
+    if (/\b(type|kind|style|suv|sedan|truck|looking for)\b.*\?|^type\??$/i.test(message)) {
+      customer.revealedPreferences.type = true;
+      customer.revealedPreferences.features = true; // Usually revealed together
+    }
+    // Feature questions: "features?", "what do you need", etc.
+    if (/\b(feature|need|want|must.have|require)\b.*\?|^feature/i.test(message)) {
+      customer.revealedPreferences.features = true;
+    }
+    // Model questions: "model?", "specific car", "which model", "what car", etc.
+    if (/\b(model|brand|make|specific|car|vehicle)\b.*\?|^model\??$/i.test(message)) {
+      customer.revealedPreferences.model = true;
+    }
   }
 
   // Check for needs/budget inquiry (legacy check - can remove or keep as fallback)
@@ -1370,13 +1343,16 @@ export async function getAIResponse(
     const { offerPrice, offerType, offerDownPayment } = contextOverrides;
     const { buyerType, budget, maxPayment, desiredDown, interest, personality } = customer;
 
+    // Always include offerPrice in scenarioData for deal quality calculation
+    scenarioData = { ...scenarioData, offerPrice };
+
     if (buyerType === 'cash' && offerType === 'payment') {
       instructionType = 'offer_wrong_type_cash';
     } else if (buyerType === 'payment' && offerType !== 'payment') {
       instructionType = 'offer_wrong_type_payment';
     } else if (offerType === 'payment' && offerDownPayment && offerDownPayment > desiredDown * 1.05) {
       instructionType = 'offer_down_too_high';
-      scenarioData = { offeredDown: offerDownPayment, desiredDown };
+      scenarioData = { ...scenarioData, offeredDown: offerDownPayment, desiredDown };
     } else {
       const moodMultiplier = 1 + (interest / 1000);
       const effectiveBudget = buyerType === 'cash' ? Math.round(budget * moodMultiplier) : Math.round(maxPayment * moodMultiplier);
@@ -1389,8 +1365,8 @@ export async function getAIResponse(
       } else if (offerPrice <= effectiveBudget * 1.05) {
         instructionType = 'offer_close';
       } else if (offerPrice <= effectiveBudget * 1.15) {
-        instructionType = 'offer_too_high'; 
-        scenarioData = { budget: effectiveBudget };
+        instructionType = 'offer_too_high';
+        scenarioData = { ...scenarioData, budget: effectiveBudget };
       } else {
         // High price - check if they love the car (budget stretch) or want downgrade
         if (currentCar && carMatchesCategory(currentCar, customer) && carMatchesFeatures(currentCar, customer.desiredFeatures).score >= 0.8) {
@@ -1415,7 +1391,12 @@ export async function getAIResponse(
       instructionType = 'customer_affirm_close';
     }
   }
-  
+
+  // Detect simple greetings - customer should just greet back, not dump info
+  if (!instructionType && /^(hey|hi|hello|what'?s up|sup|yo|howdy|good (morning|afternoon|evening))[\s\!\?\.\,]*$/i.test(message.trim())) {
+    instructionType = 'greeting_response';
+  }
+
   // General Chat Fallback
   if (!instructionType) {
       instructionType = 'general_chat';
@@ -1583,73 +1564,87 @@ export async function getAIResponse(
              break;
     }
 
-    // If we pre-calculated deal quality (for offers), use those values
-    // Otherwise analyze the AI response for general conversation
-    if (!dealQuality) {
-      // Analyze response for deal acceptance - be VERY careful of "unacceptable" etc
+    // Only run sentiment-based analysis if we DIDN'T already process a specific instruction type
+    // (instruction types like offer_accepted, offer_too_high, etc. already set the outcomes)
+    const alreadyProcessed = instructionType && instructionType !== 'general_chat';
+
+    if (!alreadyProcessed) {
+      // Check prerequisites for deal acceptance:
+      // 1. A car must have been shown
+      // 2. Price must have been discussed
+      const carShown = currentCar !== null;
+      const priceDiscussed = contextOverrides?.messageType === 'offer' ||
+                             customer.conversationHistory.some(m => /\$\d/.test(m.content));
+
+      // Analyze response for deal acceptance - ONLY if car shown AND price discussed
+      // Be strict: require explicit deal phrases, not just "yes"
       const hasNegativeWords = /\b(not|never|no|nope|won't|can't|cannot|too|unacceptable)\b/i.test(aiResponse);
-      const hasDealWords = /\b(deal|i'll take it|i'll take|sold|yes|accept it)\b/i.test(aiResponse);
-      // Only accept if they explicitly say deal/accept AND they didn't say anything negative
-      dealAccepted = hasDealWords && !hasNegativeWords;
-      
-      // Estimate interest change based on sentiment
-      if (/love|perfect|amazing|great|wonderful|deal/i.test(aiResponse)) {
-        interestChange = 15;
-        if (customer.strikes > 0) customer.strikes--; // Recovery
-      } else if (/good|nice|interested|close/i.test(aiResponse)) {
-        interestChange = 10;
-      } else if (/too much|expensive|high|budget|lower/i.test(aiResponse)) {
-        interestChange = -10;
-        // Don't add strike for simple negotiation, only for severe rejection
-      } else if (/leaving|waste|forget it|walking|done here|goodbye|not interested/i.test(aiResponse)) {
-        interestChange = -20; // Reduced severity
-        customer.strikes++;
-        
-        // Only actually leave if they have multiple strikes AND low interest
-        if ((customer.strikes >= 3 && customer.interest + interestChange < 15) || customer.interest + interestChange <= 0) {
-          isLost = true;
-        } else {
-          // "Push back" - they are mad but not walking yet
-          // Don't modify the AI response, let it speak for itself
+      const hasDealWords = /\b(deal|i'll take it|i'll take|sold|accept it|where do i sign|let's do it|we have a deal)\b/i.test(aiResponse);
+
+      // Only accept if: explicit deal phrase + no negative words + car shown + price discussed
+      if (hasDealWords && !hasNegativeWords && carShown && priceDiscussed) {
+        dealAccepted = true;
+        newPhase = 'closed';
+      }
+
+      // Estimate interest change based on sentiment (only if not already set)
+      if (interestChange === 0) {
+        if (/love|perfect|amazing|great|wonderful/i.test(aiResponse)) {
+          interestChange = 15;
+          if (customer.strikes > 0) customer.strikes--; // Recovery
+        } else if (/good|nice|interested|close/i.test(aiResponse)) {
+          interestChange = 10;
+        } else if (/too much|expensive|high|budget|lower/i.test(aiResponse)) {
+          interestChange = -10;
+        } else if (/leaving|waste|forget it|walking|done here|goodbye|not interested/i.test(aiResponse)) {
+          interestChange = -20;
+          customer.strikes++;
+
+          // Only actually leave if they have multiple strikes AND low interest
+          if ((customer.strikes >= 3 && customer.interest + interestChange < 15) || customer.interest + interestChange <= 0) {
+            isLost = true;
+            newPhase = 'closed';
+          }
         }
       }
 
-      // Determine new phase
-      if (isLost) {
-        newPhase = 'closed'; // Mark as closed since they left
-      } else if (dealAccepted) {
-        newPhase = 'closed';
-      } else if (/price|cost|numbers|how much|\$/i.test(aiResponse)) {
+      // Determine new phase if not already set
+      if (!newPhase && /price|cost|numbers|how much|\$/i.test(aiResponse)) {
         newPhase = 'negotiation';
       }
     }
 
-    // Parse AI response to extract and reveal customer preferences
-    // Check for payment mentions (e.g., "$500/month", "$1157/mo")
-    const paymentMatch = aiResponse.match(/\$\s*(\d{1,4})\s*\/\s*(month|mo)/i);
-    if (paymentMatch && customer.buyerType === 'payment') {
-      customer.revealedPreferences.budget = true;
+    // Detect preferences mentioned in AI response
+    // Model detection: check if AI mentioned any known car model names
+    const responseLower = aiResponse.toLowerCase();
+    for (const modelName of KNOWN_MODEL_NAMES) {
+      if (responseLower.includes(modelName)) {
+        customer.revealedPreferences.model = true;
+        break;
+      }
     }
 
-    // Check for cash budget mentions (e.g., "$30,000", "$50k")
-    const cashMatch = aiResponse.match(/\$\s*(\d{1,3}),?(\d{3})|(\d{1,3})k/i);
-    if (cashMatch && customer.buyerType === 'cash') {
-      customer.revealedPreferences.budget = true;
-    }
-
-    // Check for type/category mentions (SUV, sedan, etc.)
-    if (/\b(suv|sedan|truck|electric|coupe|wagon|van|minivan)\b/i.test(aiResponse)) {
+    // Type detection: check if AI mentioned vehicle types
+    if (/\b(suv|crossover|sport utility)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.type = true;
+    } else if (/\b(sedan|coupe|hatchback|compact|midsize)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.type = true;
+    } else if (/\b(electric|ev\b|hybrid|plug.?in)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.type = true;
+    } else if (/\b(economy|affordable|budget.?friendly)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.type = true;
+    } else if (/\b(luxury|premium|high.?end)\b/i.test(aiResponse)) {
       customer.revealedPreferences.type = true;
     }
 
-    // Check for feature mentions
-    if (/\b(sporty|fuel.efficient|luxury|family|affordable|tech|spacious|safety)\b/i.test(aiResponse)) {
-      customer.revealedPreferences.features = true;
+    // Budget detection: check if AI mentioned specific dollar amounts
+    if (/\$[\d,]+|\d+k|\d+\s*(thousand|cash|down|budget|max)/i.test(aiResponse)) {
+      customer.revealedPreferences.budget = true;
     }
 
-    // Check for specific model mentions (broader patterns)
-    if (/\b(model|specific|particular|looking for)\b/i.test(aiResponse)) {
-      customer.revealedPreferences.model = true;
+    // Features detection: check if AI mentioned specific features they want
+    if (/\b(fuel.?efficien|mpg|gas mileage|spacious|room|cargo|tech|safety|blind.?spot|leather|sunroof|luxury|premium|sport|family)\b/i.test(aiResponse)) {
+      customer.revealedPreferences.features = true;
     }
 
     const customerSentiment = detectSentiment(aiResponse);
@@ -1669,23 +1664,36 @@ export async function getAIResponse(
 } // End function
 
 
+// Personality guide - drives tone without scripted text
+const PERSONALITY_GUIDE: Record<PersonalityType, string> = {
+  friendly: 'Warm and chatty. You like the salesperson.',
+  serious: 'All business. Get to the point.',
+  skeptical: 'Suspicious of deals. Question everything.',
+  enthusiastic: 'Excited about cars! Show your interest.',
+  analytical: 'Focus on specs and numbers.',
+};
+
 function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructionType?: string, scenarioData?: any): string {
   const featureList = customer.desiredFeatures.map(f => FEATURE_LABELS[f]).join(', ');
-  
+
   let matchAnalysis = '';
   if (currentCar) {
+    // Check if this is the EXACT MODEL they asked for (highest priority!)
+    const modelMatch = customer.desiredModel && currentCar.model.toLowerCase().includes(customer.desiredModel.split(' ').pop()?.toLowerCase() || '');
     const categoryMatch = carMatchesCategory(currentCar, customer);
     const featureMatch = carMatchesFeatures(currentCar, customer.desiredFeatures);
-    
-    if (categoryMatch && featureMatch.score === 1) {
-      matchAnalysis = 'MATCH_QUALITY: PERFECT. The car matches ALL requests (Category + Features). Be excited.';
-    } else if (categoryMatch && featureMatch.score > 0) {
-        const missing = featureMatch.missing.map(f => FEATURE_LABELS[f]).join(', ');
-        matchAnalysis = `MATCH_QUALITY: PARTIAL. The Category is correct (${CATEGORY_LABELS[customer.desiredCategory]}), BUT it is missing these features: ${missing}. Acknowledge the correct type but Complain about the missing features.`;
+
+    if (modelMatch) {
+      // They asked for this specific model - they should be HAPPY even if features don't match perfectly
+      matchAnalysis = `MATCH_QUALITY: PERFECT! This is the ${customer.desiredModel} you asked for! Be excited and happy!`;
+    } else if (categoryMatch && featureMatch.score === 1) {
+      matchAnalysis = 'MATCH_QUALITY: GREAT. The car matches your category and features. Be interested.';
+    } else if (categoryMatch && featureMatch.score >= 0.5) {
+      matchAnalysis = 'MATCH_QUALITY: GOOD. Close to what you want. Show interest but ask about price.';
     } else if (categoryMatch) {
-       matchAnalysis = `MATCH_QUALITY: CATEGORY_ONLY. The Category is correct, but it misses ALL desired features (${featureList}). Complain about missing features.`;
+      matchAnalysis = `MATCH_QUALITY: OK. Right type but not exactly what you wanted. Be cautious.`;
     } else {
-       matchAnalysis = `MATCH_QUALITY: BAD. The car is the WRONG CATEGORY entirely. wanted ${CATEGORY_LABELS[customer.desiredCategory]}, got ${currentCar.model}. Reject it.`;
+      matchAnalysis = `MATCH_QUALITY: WRONG. Not what you asked for. Say this isn't what you're looking for.`;
     }
   }
 
@@ -1733,7 +1741,7 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
               instruction = `The down payment they asked for ($${scenarioData?.offeredDown}) is too high! You only have $${scenarioData?.desiredDown}. Tell them you can't afford that down payment.`;
               break;
           case 'offer_accepted':
-              instruction = "The offer is within your budget! You are happy. ACCEPT the deal enthusiastically!";
+              instruction = "This price is GOOD for you - it's within or under your budget! You are HAPPY. Say 'Deal!' or 'I'll take it!' enthusiastically.";
               break;
           case 'offer_close':
               instruction = "The offer is close to your budget but still a little high. Ask them to come down just a little bit more.";
@@ -1751,56 +1759,104 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
               instruction = "The car is nice but too expensive. Tell them you need a cheaper model or lower trim level.";
               break;
           case 'customer_affirm_close':
-              instruction = "You (the customer) ALREADY accepted the deal in your last message. The salesperson is asking for final confirmation. You MUST affirm the deal. Say you're ready to sign, that we have a deal, or where do I sign. Do NOT backtrack, renegotiate, or say the price is wrong.";
+              instruction = "YOU ALREADY SAID YES TO THIS DEAL! Just confirm it. Say: 'Yes, let's do it!' or 'Deal!' or 'Where do I sign?' - DO NOT change your mind or say anything negative.";
               break;
           
+          case 'greeting_response':
+              instruction = "The salesperson just said hello. Simply greet them back briefly. Do NOT volunteer your budget, preferences, or what car you want yet - wait to be asked.";
+              break;
+
           case 'general_chat':
           default:
-              instruction = "Respond naturally to the salesperson's question or statement. IF they asked about your budget, type, or needs, answer them truthfully based on your profile below.";
+              instruction = "Answer the salesperson's question briefly. Only share info they actually asked about.";
               break;
       }
   }
 
-  // Special handling for diff/guarded
-  const difficultInstructions = customer.isDifficult ? `
-IMPORTANT - DIFFICULT CUSTOMER ATTITUDE:
-- You are DIFFICULT and AVASIVE.
-- If asked personal questions (budget/needs), be vague or annoyed unless you are making a deal.
-- Short fuse.
-` : '';
+  // Special handling for diff/guarded (simplified)
+  const difficultNote = customer.isDifficult ? 'You are DIFFICULT - vague about personal info, short fuse.' : '';
+  const guardedNote = customer.isGuarded ? 'You are GUARDED - say "just looking" if pressed early on.' : '';
 
-  const guardedInstructions = customer.isGuarded ? `
-IMPORTANT - GUARDED CUSTOMER ATTITUDE:
-- You are GUARDED. You don't trust salespeople.
-- If they ask personal questions early on, say you are "just looking" or "not ready to say".
-- Only reveal info if you are negotiating or they show you a car you like.
-` : '';
+  // Budget tier context - helps AI understand customer's wealth level
+  const cashBudget = customer.buyerType === 'cash' ? customer.budget : customer.maxPayment * 60; // Estimate total from payment
+  let budgetTierNote = '';
+  if (cashBudget >= 70000) {
+    budgetTierNote = 'BUDGET TIER: HIGH - You have money to spend. Cars under your budget are GOOD deals, not "too fancy".';
+  } else if (cashBudget >= 40000) {
+    budgetTierNote = 'BUDGET TIER: MEDIUM - Middle-class buyer. Reasonable expectations.';
+  } else {
+    budgetTierNote = 'BUDGET TIER: BUDGET-CONSCIOUS - You watch your spending carefully.';
+  }
 
-  return `You are ${customer.name}, a car buyer.
-Personality: ${customer.personality.toUpperCase()}
-Satisfaction/Interest Level: ${customer.interest}% (0=Leaving, 100=Buying)
-Temper: ${customer.temper}/100
+  // Calculate deal quality label for offer scenarios
+  let dealQualityNote = '';
+  if (instructionType?.startsWith('offer_') && scenarioData?.offerPrice) {
+    const budget = customer.buyerType === 'cash' ? customer.budget : customer.maxPayment;
+    const percentOfBudget = (scenarioData.offerPrice / budget) * 100;
 
-${guardedInstructions}
-${difficultInstructions}
+    if (percentOfBudget <= 85) {
+      dealQualityNote = 'DEAL QUALITY: GREAT - well under your budget, accept happily!';
+    } else if (percentOfBudget <= 100) {
+      dealQualityNote = 'DEAL QUALITY: GOOD - within budget, accept.';
+    } else if (percentOfBudget <= 115) {
+      dealQualityNote = 'DEAL QUALITY: SLIGHTLY HIGH - negotiate for less.';
+    } else {
+      dealQualityNote = 'DEAL QUALITY: TOO EXPENSIVE - decline or counteroffer.';
+    }
+  }
 
-YOUR TRUE PREFERENCES (Use to answer questions):
+  // Simple preference revelation notes
+  const revelationNotes: string[] = [];
+  if (!customer.revealedPreferences.budget) revelationNotes.push("You haven't mentioned your budget yet.");
+  if (!customer.revealedPreferences.type) revelationNotes.push("You haven't said what type of car you want yet.");
+  const revelationNote = revelationNotes.length > 0 ? revelationNotes.join(' ') : '';
+
+  // Mood indicator (simplified)
+  let moodNote = '';
+  if (customer.interest < 30) moodNote = 'You are unhappy/frustrated. Show it.';
+  else if (customer.interest > 80) moodNote = 'You are happy/excited. Show it.';
+
+  // Available brands in this dealership
+  const availableBrands = 'Toyota, Honda, Hyundai, Kia, Nissan, Mazda, Ford, Chevrolet, Subaru, Volkswagen, Tesla';
+
+  return `You are ${customer.name}, a CUSTOMER shopping for a NEW car.
+The salesperson is talking to you. You ANSWER their questions.
+This is a NEW car dealership - all cars are brand new, no used cars.
+
+CRITICAL: You are the CUSTOMER, not the salesperson!
+- NEVER ask "What's your budget?" or "What are you looking for?" - those are salesperson questions
+- You ANSWER questions, you don't ask them
+- Say things like "I need..." or "I'm looking for..." NOT "What can I help you with?"
+- NEVER mention used cars or wanting a used car - this dealership only sells NEW cars
+
+Personality: ${customer.personality} - ${PERSONALITY_GUIDE[customer.personality]}
+${difficultNote}
+${guardedNote}
+
+YOUR PREFERENCES (answer based on these when asked):
 - Budget: ${customer.buyerType === 'cash' ? `$${customer.budget.toLocaleString()} cash` : `$${customer.maxPayment}/mo with $${customer.desiredDown.toLocaleString()} down`}
-- Type: ${CATEGORY_LABELS[customer.desiredCategory] || "Any"}
-- Features: ${featureList}
-- Model Preference: ${customer.desiredModel || "None"}
+- Type: ${CATEGORY_LABELS[customer.desiredCategory] || "flexible"}
+- Features: ${featureList || "nothing specific"}
+- Model: ${customer.desiredModel || "no specific model, open to suggestions"}
+${budgetTierNote}
 
-CURRENT STATUS:
+DEALERSHIP BRANDS: ${availableBrands}
+(Only mention these brands - no BMW, Mercedes, Audi, Lexus, etc.)
+
+${revelationNote}
+
 ${carInfo}
+${dealQualityNote}
+${moodNote}
 
-INSTRUCTION FOR THIS RESPONSE:
-${instruction}
+INSTRUCTION: ${instruction}
 
-RULES:
-- Respond in 1-2 SHORT sentences.
-- Speak in the first person ("I want...", "I think...").
-- Match your personality (${customer.personality}).
-- ${customer.interest < 30 ? "You are currently unhappy/bored. Show it." : ""}
-- ${customer.interest > 80 ? "You are currently very happy/excited. Show it." : ""}
+RESPONSE FORMAT:
+- 1-2 sentences MAX
+- Answer the salesperson's question directly
+- No lists, no bullet points
+- Stay in character as ${customer.personality}
+- NEVER mention specific dollar amounts unless the salesperson told you a price
+- Do NOT make up prices or say things like "$48k" unless they said it first
 `;
 }

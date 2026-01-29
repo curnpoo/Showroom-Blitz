@@ -409,8 +409,8 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
   
   const temper = Math.floor(Math.random() * 100);
 
-  // Generate specific desires (50% chance for a specific "Brand Model")
-  const hasSpecificModel = Math.random() > 0.5;
+  // Generate specific desires (85% chance for a specific "Brand Model")
+  const hasSpecificModel = Math.random() > 0.15;
   const desiredModel = hasSpecificModel ? pickRandom(BRAND_MODEL_PAIRS).brandModel : undefined;
 
   let desiredCategory: VehicleCategory = 'any';
