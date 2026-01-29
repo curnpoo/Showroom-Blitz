@@ -195,30 +195,13 @@ function App() {
     setAiWarmupStatus('warming');
     setAiWarmupMessage('Starting AI server... this can take a few minutes.');
 
-    // Use /chat/completions endpoint - same as the actual game uses
-    let warmupUrl = settings.apiBaseUrl || '/api/ai';
-    if (!warmupUrl.includes('/chat/completions')) {
-      warmupUrl = warmupUrl.replace(/\/+$/, '') + '/chat/completions';
-    }
+    // Use /models endpoint (GET) - triggers Modal cold start
+    const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
 
-    // Send ONE request - it will trigger cold start and respond when ready
-    // No polling needed - just wait for this request to complete
     try {
-      const response = await fetch(warmupUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.apiKey || 'lm-studio'}`,
-        },
-        body: JSON.stringify({
-          model: settings.modelName || 'local-model',
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 1,
-          temperature: 0,
-        }),
-      });
+      const response = await fetch(warmupUrl, { method: 'GET' });
 
-      if (!useAIRef.current) return; // AI was disabled while waiting
+      if (!useAIRef.current) return;
 
       if (response.ok) {
         setAiWarmupStatus('ready');
@@ -228,11 +211,11 @@ function App() {
         setAiWarmupMessage('AI server returned an error. Retry or switch to Non-AI.');
       }
     } catch {
-      if (!useAIRef.current) return; // AI was disabled while waiting
+      if (!useAIRef.current) return;
       setAiWarmupStatus('error');
       setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
     }
-  }, [settings.useAI, settings.provider, settings.apiBaseUrl, settings.apiKey, settings.modelName]);
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl]);
 
   const testConnection = async () => {
     if (!settings.apiBaseUrl) return;

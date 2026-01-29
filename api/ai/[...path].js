@@ -42,11 +42,22 @@ const filterHeaders = (headers) => {
   return filtered;
 };
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 export default async function handler(request, context) {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (!aiServerUrl) {
     return new Response(JSON.stringify({ error: { message: 'AI server not configured' } }), {
       status: 503,
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...corsHeaders },
     });
   }
 
@@ -61,6 +72,7 @@ export default async function handler(request, context) {
         'x-ratelimit-limit': limit.toString(),
         'x-ratelimit-remaining': remaining.toString(),
         'x-ratelimit-reset': reset.toString(),
+        ...corsHeaders,
       },
     });
   }
@@ -78,6 +90,10 @@ export default async function handler(request, context) {
   responseHeaders.set('x-ratelimit-limit', limit.toString());
   responseHeaders.set('x-ratelimit-remaining', remaining.toString());
   responseHeaders.set('x-ratelimit-reset', reset.toString());
+  // Add CORS headers
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    responseHeaders.set(key, value);
+  });
 
   return new Response(upstream.body, {
     status: upstream.status,
