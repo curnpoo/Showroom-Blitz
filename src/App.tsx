@@ -184,9 +184,12 @@ function App() {
     return `${cleaned}/models`;
   }, []);
 
-  const getAuthHeaders = useCallback((): HeadersInit | undefined => {
-    if (!settings.apiKey) return undefined;
-    return { Authorization: `Bearer ${settings.apiKey}` };
+  const getAuthHeaders = useCallback((): HeadersInit => {
+    const headers: Record<string, string> = {};
+    if (settings.apiKey) {
+      headers.Authorization = `Bearer ${settings.apiKey}`;
+    }
+    return headers;
   }, [settings.apiKey]);
 
   const warmupAI = useCallback(async (_reason: 'setup' | 'start' | 'customer' | 'retry') => {
