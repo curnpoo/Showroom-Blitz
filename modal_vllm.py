@@ -4,11 +4,11 @@ from typing import Any
 import aiohttp
 import modal
 
-# Modal + vLLM OpenAI-compatible server for Mistral 3B
+# Modal + vLLM OpenAI-compatible server for Ministral 3B Reasoning
 # Deploy with: modal deploy modal_vllm.py
 # Test once with: modal run modal_vllm.py
 
-MODEL_NAME = "mistralai/Ministral-3-3B-Instruct-2512"
+MODEL_NAME = "mistralai/Ministral-3-3B-Reasoning-2512"
 N_GPU = 1
 # T4 (compute 7.5) can't run fp8 models; L4/A10G/A100 are >= 8.0.
 GPU_TYPE = "L4"
@@ -66,6 +66,8 @@ def serve():
         "--config_format",
         "mistral",
         "--load_format",
+        "mistral",
+        "--reasoning-parser",
         "mistral",
         "--max-model-len",
         "8192",

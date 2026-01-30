@@ -111,7 +111,7 @@ function App() {
   const [paymentTerm, setPaymentTerm] = useState(72);
   const [paymentAPR, setPaymentAPR] = useState(6.9);
   const [downPayment, setDownPayment] = useState(0);
-  const currenServerModel = 'mistralai/Ministral-3-3B-Instruct-2512';
+  const currenServerModel = 'mistralai/Ministral-3-3B-Reasoning-2512';
   const [aiUsageSeconds, setAiUsageSeconds] = useState(0);
   const [settings, setSettings] = useState<GameSettings>(() => {
     const saved = localStorage.getItem('showroom_settings');

@@ -1430,6 +1430,11 @@ export async function getAIResponse(
     instructionType = 'greeting_response';
   }
 
+  // Car shown response should focus on the specific car reaction (no pricing unless asked)
+  if (!instructionType && messageType === 'car_shown') {
+    instructionType = 'car_shown';
+  }
+
   // Personal/off-topic questions should be answered briefly in character
   if (!instructionType && isPersonalQuestion(message)) {
     instructionType = 'personal_chat';
@@ -1440,7 +1445,12 @@ export async function getAIResponse(
       instructionType = 'general_chat';
   }
 
-  const systemPrompt = buildSystemPrompt(customer, currentCar, instructionType, scenarioData);
+  const useLitePrompt =
+    (instructionType === 'personal_chat' || instructionType === 'general_chat') &&
+    !isDealRelatedText(message);
+  const systemPrompt = useLitePrompt
+    ? buildLiteSystemPrompt(customer, instructionType)
+    : buildSystemPrompt(customer, currentCar, instructionType, scenarioData);
 
   try {
     let aiResponse = '';
@@ -1839,13 +1849,17 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
               instruction = "The salesperson just said hello. Simply greet them back briefly. Do NOT volunteer your budget, preferences, or what car you want yet - wait to be asked.";
               break;
 
+          case 'car_shown':
+              instruction = "The salesperson just showed you a specific car. React to the car itself (match quality) in 1 short sentence. Do NOT ask about price, monthly payment, or other models unless the salesperson asked you.";
+              break;
+
           case 'personal_chat':
-              instruction = "The salesperson asked a personal/off-topic question. Answer briefly in character with a small personal detail. Do not talk about prices or car preferences unless asked.";
+              instruction = "The salesperson asked a personal/off-topic question. Answer briefly in character with a small personal detail. If asked why you're shopping for a car, give a short reason. Do not talk about prices or car preferences unless asked.";
               break;
 
           case 'general_chat':
           default:
-              instruction = "Answer the salesperson's question briefly. Only share info they actually asked about.";
+              instruction = "Answer the salesperson's exact message briefly. If asked why you're shopping for a car, give a short reason. Only share info they actually asked about. Do NOT ask follow-up questions or request other models unless explicitly asked.";
               break;
       }
   }
@@ -1937,5 +1951,34 @@ RESPONSE FORMAT:
 - Stay in character as ${customer.personality}
 - NEVER mention specific dollar amounts unless the salesperson told you a price
 - Do NOT make up prices or say things like "$48k" unless they said it first
+- Do NOT ask for recommendations or other models unless the salesperson explicitly asked you to
+`;
+}
+
+function buildLiteSystemPrompt(customer: Customer, instructionType?: string): string {
+  const difficultNote = customer.isDifficult ? 'You are DIFFICULT - vague about personal info, short fuse.' : '';
+  const guardedNote = customer.isGuarded ? 'You are GUARDED - say "just looking" if pressed early on.' : '';
+
+  let instruction = 'Answer the salesperson briefly.';
+  if (instructionType === 'personal_chat') {
+    instruction = "The salesperson asked a personal/off-topic question. Answer briefly in character with a small personal detail. If asked why you're shopping for a car, give a short reason.";
+  } else if (instructionType === 'general_chat') {
+    instruction = "Answer the salesperson's exact message briefly. If asked why you're shopping for a car, give a short reason. Do NOT ask follow-up questions.";
+  }
+
+  return `You are ${customer.name}, a CUSTOMER shopping for a NEW car.
+The salesperson is talking to you. You ANSWER their questions.
+
+Personality: ${customer.personality} - ${PERSONALITY_GUIDE[customer.personality]}
+${difficultNote}
+${guardedNote}
+
+INSTRUCTION: ${instruction}
+
+RESPONSE FORMAT:
+- 1-2 sentences MAX
+- Answer the salesperson's question directly
+- No lists, no bullet points
+- Stay in character as ${customer.personality}
 `;
 }

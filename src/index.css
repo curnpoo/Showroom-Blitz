@@ -1766,7 +1766,7 @@ body {
 
 @media (max-width: 768px) {
     .ai-cost-overlay {
-        top: 80px;
+        top: 140px;
         left: 12px;
         min-width: 120px;
     }
