@@ -145,6 +145,13 @@ function App() {
       if (merged.apiBaseUrl?.startsWith('http')) {
         merged.apiBaseUrl = '/api/ai';
       }
+      if (
+        merged.provider === 'local' &&
+        merged.apiBaseUrl === '/api/ai' &&
+        (!merged.modelName || merged.modelName === 'local-model')
+      ) {
+        merged.modelName = currenServerModel;
+      }
 
       return merged;
     } catch (e) {
@@ -3258,8 +3265,15 @@ function App() {
                       draftSettings.useAI &&
                       draftSettings.provider === 'local' &&
                       draftSettings.apiBaseUrl === '/api/ai';
+                    const needsModelFix =
+                      draftSettings.provider === 'local' &&
+                      draftSettings.apiBaseUrl === '/api/ai' &&
+                      (!draftSettings.modelName || draftSettings.modelName === 'local-model');
+                    const nextSettings = needsModelFix
+                      ? { ...draftSettings, modelName: currenServerModel }
+                      : draftSettings;
                     if (shouldWarmup) pendingWarmupRef.current = true;
-                    setSettings(draftSettings);
+                    setSettings(nextSettings);
                   }
                   setShowSettings(false);
                 }}
