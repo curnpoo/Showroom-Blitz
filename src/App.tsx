@@ -37,6 +37,17 @@ const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
 const AI_COST_PER_MINUTE_USD = 0.01;
 const CHAT_START_TIP_KEY = 'showroom_chat_start_tip_dismissed_v1';
+const AI_WARMUP_TIPS = [
+  'Start by asking their needs and priorities before anything else.',
+  'Confirm budget, type of car, and must-haves, then restate them clearly.',
+  'Show a car that fits their needs and explain why it matches.',
+  'Invite questions and answer directly before moving to numbers.',
+  'Present the numbers clearly and walk through payments calmly.',
+  'Explain why the price is fair by tying it to their needs.',
+  'Ask for the close and guide them to the next step.',
+  'Build rapport throughout and stay helpful.'
+  'Be nice but feel free to be honest ;)',
+];
 
 const CATEGORY_UI_LABELS: Record<VehicleCategory, string> = {
   suv: '⛽️ SUV',
@@ -111,6 +122,8 @@ function App() {
   const [paymentTerm, setPaymentTerm] = useState(72);
   const [paymentAPR, setPaymentAPR] = useState(6.9);
   const [downPayment, setDownPayment] = useState(0);
+  const [warmupTipIndex, setWarmupTipIndex] = useState(0);
+  const [warmupTipVisible, setWarmupTipVisible] = useState(true);
   const currenServerModel = 'mistralai/Ministral-3-3B-Reasoning-2512';
   const [aiUsageSeconds, setAiUsageSeconds] = useState(0);
   const [settings, setSettings] = useState<GameSettings>(() => {
@@ -436,6 +449,24 @@ function App() {
     pendingWarmupRef.current = false;
     warmupAI('setup');
   }, [gameState, settings.useAI, settings.provider, settings.apiBaseUrl, warmupAI]);
+
+  useEffect(() => {
+    if (gameState !== 'loading') return;
+    setWarmupTipIndex(0);
+    setWarmupTipVisible(true);
+    let fadeTimeout: number | undefined;
+    const intervalId = window.setInterval(() => {
+      setWarmupTipVisible(false);
+      fadeTimeout = window.setTimeout(() => {
+        setWarmupTipIndex(prev => (prev + 1) % AI_WARMUP_TIPS.length);
+        setWarmupTipVisible(true);
+      }, 400);
+    }, 10000);
+    return () => {
+      window.clearInterval(intervalId);
+      if (fadeTimeout) window.clearTimeout(fadeTimeout);
+    };
+  }, [gameState]);
 
   const startShowroom = useCallback(() => {
     setShowDealClosed(false);
@@ -2644,6 +2675,10 @@ function App() {
               {isReady ? 'Ready!' : `${progressPercent}%`}
             </div>
           </div>
+
+          <p className={`loading-tip ${warmupTipVisible ? 'is-visible' : ''}`}>
+            {AI_WARMUP_TIPS[warmupTipIndex]}
+          </p>
 
           <div className="loading-actions">
             <button

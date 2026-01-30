@@ -214,6 +214,20 @@ body {
     color: #b9bbbe;
 }
 
+.loading-tip {
+    margin: 4px 0 18px;
+    min-height: 2.4em;
+    font-size: 0.95rem;
+    color: #c9ccd1;
+    line-height: 1.2;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.loading-tip.is-visible {
+    opacity: 1;
+}
+
 .loading-actions {
     display: flex;
     flex-wrap: wrap;
