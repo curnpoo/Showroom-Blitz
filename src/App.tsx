@@ -433,13 +433,18 @@ function App() {
       setAiPendingStart(true);
       setAiWarmupSuccess(false);
       setGameState('loading');
+      if (settings.provider !== 'anthropic') {
+        const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
+        const authHeaders = getAuthHeaders();
+        fetch(warmupUrl, { method: 'GET', headers: authHeaders }).catch(() => {});
+      }
       warmupAI('start');
       return;
     }
 
     setGameState('playing');
     startShowroom();
-  }, [settings.useAI, startShowroom, warmupAI]);
+  }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl, getAuthHeaders, startShowroom, warmupAI]);
 
   const retryWarmup = useCallback((context: 'loading' | 'overlay') => {
     if (context === 'loading') {

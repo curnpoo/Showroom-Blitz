@@ -1717,38 +1717,38 @@ body {
 /* ========== AI cost overlay ========== */
 .ai-cost-overlay {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 92px;
+    left: 16px;
     background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 12px;
-    padding: 10px 14px;
-    z-index: 10;
+    border-radius: 10px;
+    padding: 6px 10px;
+    z-index: 8;
     animation: slideInRight 0.3s ease;
-    min-width: 180px;
+    min-width: 130px;
 }
 
 .ai-cost-overlay.with-timer {
-    top: 136px;
+    top: 92px;
 }
 
 .ai-cost-overlay .label {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     color: #7dd3fc;
 }
 
 .ai-cost-overlay .value {
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: #e0f2fe;
     margin-top: 2px;
 }
 
 .ai-cost-overlay .rate {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     color: #94a3b8;
     margin-top: 2px;
 }
@@ -1761,6 +1761,14 @@ body {
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .ai-cost-overlay {
+        top: 80px;
+        left: 12px;
+        min-width: 120px;
     }
 }
 
