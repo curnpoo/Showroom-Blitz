@@ -39,8 +39,6 @@ body {
     -moz-osx-font-smoothing: grayscale;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    padding-top: calc(var(--safe-area-top) + 16px);
-    padding-bottom: 8px;
 }
 
 /* ========== Game container & canvas ========== */
@@ -62,6 +60,8 @@ body {
     background: url('../Assets/showroom_bg.webp') center/cover no-repeat;
     position: relative;
     overflow: hidden;
+    padding-top: calc(var(--safe-area-top) + 16px);
+    padding-bottom: calc(var(--safe-area-bottom) + 16px);
 }
 
 .game-canvas {
@@ -189,7 +189,7 @@ body {
 .intro-screen.startscreen-page,
 .intro-screen.setup-page {
     background: transparent;
-    padding: 0;
+    padding: calc(var(--safe-area-top) + 24px) 0 calc(var(--safe-area-bottom) + 12px);
     position: relative;
     overflow: hidden;
 }
