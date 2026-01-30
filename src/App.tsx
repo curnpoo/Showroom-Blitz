@@ -35,7 +35,9 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
-const AI_COST_PER_MINUTE_USD = 0.01;
+const AI_COST_PER_GPU_HOUR_USD = 0.8;
+const AI_COST_PER_MINUTE_USD = AI_COST_PER_GPU_HOUR_USD / 60;
+const AI_COST_PER_SECOND_USD = AI_COST_PER_GPU_HOUR_USD / 3600;
 const CHAT_START_TIP_KEY = 'showroom_chat_start_tip_dismissed_v1';
 const AI_WARMUP_TIPS = [
   'Start by asking their needs and priorities before anything else.',
@@ -197,7 +199,7 @@ function App() {
   const useAIRef = useRef(settings.useAI);
   const isCurrenServer = settings.useAI && settings.provider === 'local' && settings.apiBaseUrl === '/api/ai';
   const showTimerOverlay = (settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing';
-  const aiCostUSD = (aiUsageSeconds / 60) * AI_COST_PER_MINUTE_USD;
+  const aiCostUSD = aiUsageSeconds * AI_COST_PER_SECOND_USD;
   const aiCostDisplay = aiCostUSD < 1 ? aiCostUSD.toFixed(4) : aiCostUSD.toFixed(2);
   const [draftSettings, setDraftSettings] = useState<GameSettings | null>(null);
   const panelSettings = draftSettings || settings;
@@ -2575,7 +2577,7 @@ function App() {
               </div>
               <div className="mode-description">
                 <div className={`mode-info ${settings.useAI ? 'visible' : 'hidden'}`}>
-                  Uses Curren&apos;s server by default • Costs money (${AI_COST_PER_MINUTE_USD.toFixed(2)}/min)
+                  Uses Curren&apos;s server by default • ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min)
                 </div>
                 <div className={`mode-info ${!settings.useAI ? 'visible' : 'hidden'}`}>
                   Smart scripted responses (offline)
@@ -2777,7 +2779,9 @@ function App() {
           <div className={`ai-cost-overlay ${showTimerOverlay ? 'with-timer' : ''}`}>
             <div className="label">Curren&apos;s Server Cost</div>
             <div className="value">${aiCostDisplay}</div>
-            <div className="rate">Rate: ${AI_COST_PER_MINUTE_USD.toFixed(2)}/min</div>
+            <div className="rate">
+              Rate: ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min)
+            </div>
           </div>
         )}
 
@@ -3136,7 +3140,7 @@ function App() {
                             Using Curren&apos;s private server proxy.
                           </div>
                           <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
-                            Estimated cost: ${AI_COST_PER_MINUTE_USD.toFixed(2)}/min while AI is enabled.
+                            Estimated cost: ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min) while AI is enabled.
                           </div>
                         </div>
                         <div className="ai-field">
