@@ -173,11 +173,14 @@ function App() {
   const [aiWarmupStatus, setAiWarmupStatus] = useState<'idle' | 'warming' | 'ready' | 'error'>('idle');
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupAttemptRef = useRef(0);
+  const pendingWarmupRef = useRef(false);
   const useAIRef = useRef(settings.useAI);
   const isCurrenServer = settings.useAI && settings.provider === 'local' && settings.apiBaseUrl === '/api/ai';
   const showTimerOverlay = (settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing';
   const aiCostUSD = (aiUsageSeconds / 60) * AI_COST_PER_MINUTE_USD;
   const aiCostDisplay = aiCostUSD < 1 ? aiCostUSD.toFixed(4) : aiCostUSD.toFixed(2);
+  const [draftSettings, setDraftSettings] = useState<GameSettings | null>(null);
+  const panelSettings = draftSettings || settings;
 
   useEffect(() => {
     const handleResize = () => {
@@ -190,6 +193,16 @@ function App() {
   useEffect(() => {
     useAIRef.current = settings.useAI;
   }, [settings.useAI]);
+
+  useEffect(() => {
+    if (showSettings) {
+      setDraftSettings(settings);
+      setTestStatus('idle');
+      setTestMessage('');
+    } else {
+      setDraftSettings(null);
+    }
+  }, [showSettings, settings]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -234,13 +247,13 @@ function App() {
     return `${cleaned}/models`;
   }, []);
 
-  const getAuthHeaders = useCallback((): HeadersInit => {
+  const getAuthHeaders = useCallback((apiKey?: string): HeadersInit => {
     const headers: Record<string, string> = {};
-    if (settings.apiKey) {
-      headers.Authorization = `Bearer ${settings.apiKey}`;
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
     }
     return headers;
-  }, [settings.apiKey]);
+  }, []);
 
   const warmupAI = useCallback(async (_reason: 'setup' | 'start' | 'customer' | 'retry') => {
     if (!settings.useAI) return;
@@ -258,7 +271,7 @@ function App() {
     setAiWarmupSuccess(false);
 
     const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
-    const authHeaders = getAuthHeaders();
+    const authHeaders = getAuthHeaders(settings.apiKey);
 
     // Fire initial request to trigger Modal cold start (don't wait for response)
     fetch(warmupUrl, { method: 'GET', headers: authHeaders }).catch(() => {});
@@ -305,8 +318,9 @@ function App() {
     setAiWarmupMessage('Could not reach AI server. Retry or switch to Non-AI.');
   }, [settings.useAI, settings.provider, settings.apiBaseUrl, getModelsUrl, getAuthHeaders]);
 
-  const testConnection = async () => {
-    if (!settings.apiBaseUrl) return;
+  const testConnection = async (override?: GameSettings) => {
+    const cfg = override || settings;
+    if (!cfg.apiBaseUrl) return;
     
     setTestStatus('testing');
     setTestMessage('');
@@ -314,11 +328,11 @@ function App() {
     try {
       // AI server check
       // We try to fetch the /models endpoint when available
-      const url = getModelsUrl(settings.apiBaseUrl);
+      const url = getModelsUrl(cfg.apiBaseUrl);
       
       const response = await fetch(url, {
         method: 'GET',
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(cfg.apiKey),
       });
       
       if (response.ok) {
@@ -408,6 +422,14 @@ function App() {
 
   }, [settings.useAI, settings.provider, warmupAI]);
 
+  useEffect(() => {
+    if (!pendingWarmupRef.current) return;
+    if (gameState !== 'playing') return;
+    if (!(settings.useAI && settings.provider === 'local' && settings.apiBaseUrl === '/api/ai')) return;
+    pendingWarmupRef.current = false;
+    warmupAI('setup');
+  }, [gameState, settings.useAI, settings.provider, settings.apiBaseUrl, warmupAI]);
+
   const startShowroom = useCallback(() => {
     setShowDealClosed(false);
     customersRef.current.forEach(c => c.active = true);
@@ -435,7 +457,7 @@ function App() {
       setGameState('loading');
       if (settings.provider !== 'anthropic') {
         const warmupUrl = getModelsUrl(settings.apiBaseUrl || '/api/ai');
-        const authHeaders = getAuthHeaders();
+        const authHeaders = getAuthHeaders(settings.apiKey);
         fetch(warmupUrl, { method: 'GET', headers: authHeaders }).catch(() => {});
       }
       warmupAI('start');
@@ -3025,26 +3047,26 @@ function App() {
                 <label>
                   <input
                     type="checkbox"
-                    checked={settings.useAI}
-                    onChange={(e) => setSettings(prev => ({ ...prev, useAI: e.target.checked }))}
+                    checked={panelSettings.useAI}
+                    onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), useAI: e.target.checked }))}
                   />
                   Enable AI Conversations
                 </label>
                 
-                {settings.useAI && (
+                {panelSettings.useAI && (
                   <div className="ai-settings">
                     <div className="ai-field">
                       <label>AI Provider</label>
                       <select
-                        value={settings.provider === 'local' && settings.apiBaseUrl === '/api/ai' ? 'proxy' : settings.provider === 'local' ? 'local' : settings.provider}
+                        value={panelSettings.provider === 'local' && panelSettings.apiBaseUrl === '/api/ai' ? 'proxy' : panelSettings.provider === 'local' ? 'local' : panelSettings.provider}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val === 'proxy') {
-                            setSettings(prev => ({ ...prev, provider: 'local', apiBaseUrl: '/api/ai' }));
+                            setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: '/api/ai' }));
                           } else if (val === 'local') {
-                            setSettings(prev => ({ ...prev, provider: 'local', apiBaseUrl: 'http://localhost:1234/v1' }));
+                            setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: 'http://localhost:1234/v1' }));
                           } else {
-                            setSettings(prev => ({ ...prev, provider: val as any }));
+                            setDraftSettings(prev => ({ ...(prev || settings), provider: val as any }));
                           }
                         }}
                       >
@@ -3054,17 +3076,17 @@ function App() {
                       </select>
                     </div>
 
-                    {settings.provider === 'anthropic' ? (
+                    {panelSettings.provider === 'anthropic' ? (
                       <div className="ai-field">
                         <label>Anthropic API Key</label>
                         <input
                           type="password"
                           placeholder="sk-ant-..."
-                          value={settings.apiKey}
-                          onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
+                          value={panelSettings.apiKey}
+                          onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiKey: e.target.value }))}
                         />
                       </div>
-                    ) : settings.apiBaseUrl === '/api/ai' ? (
+                    ) : panelSettings.apiBaseUrl === '/api/ai' ? (
                       <>
                         <div className="ai-field">
                           <label>AI Server</label>
@@ -3088,7 +3110,7 @@ function App() {
                              )}
                            </div>
                            <button
-                             onClick={testConnection}
+                             onClick={() => testConnection(panelSettings)}
                              disabled={testStatus === 'testing'}
                              style={{
                                width: '100%',
@@ -3125,8 +3147,8 @@ function App() {
                           <input
                             type="text"
                             placeholder="http://localhost:1234/v1"
-                            value={settings.apiBaseUrl}
-                            onChange={(e) => setSettings(prev => ({ ...prev, apiBaseUrl: e.target.value }))}
+                            value={panelSettings.apiBaseUrl}
+                            onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiBaseUrl: e.target.value }))}
                           />
                           <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
                             OpenAI-compatible endpoint (LM Studio, Ollama, etc.)
@@ -3145,8 +3167,8 @@ function App() {
                              )}
                            </div>
                            <button
-                             onClick={testConnection}
-                             disabled={testStatus === 'testing' || !settings.apiBaseUrl}
+                             onClick={() => testConnection(panelSettings)}
+                             disabled={testStatus === 'testing' || !panelSettings.apiBaseUrl}
                              style={{
                                width: '100%',
                                padding: '8px',
@@ -3180,8 +3202,8 @@ function App() {
                           <input
                             type="text"
                             placeholder="local-model"
-                            value={settings.modelName}
-                            onChange={(e) => setSettings(prev => ({ ...prev, modelName: e.target.value }))}
+                            value={panelSettings.modelName}
+                            onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), modelName: e.target.value }))}
                           />
                         </div>
                       </>
@@ -3190,10 +3212,10 @@ function App() {
                 )}
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                {settings.useAI
-                  ? settings.provider === 'anthropic'
+                {panelSettings.useAI
+                  ? panelSettings.provider === 'anthropic'
                     ? 'Using Claude for dynamic conversations'
-                    : settings.apiBaseUrl === '/api/ai'
+                    : panelSettings.apiBaseUrl === '/api/ai'
                       ? 'Using Curren\'s private AI server'
                       : 'Using local model on your hardware'
                   : 'Using smart scripted responses (works offline)'}
@@ -3227,7 +3249,21 @@ function App() {
                 Back to Menu (Reset Stats)
               </button>
 
-              <button className="close-btn" onClick={() => setShowSettings(false)}>
+              <button
+                className="close-btn"
+                onClick={() => {
+                  if (draftSettings) {
+                    const shouldWarmup =
+                      gameState === 'playing' &&
+                      draftSettings.useAI &&
+                      draftSettings.provider === 'local' &&
+                      draftSettings.apiBaseUrl === '/api/ai';
+                    if (shouldWarmup) pendingWarmupRef.current = true;
+                    setSettings(draftSettings);
+                  }
+                  setShowSettings(false);
+                }}
+              >
                 Done
               </button>
             </div>
