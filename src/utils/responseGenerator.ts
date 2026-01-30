@@ -1,5 +1,6 @@
 import type { Car, Customer, PersonalityType, DesiredFeature, VehicleCategory, ConversationPhase, AIConversationMessage, GameSettings, Sentiment } from '../types/game';
 import { CAR_DATABASE } from '../data/carDatabase';
+import { calculateOTDFromPayment } from './gameLogic';
 
 // Build a set of known model names for detection
 const KNOWN_MODEL_NAMES = new Set(
@@ -211,6 +212,34 @@ const DIFFICULT_CUSTOMER_RESPONSES = {
 };
 
 // ============ NEGOTIATION RESPONSES ============
+
+const MARKUP_TOO_HIGH_RESPONSES: Record<PersonalityType, string[]> = {
+  friendly: [
+      "Wait, is this price higher than the sticker? That's not very cool...",
+      "I noticed you're marking this up quite a bit. I thought we were getting a fair deal.",
+      "That seems like a lot of markup. Is that really necessary?",
+  ],
+  serious: [
+      "You've added a significant markup over MSRP. I find that unacceptable.",
+      "The price you've quoted exceeds the vehicle's value by a substantial margin.",
+      "I don't pay markups. Lower the price or I'm done.",
+  ],
+  skeptical: [
+      "Marking it up by thousands? You've got to be kidding me. That's shady.",
+      "I knew you were going to try and squeeze me. I'm not paying a markup.",
+      "Typical. You think because I have the budget I'll just pay whatever? Not happening.",
+  ],
+  enthusiastic: [
+      "Whoa! That's way more than the price on the window! Why is it so much higher?!",
+      "I love the car, but why are we marking it up so much? That doesn't feel right!",
+      "Aww, I thought this was going to be a good deal! Why the markup?",
+  ],
+  analytical: [
+      "Percentage markup over MSRP is calculated at over 20%. This is outside of acceptable market variance.",
+      "Markup detected. Adjusted pricing does not align with valuation models.",
+      "The quoted price includes a non-standard premium. I will not authorize this expenditure.",
+  ],
+};
 
 const OFFER_TOO_HIGH: Record<PersonalityType, (counterOffer: number, isPayment: boolean, desiredDown?: number) => string[]> = {
   friendly: (counter, isPayment, desiredDown) => [
@@ -1096,6 +1125,24 @@ export function generateResponse(context: ResponseContext): ResponseResult {
         break;
       }
 
+      // Check for Markup > 20% (MUST HAPPEN BEFORE BUDGET CHECK)
+      if (currentCar && offerPrice) {
+          let sellingPrice = offerPrice;
+          if (offerType === 'otd') {
+              sellingPrice = Math.round((offerPrice - currentCar.fees) / 1.07);
+          } else if (offerType === 'payment' && context.offerDownPayment !== undefined && context.offerAPR !== undefined && context.offerTerm !== undefined) {
+              const otd = calculateOTDFromPayment(offerPrice, context.offerDownPayment, context.offerAPR, context.offerTerm);
+              sellingPrice = Math.round((otd - currentCar.fees) / 1.07);
+          }
+          
+          if (sellingPrice > currentCar.price * 1.2) {
+              response = pickRandom(MARKUP_TOO_HIGH_RESPONSES[personality]);
+              interestChange = -20;
+              dealAccepted = false;
+              break;
+          }
+      }
+
       // Check for down payment mismatch (Finance specifically)
       if (offerType === 'payment' && context.offerDownPayment !== undefined) {
           // If offer down > desired down, reject unless they are VERY happy
@@ -1393,11 +1440,29 @@ export async function getAIResponse(
       instructionType = 'offer_down_too_high';
       scenarioData = { ...scenarioData, offeredDown: offerDownPayment, desiredDown };
     } else {
-      const moodMultiplier = 1 + (interest / 1000);
-      const effectiveBudget = buyerType === 'cash' ? Math.round(budget * moodMultiplier) : Math.round(maxPayment * moodMultiplier);
-      const isGreatDeal = offerType === 'payment'
-        ? offerPrice <= maxPayment * 0.9
-        : currentCar && offerPrice <= currentCar.price * 0.8;
+      // Check for Markup > 20% (EVEN IF BELOW BUDGET)
+      const isMarkupTooHigh = (() => {
+          if (!currentCar || !offerPrice) return false;
+          let sellingPrice = offerPrice;
+          if (offerType === 'otd') {
+              sellingPrice = Math.round((offerPrice - currentCar.fees) / 1.07);
+          } else if (offerType === 'payment' && contextOverrides.offerDownPayment !== undefined && contextOverrides.offerAPR !== undefined && contextOverrides.offerTerm !== undefined) {
+              const otd = calculateOTDFromPayment(offerPrice, contextOverrides.offerDownPayment, contextOverrides.offerAPR, contextOverrides.offerTerm);
+              sellingPrice = Math.round((otd - currentCar.fees) / 1.07);
+          }
+          return sellingPrice > currentCar.price * 1.2;
+      })();
+
+      if (isMarkupTooHigh) {
+          instructionType = 'markup_too_high';
+          interestChange = -20;
+          dealAccepted = false;
+      } else {
+          const moodMultiplier = 1 + (interest / 1000);
+          const effectiveBudget = buyerType === 'cash' ? Math.round(budget * moodMultiplier) : Math.round(maxPayment * moodMultiplier);
+          const isGreatDeal = offerType === 'payment'
+            ? offerPrice <= maxPayment * 0.9
+            : currentCar && offerPrice <= currentCar.price * 0.8;
 
       if (offerPrice <= effectiveBudget || isGreatDeal) {
         instructionType = 'offer_accepted';
@@ -1422,7 +1487,8 @@ export async function getAIResponse(
       }
     }
   }
-
+  }
+  
   // Player is asking to confirm/close after customer already accepted — avoid backtracking
   if (!instructionType && isPlayerClosingAttempt(message)) {
     const lastAsst = [...customer.conversationHistory].reverse().find(m => m.role === 'assistant');
@@ -1591,6 +1657,12 @@ export async function getAIResponse(
             dealAccepted = true;
             customer.strikes = 0;
             newPhase = 'closed';
+            break;
+        case 'markup_too_high':
+            interestChange = -20;
+            dealAccepted = false;
+            customer.strikes++;
+            newPhase = 'negotiation';
             break;
         case 'offer_budget_stretch':
             interestChange = 25;
@@ -1847,6 +1919,9 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
               break;
           case 'offer_down_too_high':
               instruction = `The down payment they asked for ($${scenarioData?.offeredDown}) is too high! You only have $${scenarioData?.desiredDown}. Tell them you can't afford that down payment.`;
+              break;
+          case 'markup_too_high':
+              instruction = "The salesperson is trying to charge you more than 20% over the car's MSRP sticker price. This is a massive markup and you find it greedy and offensive. Tell them it's not cool and you won't pay a markup that high, even if it fits your budget.";
               break;
           case 'offer_accepted':
               instruction = "This price is GOOD for you - it's within or under your budget! You are HAPPY. Say 'Deal!' or 'I'll take it!' enthusiastically.";

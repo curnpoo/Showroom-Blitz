@@ -53,6 +53,9 @@ export function useGameLoop({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const deskImg = new Image();
+    deskImg.src = new URL('../../Assets/desk.png', import.meta.url).href;
+
     const animate = () => {
       const uiScale = isMobile ? 1.75 : 1;
       const player = playerRef.current;
@@ -131,12 +134,18 @@ export function useGameLoop({
         ctx.stroke();
       }
 
+
       desksRef.current.forEach((desk) => {
-        ctx.fillStyle = '#8b7355';
-        ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
-        ctx.strokeStyle = '#654321';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(desk.x, desk.y, desk.w, desk.h);
+        if (deskImg.complete && deskImg.naturalWidth > 0) {
+          ctx.drawImage(deskImg, desk.x, desk.y, desk.w, desk.h);
+        } else {
+          // Fallback rendering while loading - DEBUG RED
+          ctx.fillStyle = '#FF0000';
+          ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
+          ctx.strokeStyle = '#654321';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(desk.x, desk.y, desk.w, desk.h);
+        }
       });
 
       coworkersRef.current.forEach((coworker) => {

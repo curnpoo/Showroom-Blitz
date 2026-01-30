@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, DollarSign, Users, Car, HelpCircle } from 'lucide-react';
+import { Settings, HelpCircle } from 'lucide-react';
 import { TipsModal } from './components/TipsModal';
 import type { 
   Customer, 
@@ -19,12 +19,16 @@ import {
   generateInventory, 
   generateCustomer, 
   calculatePayment,
+  calculateOTDFromPayment,
   SPAWN_LOCATIONS,
-  INITIAL_DESKS, 
+  INITIAL_DESKS,
   INITIAL_COWORKERS,
   MOBILE_SPAWN_LOCATIONS,
   MOBILE_DESKS,
-  MOBILE_COWORKERS
+  MOBILE_COWORKERS,
+  SHOWROOM_CARS_ASSET,
+  SHOWROOM_COLLISION_AREAS,
+  MOBILE_COLLISION_AREAS
 } from './utils/gameLogic';
 import { generateResponse, getAIResponse, isTakeItOrLeaveIt, isInventoryAdmission } from './utils/responseGenerator';
 import { NumbersPanel } from './components/NumbersPanel';
@@ -97,9 +101,30 @@ const STEAL_INTERVAL_MIN = 20;
 const STEAL_INTERVAL_MAX = 45;
 const COWORKER_DEAL_MIN = 60;
 const COWORKER_DEAL_MAX = 120;
+const START_TITLE_IMAGE = new URL('../Assets/title_startscreen.png', import.meta.url).href;
+const START_DESCRIPTION_IMAGE = new URL('../Assets/description_startscreen.png', import.meta.url).href;
+const START_BUTTON_BG_IMAGE = new URL('../Assets/startbutton_bg.png', import.meta.url).href;
+const START_BUTTON_TEXT_IMAGE = new URL('../Assets/start_button_text.png', import.meta.url).href;
+const TRANSITION_VIDEO = new URL('../Assets/startscreen-to-menu_transition.mp4', import.meta.url).href;
 
 function App() {
+  const deskImageRef = useRef<HTMLImageElement | null>(null);
+  const showroomCarsImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Load assets once
+  useEffect(() => {
+    const deskImg = new Image();
+    deskImg.src = new URL('../Assets/desk.png', import.meta.url).href;
+    deskImageRef.current = deskImg;
+
+    const carsImg = new Image();
+    carsImg.src = SHOWROOM_CARS_ASSET;
+    showroomCarsImageRef.current = carsImg;
+  }, []);
+
   const [gameState, setGameState] = useState<GameState>('intro');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -204,6 +229,36 @@ function App() {
   const [draftSettings, setDraftSettings] = useState<GameSettings | null>(null);
   const panelSettings = draftSettings || settings;
 
+  const handleStartClick = () => {
+    setIsTransitioning(true);
+    setShowVideo(true);
+  };
+
+  const handleVideoTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = e.currentTarget;
+    // Trigger setup screen fade-in earlier (1.2s buffer) so UI fully appears over video
+    if (video.duration > 0 && video.currentTime >= video.duration - 1.2) {
+      if (gameState !== 'setup') {
+        setGameState('setup');
+      }
+    }
+  };
+
+  const onVideoEnded = () => {
+    // 1. Ensure setup state is active (if missed by timeupdate)
+    if (gameState !== 'setup') setGameState('setup');
+    
+    // 2. Start background fade-in (via CSS transition on ::before)
+    // The background is currently transparent. Setting this to false triggers opacity 0 -> 1.
+    setIsTransitioning(false);
+
+    // 3. Keep video visible BEHIND the fading-in background for smooth blending
+    // Wait for the background transition (0.5s) to complete before removing video
+    setTimeout(() => {
+      setShowVideo(false);
+    }, 600);
+  };
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
@@ -215,6 +270,30 @@ function App() {
   useEffect(() => {
     useAIRef.current = settings.useAI;
   }, [settings.useAI]);
+
+  // Sync desks and coworkers when orientation changes
+  useEffect(() => {
+    desksRef.current = isMobile ? MOBILE_DESKS : INITIAL_DESKS;
+    
+    // Update coworker positions if not currently in a transaction/steal
+    const baseCoworkers = isMobile ? MOBILE_COWORKERS : INITIAL_COWORKERS;
+    coworkersRef.current = coworkersRef.current.map(c => {
+      const match = baseCoworkers.find((bc: Coworker) => bc.id === c.id);
+      if (match) {
+        return {
+          ...c,
+          originalX: match.originalX,
+          originalY: match.originalY,
+          // Only snap position if they aren't mid-action
+          ...(c.workingWithCustomerId ? {} : { x: match.x, y: match.y })
+        };
+      }
+      return c;
+    });
+
+    // Reset player to their desk
+    resetPlayerToDesk();
+  }, [isMobile]);
 
   useEffect(() => {
     if (showSettings) {
@@ -387,11 +466,8 @@ function App() {
     if (isMobile) {
       desksRef.current = MOBILE_DESKS;
       coworkersRef.current = MOBILE_COWORKERS;
-      // Reposition player to their desk on mobile (first desk in row 2)
-      playerRef.current.x = 90;
-      playerRef.current.y = 570;
-      playerRef.current.targetX = 90;
-      playerRef.current.targetY = 570;
+      // Reposition player to their desk
+      resetPlayerToDesk();
       // Reposition customers within mobile bounds
       customersRef.current.forEach((c, i) => {
         if (c.active) {
@@ -404,11 +480,8 @@ function App() {
     } else {
       desksRef.current = INITIAL_DESKS;
       coworkersRef.current = INITIAL_COWORKERS;
-      // Reposition player to their desk on desktop
-      playerRef.current.x = 285;
-      playerRef.current.y = 635;
-      playerRef.current.targetX = 285;
-      playerRef.current.targetY = 635;
+      // Reposition player to their desk
+      resetPlayerToDesk();
       // Reposition customers within desktop bounds
       customersRef.current.forEach((c, i) => {
         if (c.active) {
@@ -470,9 +543,28 @@ function App() {
     };
   }, [gameState]);
 
+  const resetPlayerToDesk = useCallback(() => {
+    const desks = desksRef.current;
+    if (desks.length >= 6) {
+      // Index 5 is the player's desk (Row 2, Center)
+      const desk = desks[5];
+      playerRef.current.x = desk.x + desk.w / 2;
+      playerRef.current.y = desk.y + desk.h / 2;
+      playerRef.current.targetX = playerRef.current.x;
+      playerRef.current.targetY = playerRef.current.y;
+    }
+  }, []);
+
   const startShowroom = useCallback(() => {
     setShowDealClosed(false);
     customersRef.current.forEach(c => c.active = true);
+    
+    // Reset entities to their default positions/roles
+    desksRef.current = isMobile ? MOBILE_DESKS : INITIAL_DESKS;
+    coworkersRef.current = isMobile ? MOBILE_COWORKERS : INITIAL_COWORKERS;
+    
+    // Reset player to their desk
+    resetPlayerToDesk();
 
     if (settings.gameMode === 'volume') {
       inventoryRef.current = generateInventory(10);
@@ -485,7 +577,7 @@ function App() {
     } else {
       inventoryRef.current = generateInventory(100);
     }
-  }, [settings.gameMode, settings.timer.enabled, settings.timer.duration]);
+  }, [settings.gameMode, settings.timer.enabled, settings.timer.duration, isMobile]);
 
   const beginGameStart = useCallback(() => {
     setAiUsageSeconds(0);
@@ -573,11 +665,11 @@ function App() {
   const initialIsMobile = window.innerWidth <= 768;
 
   const playerRef = useRef<Player>({
-    // Start at player's desk position based on initial screen size
-    x: initialIsMobile ? 90 : 285,
-    y: initialIsMobile ? 570 : 635,
-    targetX: initialIsMobile ? 90 : 285,
-    targetY: initialIsMobile ? 570 : 635,
+    // Start at player's desk position (Row 2, Center)
+    x: initialIsMobile ? 200 : 400,
+    y: initialIsMobile ? 685 : 635,
+    targetX: initialIsMobile ? 200 : 400,
+    targetY: initialIsMobile ? 685 : 635,
     speed: 5,
   });
 
@@ -587,14 +679,14 @@ function App() {
   const customersRef = useRef<Customer[]>(
     initialIsMobile 
       ? [
-          generateCustomer(1, 120, 220),
-          generateCustomer(2, 200, 260),
-          generateCustomer(3, 280, 220),
+          generateCustomer(1, 100, 200),
+          generateCustomer(2, 200, 250),
+          generateCustomer(3, 300, 200),
         ]
       : [
-          generateCustomer(1, 200, 220),
-          generateCustomer(2, 400, 200),
-          generateCustomer(3, 550, 220),
+          generateCustomer(1, 150, 220),
+          generateCustomer(2, 400, 180),
+          generateCustomer(3, 650, 220),
         ]
   );
   
@@ -637,9 +729,10 @@ function App() {
 
     const spawnLocs = isMobile ? MOBILE_SPAWN_LOCATIONS : SPAWN_LOCATIONS;
     const desks = desksRef.current;
+    const environmentBoxes = isMobile ? MOBILE_COLLISION_AREAS : SHOWROOM_COLLISION_AREAS;
     
-    // Attempt to find a location not too close to other active customers or desks
-    const availableLocations = spawnLocs.filter(loc => {
+    // Attempt to find a location not too close to other active customers, desks, or environment objects (cars)
+    const availableLocations = spawnLocs.filter((loc: {x: number, y: number}) => {
       const nearCustomer = customersRef.current.some(c => 
         c.active && !c.isStolen && Math.sqrt(Math.pow(c.x - loc.x, 2) + Math.pow(c.y - loc.y, 2)) < 50
       );
@@ -647,7 +740,17 @@ function App() {
         loc.x >= desk.x - 20 && loc.x <= desk.x + desk.w + 20 &&
         loc.y >= desk.y - 20 && loc.y <= desk.y + desk.h + 20
       );
-      return !nearCustomer && !onDesk;
+      
+      const onEnvironment = environmentBoxes.some((box: {x: number, y: number, w: number, h: number}) => {
+        const closestX = Math.max(box.x, Math.min(loc.x, box.x + box.w));
+        const closestY = Math.max(box.y, Math.min(loc.y, box.y + box.h));
+        const edx = loc.x - closestX;
+        const edy = loc.y - closestY;
+        const distanceSq = edx * edx + edy * edy;
+        return distanceSq < 25 * 25; // Check with safety radius
+      });
+
+      return !nearCustomer && !onDesk && !onEnvironment;
     });
 
     const spawnLoc = availableLocations.length > 0 
@@ -664,6 +767,7 @@ function App() {
     customersRef.current = [...customersRef.current, newCustomer];
     return newCustomer;
   }, [isMobile]);
+
 
   const findPerfectCars = (customer: Customer | null) => {
     if (!customer) return [];
@@ -1013,6 +1117,30 @@ function App() {
         }
       }
 
+      // Collision with showroom environment (Cars)
+      const environmentBoxes = isMobile ? MOBILE_COLLISION_AREAS : SHOWROOM_COLLISION_AREAS;
+      entities.forEach(entity => {
+        const isStaticCoworker = (entity as any).type === 'coworker' && !(entity as any).workingWithCustomerId;
+        if (isStaticCoworker) return; 
+        
+        environmentBoxes.forEach(box => {
+          const closestX = Math.max(box.x, Math.min(entity.x, box.x + box.w));
+          const closestY = Math.max(box.y, Math.min(entity.y, box.y + box.h));
+          
+          const edx = entity.x - closestX;
+          const edy = entity.y - closestY;
+          const distanceSq = edx * edx + edy * edy;
+          const radius = 18; // Entity radius for environment collision
+          
+          if (distanceSq < radius * radius) {
+            const distance = Math.sqrt(distanceSq) || 0.1;
+            const overlap = radius - distance;
+            entity.x += (edx / distance) * overlap;
+            entity.y += (edy / distance) * overlap;
+          }
+        });
+      });
+
       const dx = player.targetX - player.x;
       const dy = player.targetY - player.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1053,13 +1181,29 @@ function App() {
         ctx.stroke();
       }
 
+      // Draw Showroom Cars (Rendered on floor layer)
+      const carsImg = showroomCarsImageRef.current;
+      if (carsImg && carsImg.complete && carsImg.naturalWidth > 0) {
+        if (isMobile) {
+          ctx.drawImage(carsImg, 220, 150, 180, 150);
+        } else {
+          ctx.drawImage(carsImg, 500, 100, 190, 150);
+        }
+      }
+
       // Draw desks
       desksRef.current.forEach(desk => {
-        ctx.fillStyle = '#8b7355';
-        ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
-        ctx.strokeStyle = '#654321';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(desk.x, desk.y, desk.w, desk.h);
+        const deskImg = deskImageRef.current;
+        if (deskImg && deskImg.complete && deskImg.naturalWidth > 0) {
+          ctx.drawImage(deskImg, desk.x, desk.y, desk.w, desk.h);
+        } else {
+          // Fallback rendering while loading
+          ctx.fillStyle = '#8b7355';
+          ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
+          ctx.strokeStyle = '#654321';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(desk.x, desk.y, desk.w, desk.h);
+        }
       });
 
       // Draw coworkers
@@ -1079,13 +1223,26 @@ function App() {
 
         // Title badge (above name) - HIDE when working with customer
         if (!isWorking) {
-          const titleWidth = ctx.measureText(coworker.title).width + 10;
-          ctx.fillStyle = coworker.color;
-          ctx.fillRect(coworker.x - titleWidth / 2, coworker.y - 48, titleWidth, 14);
-          ctx.fillStyle = '#fff';
           ctx.font = `bold ${9 * uiScale}px Arial`;
+          const text = coworker.title;
+          const metrics = ctx.measureText(text);
+          const badgeWidth = metrics.width + 12;
+          const badgeHeight = 16;
+          const badgeX = coworker.x - badgeWidth / 2;
+          const badgeY = coworker.y - 52;
+          
+          ctx.fillStyle = coworker.color;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 4);
+          } else {
+            ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
+          }
+          ctx.fill();
+          
+          ctx.fillStyle = '#fff';
           ctx.textAlign = 'center';
-          ctx.fillText(coworker.title, coworker.x, coworker.y - 37);
+          ctx.fillText(text, coworker.x, badgeY + badgeHeight / 2 + 4);
         }
 
         // First name only
@@ -1140,25 +1297,47 @@ function App() {
 
         // Buyer type badge OR stolen badge
         if (isStolen) {
-          // TAKEN badge - wider pill with clean styling
-          const badgeWidth = 50;
-          const badgeHeight = 14;
+          ctx.font = `bold ${9 * uiScale}px Arial`;
+          const text = 'TAKEN';
+          const metrics = ctx.measureText(text);
+          const badgeWidth = metrics.width + 16;
+          const badgeHeight = 16;
+          const badgeX = customer.x - badgeWidth / 2;
+          const badgeY = customer.y - 55;
+          
           ctx.fillStyle = '#c0392b';
           ctx.beginPath();
-          ctx.roundRect(customer.x - badgeWidth/2, customer.y - 53, badgeWidth, badgeHeight, 7);
+          if (ctx.roundRect) {
+            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 8);
+          } else {
+            ctx.arc(customer.x, customer.y - 53 + 7, 7, 0, Math.PI * 2);
+          }
           ctx.fill();
           
-          // Text (no emoji for cleaner look)
           ctx.fillStyle = '#fff';
-          ctx.font = `bold ${9 * uiScale}px Arial`;
           ctx.textAlign = 'center';
-          ctx.fillText('TAKEN', customer.x, customer.y - 43);
+          ctx.fillText(text, customer.x, badgeY + badgeHeight / 2 + 4);
         } else {
-          ctx.fillStyle = customer.buyerType === 'cash' ? '#2ecc71' : '#3498db';
-          ctx.fillRect(customer.x - 25, customer.y - 52, 50, 12);
-          ctx.fillStyle = '#fff';
           ctx.font = `bold ${8 * uiScale}px Arial`;
-          ctx.fillText(customer.buyerType.toUpperCase(), customer.x, customer.y - 43);
+          const text = customer.buyerType.toUpperCase();
+          const metrics = ctx.measureText(text);
+          const badgeWidth = metrics.width + 14;
+          const badgeHeight = 14;
+          const badgeX = customer.x - badgeWidth / 2;
+          const badgeY = customer.y - 54;
+
+          ctx.fillStyle = customer.buyerType === 'cash' ? '#2ecc71' : '#3498db';
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 4);
+          } else {
+            ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
+          }
+          ctx.fill();
+          
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.fillText(text, customer.x, badgeY + badgeHeight / 2 + 4);
         }
 
         // Talk button when nearby - hidden if stolen
@@ -1888,9 +2067,26 @@ function App() {
 
     const priceForEvaluation = agreedPrice || customSellingPrice;
 
+    // Check for excessive markup (Strict 20% over MSRP)
+    // We must normalize payment deals to OTD/Selling price equivalent for this check
+    let markupCheckingPrice = priceForEvaluation;
+    if (currentCar) {
+       if (agreedType === 'otd') {
+          // OTD includes 7% tax + fees. Back it out to get selling price.
+          markupCheckingPrice = (priceForEvaluation - (currentCar.fees || 0)) / 1.07;
+       } else if (agreedType === 'payment') {
+          // Calculate OTD from monthly payment, then back out to selling price
+          const otd = calculateOTDFromPayment(priceForEvaluation, downPayment, paymentAPR, paymentTerm);
+          markupCheckingPrice = (otd - (currentCar.fees || 0)) / 1.07;
+       }
+    }
+    const isMarkupExcessive = currentCar && markupCheckingPrice > currentCar.price * 1.2;
+
     // FIRST: Check if customer likes the car AND the price
     const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
-    const likesThePrice = isCommitted || customerLikesThePrice(selectedPerson, priceForEvaluation);
+    // If markup is excessive, they hate the price regardless of budget.
+    // Otherwise, check budget fit via customerLikesThePrice.
+    const likesThePrice = isCommitted || (!isMarkupExcessive && customerLikesThePrice(selectedPerson, priceForEvaluation));
 
     // ATTRITION / PRESSURE SALE LOGIC
     // If we've tried 3+ times and price is within 20% of base budget, give a small extra chance
@@ -1949,8 +2145,18 @@ function App() {
             analytical: "The vehicle specifications don't align with my desired features."
           };
           objection = responses[selectedPerson.personality];
+        } else if (isMarkupExcessive) {
+          // Markup objection
+          const responses = {
+            friendly: "I like the car, but it's listed way over the MSRP. That markup isn't very cool...",
+            serious: "The price includes a non-standard markup. I refuse to pay a premium over sticker.",
+            skeptical: "Typical. You're trying to gouge me with a markup. No deal.",
+            enthusiastic: "I love it, but why are we marking it up so much? That doesn't feel right!",
+            analytical: "The pricing structure includes a markup exceeding 20% of MSRP. Interaction terminated."
+          };
+          objection = responses[selectedPerson.personality];
         } else {
-          // Price too high
+          // Price too high (budget)
           const responses = {
             friendly: "I like the car, but I'm still not comfortable with the price...",
             serious: "The vehicle is acceptable, but the price is not.",
@@ -2200,15 +2406,8 @@ function App() {
     setShowInventory(false);
     setShowNumbers(false);
 
-    // Move player back to an open desk
-    const desks = desksRef.current;
-    if (desks.length > 0) {
-      const desk = desks[Math.floor(Math.random() * desks.length)];
-      playerRef.current.x = desk.x + desk.w / 2;
-      playerRef.current.y = desk.y + desk.h / 2;
-      playerRef.current.targetX = playerRef.current.x;
-      playerRef.current.targetY = playerRef.current.y;
-    }
+    // Reset player to their desk
+    resetPlayerToDesk();
 
     spawnNewCustomer();
   };
@@ -2228,27 +2427,8 @@ function App() {
     setShowInventory(false);
     setShowNumbers(false);
 
-    // Move player back to an unoccupied desk
-    const allDesks = desksRef.current;
-    if (allDesks.length > 0) {
-      const unoccupiedDesks = allDesks.filter(desk => {
-        const deskCenterX = desk.x + desk.w / 2;
-        const deskCenterY = desk.y + desk.h / 2;
-        return !coworkersRef.current.some(coworker => 
-          Math.abs(coworker.x - deskCenterX) < 60 && 
-          Math.abs(coworker.y - deskCenterY) < 60
-        );
-      });
-      
-      const desk = unoccupiedDesks.length > 0 
-        ? unoccupiedDesks[Math.floor(Math.random() * unoccupiedDesks.length)]
-        : allDesks[Math.floor(Math.random() * allDesks.length)];
-        
-      playerRef.current.x = desk.x + desk.w / 2;
-      playerRef.current.y = desk.y + desk.h / 2;
-      playerRef.current.targetX = playerRef.current.x;
-      playerRef.current.targetY = playerRef.current.y;
-    }
+    // Reset player to their desk
+    resetPlayerToDesk();
 
     spawnNewCustomer();
   };
@@ -2451,204 +2631,201 @@ function App() {
 
 
 
-  // Welcome screen
-  if (gameState === 'intro') {
+  // Main Render for Intro and Setup (handled together for transition continuity)
+  if (gameState === 'intro' || gameState === 'setup') {
     return (
-      <div className="intro-screen">
-        <div className="intro-card">
-          <h1>Showroom Blitz</h1>
-          <p className="subtitle">Competitive Car Sales Simulation</p>
-
-          <div className="game-description">
-            <p>Work the showroom floor as a car salesperson competing against AI coworkers. Move quickly to intercept customers, learn their preferences, and close deals before your competition does.</p>
+      <>
+        {showVideo && (
+          <div className="transition-video-overlay">
+            <video
+              src={TRANSITION_VIDEO}
+              autoPlay
+              playsInline
+              className="transition-video"
+              onTimeUpdate={handleVideoTimeUpdate}
+              onEnded={onVideoEnded}
+            />
           </div>
+        )}
 
-          <div className="features">
-            <div className="feature">
-              <div className="feature-icon">
-                <DollarSign size={20} />
-              </div>
-              <div className="feature-text">
-                <strong>Real Deal Math</strong>
-                <span>Calculate profit margins, payments, and OTD pricing</span>
-              </div>
-            </div>
-            <div className="feature">
-              <div className="feature-icon">
-                <Users size={20} />
-              </div>
-              <div className="feature-text">
-                <strong>AI Personalities</strong>
-                <span>Each customer has unique budgets, preferences, and negotiation styles</span>
-              </div>
-            </div>
-            <div className="feature">
-              <div className="feature-icon">
-                <Car size={20} />
-              </div>
-              <div className="feature-text">
-                <strong>Dynamic Inventory</strong>
-                <span>Browse 10-100 vehicles with real specs and pricing</span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            className="start-button"
-            onClick={() => setGameState('setup')}
-          >
-            Get Started
-          </button>
-
-          <button
-            className="tips-button"
-            onClick={() => setShowTips(true)}
-          >
-            <HelpCircle size={18} /> How to Play
-          </button>
-
-          <p className="made-by-footer">Made by Curren</p>
-        </div>
-
-        {showTips && <TipsModal onClose={() => setShowTips(false)} />}
-      </div>
-    );
-  }
-
-  // Setup screen (game mode selection)
-  if (gameState === 'setup') {
-    return (
-      <div className="intro-screen">
-        <div className="intro-card setup-card">
-          <h2 className="setup-title">Game Setup</h2>
-          <p className="setup-subtitle">Choose your game mode and settings</p>
-
-          <div className="settings-container">
-            <div className="setting-section">
-              <h3>Game Mode</h3>
-              <div className="mode-buttons">
-                <button
-                  className={`mode-btn ${settings.gameMode === 'standard' ? 'active' : ''}`}
-                  onClick={() => setSettings(prev => ({ ...prev, gameMode: 'standard' }))}
-                >
-                  Standard
-                </button>
-                <button
-                  className={`mode-btn ${settings.gameMode === 'volume' ? 'active' : ''}`}
-                  onClick={() => setSettings(prev => ({ ...prev, gameMode: 'volume', timer: { ...prev.timer, enabled: false } }))}
-                >
-                  Volume Run
-                </button>
-              </div>
-              <div className="mode-description">
-                <div className={`mode-info ${settings.gameMode === 'standard' ? 'visible' : 'hidden'}`}>
-                  100 vehicles • Practice deals
+        {/* Intro Screen Content */}
+        {gameState === 'intro' && (
+          <div className={`intro-screen startscreen-page ${isTransitioning ? 'transparent-bg' : ''}`}>
+            <div className="startscreen-overlay">
+              <div className="startscreen-card">
+                <div className={`startscreen-title-img ${isTransitioning ? 'exiting-up' : ''}`}>
+                  <img src={START_TITLE_IMAGE} alt="Showroom Blitz" loading="lazy" />
                 </div>
-                <div className={`mode-info ${settings.gameMode === 'volume' ? 'visible' : 'hidden'}`}>
-                  10 vehicles • Race the clock!
+                <div className={`startscreen-description-img ${isTransitioning ? 'exiting-up' : ''}`}>
+                  <img
+                    src={START_DESCRIPTION_IMAGE}
+                    alt="Work the showroom floor as a car salesperson competing against coworkers. Move quickly to intercept customers, learn their preferences, and close deals before your competition does."
+                    loading="lazy"
+                  />
                 </div>
-              </div>
-            </div>
-
-            <div className="setting-section">
-              <div className="ai-toggle-header">
-                <h3>AI Mode</h3>
-                <span className="ai-recommend">Highly recommended</span>
-              </div>
-              <div className="ai-toggle-buttons">
-                <button
-                  className={`timer-btn ${!settings.useAI ? 'active' : ''}`}
-                  onClick={() => setSettings(prev => ({ ...prev, useAI: false }))}
-                >
-                  Off
-                </button>
-                <button
-                  className={`timer-btn ${settings.useAI ? 'active' : ''}`}
-                  onClick={() => setSettings(prev => ({
-                    ...prev,
-                    useAI: true,
-                    provider: 'local',
-                    apiBaseUrl: '/api/ai',
-                    modelName: currenServerModel,
-                  }))}
-                >
-                  On
-                </button>
-              </div>
-              <div className="mode-description">
-                <div className={`mode-info ${settings.useAI ? 'visible' : 'hidden'}`}>
-                  Uses Curren&apos;s server by default • ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min)
-                </div>
-                <div className={`mode-info ${!settings.useAI ? 'visible' : 'hidden'}`}>
-                  Smart scripted responses (offline)
-                </div>
-              </div>
-            </div>
-
-            {settings.gameMode === 'standard' && (
-              <div className="setting-section">
-                <h3>Timed Session</h3>
-                <div className="timer-buttons">
+                <div className={`startscreen-actions ${isTransitioning ? 'exiting-down' : ''}`}>
                   <button
-                    className={`timer-btn ${!settings.timer.enabled ? 'active' : ''}`}
-                    onClick={() => setSettings(prev => ({
-                      ...prev,
-                      timer: { ...prev.timer, enabled: false }
-                    }))}
+                    className="start-button"
+                    onClick={handleStartClick}
+                    type="button"
                   >
-                    Off
+                    <span className="start-button-bg">
+                      <img src={START_BUTTON_BG_IMAGE} alt="" aria-hidden="true" loading="lazy" />
+                    </span>
+                    <span className="start-button-text">
+                      <img src={START_BUTTON_TEXT_IMAGE} alt="Start" loading="lazy" />
+                    </span>
                   </button>
                   <button
-                    className={`timer-btn ${settings.timer.enabled ? 'active' : ''}`}
-                    onClick={() => setSettings(prev => ({
-                      ...prev,
-                      timer: { ...prev.timer, enabled: true }
-                    }))}
+                    className="tips-button"
+                    onClick={() => setShowTips(true)}
+                    type="button"
                   >
-                    On
+                    <HelpCircle size={18} /> How to Play
                   </button>
                 </div>
-                <div className="timer-duration-container">
-                  <div className={`timer-duration ${settings.timer.enabled ? 'visible' : 'hidden'}`}>
-                    <div className="duration-buttons">
-                      {[3, 5, 10].map(d => (
-                        <button
-                          key={d}
-                          className={`duration-btn ${settings.timer.duration === d ? 'active' : ''}`}
-                          onClick={() => setSettings(prev => ({
-                            ...prev,
-                            timer: { ...prev.timer, duration: d as 3 | 5 | 10 }
-                          }))}
-                        >
-                          {d} min
-                        </button>
-                      ))}
+
+                <p className={`made-by-footer ${isTransitioning ? 'exiting-down' : ''}`}>Made by Curren</p>
+              </div>
+            </div>
+            {showTips && <TipsModal onClose={() => setShowTips(false)} />}
+          </div>
+        )}
+
+        {/* Setup Screen Content */}
+        {gameState === 'setup' && (
+          <div className={`intro-screen setup-page ${isTransitioning ? 'transparent-bg' : ''}`}>
+            <div className={`intro-card setup-card ${isTransitioning ? 'fade-in' : ''}`}>
+              <h2 className="setup-title">Game Setup</h2>
+              <p className="setup-subtitle">Choose your game mode and settings</p>
+
+              <div className="settings-container">
+                <div className="setting-section">
+                  <h3>Game Mode</h3>
+                  <div className="mode-buttons">
+                    <button
+                      className={`mode-btn btn-purple ${settings.gameMode === 'standard' ? 'active' : ''}`}
+                      onClick={() => setSettings(prev => ({ ...prev, gameMode: 'standard' }))}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      className={`mode-btn btn-purple ${settings.gameMode === 'volume' ? 'active' : ''}`}
+                      onClick={() => setSettings(prev => ({ ...prev, gameMode: 'volume', timer: { ...prev.timer, enabled: false } }))}
+                    >
+                      Volume Run
+                    </button>
+                  </div>
+                  <div className="mode-description">
+                    <div className={`mode-info ${settings.gameMode === 'standard' ? 'visible' : 'hidden'}`}>
+                      100 vehicles • Practice deals
+                    </div>
+                    <div className={`mode-info ${settings.gameMode === 'volume' ? 'visible' : 'hidden'}`}>
+                      10 vehicles • Race the clock!
                     </div>
                   </div>
                 </div>
+
+                <div className="setting-section">
+                  <div className="ai-toggle-header">
+                    <h3>AI Mode</h3>
+                    <span className="ai-recommend">Highly recommended</span>
+                  </div>
+                  <div className="ai-toggle-buttons">
+                    <button
+                      className={`timer-btn btn-orange ${!settings.useAI ? 'active' : ''}`}
+                      onClick={() => setSettings(prev => ({ ...prev, useAI: false }))}
+                    >
+                      Off
+                    </button>
+                    <button
+                      className={`timer-btn btn-green ${settings.useAI ? 'active' : ''}`}
+                      onClick={() => setSettings(prev => ({
+                        ...prev,
+                        useAI: true,
+                        provider: 'local',
+                        apiBaseUrl: '/api/ai',
+                        modelName: currenServerModel,
+                      }))}
+                    >
+                      On
+                    </button>
+                  </div>
+                  <div className="mode-description">
+                    <div className={`mode-info ${settings.useAI ? 'visible' : 'hidden'}`}>
+                      Uses Curren&apos;s server by default • ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min)
+                    </div>
+                    <div className={`mode-info ${!settings.useAI ? 'visible' : 'hidden'}`}>
+                      Smart scripted responses (offline)
+                    </div>
+                  </div>
+                </div>
+
+                {settings.gameMode === 'standard' && (
+                  <div className="setting-section">
+                    <h3>Timed Session</h3>
+                    <div className="timer-buttons">
+                      <button
+                        className={`timer-btn btn-purple ${!settings.timer.enabled ? 'active' : ''}`}
+                        onClick={() => setSettings(prev => ({
+                          ...prev,
+                          timer: { ...prev.timer, enabled: false }
+                        }))}
+                      >
+                        Off
+                      </button>
+                      <button
+                        className={`timer-btn btn-purple ${settings.timer.enabled ? 'active' : ''}`}
+                        onClick={() => setSettings(prev => ({
+                          ...prev,
+                          timer: { ...prev.timer, enabled: true }
+                        }))}
+                      >
+                        On
+                      </button>
+                    </div>
+                    <div className="timer-duration-container">
+                      <div className={`timer-duration ${settings.timer.enabled ? 'visible' : 'hidden'}`}>
+                        <div className="duration-buttons">
+                          {[3, 5, 10].map(d => (
+                            <button
+                              key={d}
+                              className={`duration-btn btn-green ${settings.timer.duration === d ? 'active' : ''}`}
+                              onClick={() => setSettings(prev => ({
+                                ...prev,
+                                timer: { ...prev.timer, duration: d as 3 | 5 | 10 }
+                              }))}
+                            >
+                              {d} min
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              <button
+                className="setup-action-button"
+                onClick={beginGameStart}
+              >
+                Open Showroom
+              </button>
+
+              <button
+                className="secondary-button"
+                onClick={() => setGameState('intro')}
+              >
+                Back
+              </button>
+
+              <p className="made-by-footer">Made by Curren</p>
+            </div>
+            {showTips && <TipsModal onClose={() => setShowTips(false)} />}
           </div>
-
-          <button
-            className="start-button"
-            onClick={beginGameStart}
-          >
-            Open Showroom
-          </button>
-
-          <button
-            className="secondary-button"
-            onClick={() => setGameState('intro')}
-          >
-            Back
-          </button>
-
-          <p className="made-by-footer">Made by Curren</p>
-        </div>
-
-        {showTips && <TipsModal onClose={() => setShowTips(false)} />}
-      </div>
+        )}
+      </>
     );
   }
 
@@ -2657,7 +2834,7 @@ function App() {
     const progressPercent = Math.round(aiLoadProgress * 100);
     const isReady = aiWarmupStatus === 'ready';
     return (
-      <div className="intro-screen">
+      <div className="intro-screen setup-page">
         <div className="intro-card setup-card loading-card">
           <h2 className="setup-title">
             {isReady ? 'Ready!' : 'Starting AI Server'}
@@ -2695,7 +2872,7 @@ function App() {
               Switch to Non-AI
             </button>
             <button
-              className="start-button"
+              className="setup-action-button"
               onClick={() => retryWarmup('loading')}
             >
               Retry Warmup

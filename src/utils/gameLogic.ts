@@ -553,81 +553,99 @@ export function calculateOTDFromPayment(payment: number, downPayment: number, ap
 
 // Spawn locations - customers spawn in visible area BEFORE desks start (y < 340)
 // Keeping 60px+ from all edges for name visibility
+// Showroom Layout Asset Path
+export const SHOWROOM_CARS_ASSET = new URL('../../Assets/showroom_cars.png', import.meta.url).href;
+
+// Collision Areas for Showroom Cars (Right Side)
+// Optimized to match the specific car positions in showroom_cars.png
+export const SHOWROOM_COLLISION_AREAS = [
+  { x: 520, y: 105, w: 120, h: 60 },  // Top/Back car
+  { x: 570, y: 155, w: 110, h: 60 },  // Middle/Right car
+  { x: 505, y: 205, w: 100, h: 45 },  // Front/Left car
+];
+
+export const MOBILE_COLLISION_AREAS = [
+  { x: 240, y: 154, w: 120, h: 60 },
+  { x: 290, y: 204, w: 110, h: 60 },
+  { x: 224, y: 254, w: 100, h: 44 },
+];
+
+
+
+
+
+// Spawn locations - Adjusted to avoid cars and respect new padding
 export const SPAWN_LOCATIONS = [
-  { x: 150, y: 200 },
-  { x: 300, y: 180 },
-  { x: 450, y: 200 },
-  { x: 600, y: 180 },
-  { x: 200, y: 250 },
-  { x: 400, y: 230 },
-  { x: 550, y: 250 },
+  { x: 150, y: 220 },
+  { x: 300, y: 200 },
+  { x: 100, y: 280 },
+  { x: 250, y: 260 },
+  { x: 400, y: 300 },
 ];
 
-// Desks - centered in 800px canvas, moved back to y=360 and y=450
-// Reception at front, player's desk in row 2 column 2
+// Desks - 1 Reception + 6 Sales desks (3x2 grid)
 export const INITIAL_DESKS = [
-  { x: 350, y: 100, w: 100, h: 50 }, // Reception desk
-  { x: 80, y: 340, w: 90, h: 45 },
-  { x: 240, y: 340, w: 90, h: 45 },
-  { x: 400, y: 340, w: 90, h: 45 },
-  { x: 560, y: 340, w: 90, h: 45 },
-  { x: 80, y: 600, w: 90, h: 45 },
-  { x: 240, y: 600, w: 90, h: 45 },  // Player's desk - no coworker here
-  { x: 400, y: 600, w: 90, h: 45 },
-  { x: 560, y: 600, w: 90, h: 45 },
+  { x: 70, y: 100, w: 100, h: 50 }, // Reception desk (Left)
+  // Row 1 (y=380 - Moved down for padding)
+  { x: 120, y: 380, w: 90, h: 45 },
+  { x: 355, y: 380, w: 90, h: 45 },
+  { x: 590, y: 380, w: 90, h: 45 },
+  // Row 2 (y=640)
+  { x: 120, y: 640, w: 90, h: 45 },
+  { x: 355, y: 640, w: 90, h: 45 }, // Player's desk (Col 2)
+  { x: 590, y: 640, w: 90, h: 45 },
 ];
 
-// Coworkers positioned at their desks (all except player's desk at 240, 600)
+// Coworkers positioned at their desks (5 active sales + 1 reception)
 export const INITIAL_COWORKERS: Coworker[] = [
   // Receptionist - doesn't steal
-  { id: 107, name: 'Rachel', title: 'Receptionist', department: 'bdc', x: 400, y: 160, type: 'coworker', color: '#9b59b6', originalX: 400, originalY: 160 },
+  { id: 107, name: 'Rachel', title: 'Receptionist', department: 'bdc', x: 120, y: 160, type: 'coworker', color: '#9b59b6', originalX: 120, originalY: 160 },
   
-  // Row 1 (y=340)
-  { id: 101, name: 'Mike', title: 'GSM', department: 'management', x: 125, y: 375, type: 'coworker', color: '#f39c12', originalX: 125, originalY: 375 },
-  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 285, y: 375, type: 'coworker', color: '#3498db', originalX: 285, originalY: 375, nextStealTime: 20 + Math.random() * 25 },
-  { id: 102, name: 'Sarah', title: 'Finance', department: 'management', x: 445, y: 375, type: 'coworker', color: '#e67e22', originalX: 445, originalY: 375 },
-  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 605, y: 375, type: 'coworker', color: '#2980b9', originalX: 605, originalY: 375, nextStealTime: 20 + Math.random() * 25 },
+  // Row 1 (y=380)
+  { id: 101, name: 'Mike', title: 'Sales', department: 'sales', x: 165, y: 415, type: 'coworker', color: '#f39c12', originalX: 165, originalY: 415, nextStealTime: 20 + Math.random() * 25 },
+  { id: 102, name: 'Sarah', title: 'Sales', department: 'sales', x: 400, y: 415, type: 'coworker', color: '#e67e22', originalX: 400, originalY: 415, nextStealTime: 20 + Math.random() * 25 },
+  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 635, y: 415, type: 'coworker', color: '#3498db', originalX: 635, originalY: 415, nextStealTime: 20 + Math.random() * 25 },
   
-  // Row 2 (y=600) - desk at 240 is EMPTY for player
-  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 125, y: 635, type: 'coworker', color: '#1abc9c', originalX: 125, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
-  { id: 111, name: 'Tom', title: 'Sales', department: 'sales', x: 445, y: 635, type: 'coworker', color: '#16a085', originalX: 445, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
-  { id: 112, name: 'Amy', title: 'Sales', department: 'sales', x: 605, y: 635, type: 'coworker', color: '#3498db', originalX: 605, originalY: 635, nextStealTime: 20 + Math.random() * 25 },
+  // Row 2 (y=640) - desk at 355 (Center) is EMPTY for player
+  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 165, y: 675, type: 'coworker', color: '#1abc9c', originalX: 165, originalY: 675, nextStealTime: 20 + Math.random() * 25 },
+  { id: 111, name: 'Tom', title: 'Sales', department: 'sales', x: 635, y: 675, type: 'coworker', color: '#16a085', originalX: 635, originalY: 675, nextStealTime: 20 + Math.random() * 25 },
 ];
 
 // Mobile Layout Constants (Portrait Mode: 400px wide, 800px tall)
-// Keep customers in upper area where they're visible
 export const MOBILE_SPAWN_LOCATIONS = [
-  { x: 80, y: 200 },
-  { x: 200, y: 180 },
-  { x: 320, y: 200 },
-  { x: 120, y: 260 },
-  { x: 280, y: 260 },
-  { x: 200, y: 300 },
+  { x: 60, y: 220 },
+  { x: 150, y: 200 },
+  { x: 240, y: 220 },
+  { x: 100, y: 280 },
+  { x: 180, y: 320 },
 ];
 
-// Mobile desks - centered in 400px width, positioned lower to leave room for customers
-// Canvas is 400w x 800h - desks start at y=420 to leave customer area above
+// Mobile desks - 1 Reception + 6 Sales desks (3x2 grid)
 export const MOBILE_DESKS = [
-  { x: 150, y: 80, w: 100, h: 40 }, // Reception desk
-  { x: 40, y: 420, w: 100, h: 50 },
-  { x: 160, y: 420, w: 100, h: 50 },
-  { x: 280, y: 420, w: 100, h: 50 },
-  { x: 40, y: 640, w: 100, h: 50 },  // Player desk
-  { x: 160, y: 640, w: 100, h: 50 },
-  { x: 280, y: 640, w: 100, h: 50 },
+  { x: 40, y: 80, w: 100, h: 40 }, // Reception desk (Left)
+  // Row 1 (y=460 - Moved down)
+  { x: 30, y: 460, w: 100, h: 50 },
+  { x: 150, y: 460, w: 100, h: 50 },
+  { x: 270, y: 460, w: 100, h: 50 },
+  // Row 2 (y=680)
+  { x: 30, y: 680, w: 100, h: 50 },
+  { x: 150, y: 680, w: 100, h: 50 }, // Player's desk (Col 2)
+  { x: 270, y: 680, w: 100, h: 50 },
 ];
 
-// Mobile coworkers - positioned at desks within 400px width
+// Mobile coworkers (5 active sales + 1 reception)
 export const MOBILE_COWORKERS: Coworker[] = [
-  // Receptionist - doesn't steal
-  { id: 107, name: 'Rachel', title: 'Receptionist', department: 'bdc', x: 200, y: 130, type: 'coworker', color: '#9b59b6', originalX: 200, originalY: 130 },
+  // Receptionist
+  { id: 107, name: 'Rachel', title: 'Receptionist', department: 'bdc', x: 90, y: 130, type: 'coworker', color: '#9b59b6', originalX: 90, originalY: 130 },
   
-  // Row 1 desks (y=420)
-  { id: 101, name: 'Mike', title: 'GSM', department: 'management', x: 90, y: 460, type: 'coworker', color: '#f39c12', originalX: 90, originalY: 460 },
-  { id: 102, name: 'Sarah', title: 'Finance', department: 'management', x: 210, y: 460, type: 'coworker', color: '#e67e22', originalX: 210, originalY: 460 },
-  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 330, y: 460, type: 'coworker', color: '#3498db', originalX: 330, originalY: 460, nextStealTime: 20 + Math.random() * 25 },
+  // Row 1 desks (y=460)
+  { id: 101, name: 'Mike', title: 'Sales', department: 'sales', x: 80, y: 500, type: 'coworker', color: '#f39c12', originalX: 80, originalY: 500, nextStealTime: 20 + Math.random() * 25 },
+  { id: 102, name: 'Sarah', title: 'Sales', department: 'sales', x: 200, y: 500, type: 'coworker', color: '#e67e22', originalX: 200, originalY: 500, nextStealTime: 20 + Math.random() * 25 },
+  { id: 108, name: 'Jake', title: 'Sales', department: 'sales', x: 320, y: 500, type: 'coworker', color: '#3498db', originalX: 320, originalY: 500, nextStealTime: 20 + Math.random() * 25 },
   
-  // Row 2 desks (y=640) - first desk (x=40) is EMPTY for player
-  { id: 109, name: 'Emma', title: 'Sales', department: 'sales', x: 210, y: 680, type: 'coworker', color: '#2980b9', originalX: 210, originalY: 680, nextStealTime: 20 + Math.random() * 25 },
-  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 330, y: 680, type: 'coworker', color: '#1abc9c', originalX: 330, originalY: 680, nextStealTime: 20 + Math.random() * 25 },
+  // Row 2 desks (y=680) - middle desk (x=150) is EMPTY for player
+  { id: 110, name: 'Chris', title: 'Sales', department: 'sales', x: 80, y: 720, type: 'coworker', color: '#1abc9c', originalX: 80, originalY: 720, nextStealTime: 20 + Math.random() * 25 },
+  { id: 111, name: 'Tom', title: 'Sales', department: 'sales', x: 320, y: 720, type: 'coworker', color: '#16a085', originalX: 320, originalY: 720, nextStealTime: 20 + Math.random() * 25 },
 ];
+
+

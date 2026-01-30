@@ -55,7 +55,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    background: url('../Assets/showroom_bg.png') center/cover no-repeat;
     position: relative;
     overflow: hidden;
 }
@@ -126,7 +126,10 @@ body {
     font-weight: 600;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
 }
 
 .ai-warmup-btn.primary {
@@ -158,8 +161,12 @@ body {
 }
 
 @keyframes ai-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ========== Intro screen ========== */
@@ -169,8 +176,177 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #36393f; /* Discord background - solid, no gradient */
     padding: 24px;
+    background: #36393f;
+    z-index: 2;
+    position: relative;
+}
+
+.intro-screen.startscreen-page,
+.intro-screen.setup-page {
+    background: transparent;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.intro-screen.startscreen-page::before,
+.intro-screen.setup-page::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    transition: opacity 0.5s ease;
+    opacity: 1;
+}
+
+.intro-screen.startscreen-page::before {
+    background: url("../Assets/desktop_startscreen_bg.png") center/cover no-repeat;
+}
+
+.intro-screen.setup-page::before {
+    background: url('../Assets/menu_bg.png') center/cover no-repeat;
+}
+
+.startscreen-overlay {
+    position: relative;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.startscreen-card {
+    width: 100%;
+    height: 98vh;
+    padding: 0;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    justify-content: flex-start;
+}
+
+.startscreen-title-img {
+    animation: startscreen-wiggle 8s ease-in-out infinite;
+    transform-origin: center;
+    width: 100%;
+    margin-top: 60px;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+}
+
+.startscreen-title-img img {
+    width: 90%;
+    max-width: 850px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.startscreen-description-img {
+    margin-bottom: 0px;
+    max-width: 420px;
+    width: 90%;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+}
+
+.startscreen-description-img img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.startscreen-actions {
+    margin-top: auto;
+    width: 90%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 1.5vw, 16px);
+    padding-bottom: 20px;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+}
+
+.intro-screen.startscreen-page .made-by-footer {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.7rem;
+    margin-top: 32px;
+    margin-bottom: -16px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 12px;
+    border-radius: 999px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: inline-block;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+}
+
+@keyframes startscreen-wiggle {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(1.5deg); }
+    40% { transform: rotate(-1deg); }
+    60% { transform: rotate(0.5deg); }
+    80% { transform: rotate(-0.5deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* Exit Animations */
+.exiting-up {
+    transform: translateY(-150%) !important;
+    opacity: 0;
+}
+
+.exiting-down {
+    transform: translateY(200%) !important;
+    opacity: 0;
+}
+
+/* Video Transition Overlay */
+.transition-video-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transition-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Setup Screen Fade-in */
+/* Setup Screen Fade-in */
+/* Transition transparency: allow video behind */
+.setup-page.transparent-bg::before,
+.startscreen-page.transparent-bg::before {
+    opacity: 0 !important;
+}
+
+.setup-page.transparent-bg,
+.startscreen-page.transparent-bg {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.fade-in {
+    animation: setup-fade-in 1.2s ease-out forwards;
+}
+
+@keyframes setup-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .intro-card {
@@ -182,6 +358,59 @@ body {
     width: 100%;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Material elevation shadow */
+}
+
+/* ========== Setup screen ========== */
+.setup-card {
+    max-width: 440px;
+    background: rgba(255, 255, 255, 0.25) !important;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 4px solid #f97316; /* Orange border */
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    padding: 32px 28px;
+    color: #1e293b;
+    display: flex;
+    flex-direction: column;
+    width: 90%;
+    position: relative;
+}
+
+.setup-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 8px;
+    margin-top: 0;
+}
+
+.setup-subtitle {
+    color: #475569;
+    font-size: 1rem;
+    margin-bottom: 28px;
+    font-weight: 500;
+}
+
+.setting-section h3 {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 768px) {
+    .intro-screen.startscreen-page {
+        background-image: url("../Assets/mobile_startscreen_bg.png");
+    }
+
+    .startscreen-card {
+        width: 100%;
+        padding: 0;
+        min-height: 65vh;
+    }
 }
 
 .loading-card {
@@ -204,24 +433,26 @@ body {
 .loading-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #38b2ac, #2ecc71);
+    background: linear-gradient(90deg, #f97316, #fb923c); /* Orange gradient */
     transition: width 0.25s ease;
 }
 
 .loading-progress-text {
     margin-top: 10px;
     font-size: 0.9rem;
-    color: #b9bbbe;
+    color: #334155; /* Dark gray */
+    font-weight: 600;
 }
 
 .loading-tip {
     margin: 4px 0 18px;
     min-height: 2.4em;
     font-size: 0.95rem;
-    color: #c9ccd1;
+    color: #1e293b; /* Nearly black */
     line-height: 1.2;
     opacity: 0;
     transition: opacity 0.4s ease;
+    font-weight: 500;
 }
 
 .loading-tip.is-visible {
@@ -272,7 +503,7 @@ body {
 }
 
 .intro-card .made-by-footer {
-    color: #72767d;
+    color: #1e293b;
     font-size: 0.8rem;
     margin-top: 16px;
     margin-bottom: 0;
@@ -333,7 +564,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
 }
 
 .setting-section {
@@ -378,9 +609,15 @@ body {
 }
 
 @keyframes ai-recommend-float {
-    0% { transform: translateY(0px) translateX(0px); }
-    50% { transform: translateY(-4px) translateX(2px); }
-    100% { transform: translateY(0px) translateX(0px); }
+    0% {
+        transform: translateY(0px) translateX(0px);
+    }
+    50% {
+        transform: translateY(-4px) translateX(2px);
+    }
+    100% {
+        transform: translateY(0px) translateX(0px);
+    }
 }
 
 .mode-buttons,
@@ -394,28 +631,35 @@ body {
 .timer-btn {
     flex: 1;
     padding: 12px;
-    border: 1px solid #202225;
-    border-radius: 8px;
-    background: #40444b; /* Slightly elevated */
-    color: #dcddde;
-    font-weight: 600;
-    font-size: 0.95rem;
+    border: 2px solid #334155;
+    border-radius: 12px;
+    background: #fdf6e3; /* Beige unselected */
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 1.1rem;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.1);
 }
 
 .mode-btn:hover,
 .timer-btn:hover {
-    background: #484c52; /* Lighter on hover */
-    border-color: #2c2f33;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0,0,0,0.15);
 }
 
-.mode-btn.active,
-.timer-btn.active {
-    background: #5865F2; /* Discord blurple */
-    border-color: #5865F2;
+.mode-btn:active,
+.timer-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+}
+
+/* Standard Button - Purple when active */
+.mode-btn.active {
+    background: #5865F2;
+    border-color: #4752c4;
     color: white;
-    box-shadow: 0 2px 6px rgba(88, 101, 242, 0.3); /* Glow effect */
+    box-shadow: 0 4px 0 #3c45a5;
 }
 
 .mode-description {
@@ -424,17 +668,19 @@ body {
 }
 
 .mode-info {
+    position: relative; /* Changed from absolute to flow naturally if needed, but absolute over empty space works */
+    /* Actually reference has it as a block below buttons. */
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     text-align: center;
-    color: #b9bbbe;
+    color: #334155; /* Dark gray for contrast */
     font-size: 0.85rem;
-    padding: 8px;
-    background: #40444b;
-    border: 1px solid #202225;
-    border-radius: 6px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.06); /* Very transparent gray */
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
@@ -500,52 +746,204 @@ body {
     box-shadow: 0 2px 6px rgba(59, 165, 93, 0.3);
 }
 
-.start-button {
-    width: 100%;
-    padding: 16px 32px;
-    font-size: 1.05rem;
-    font-weight: 700;
-    border: none;
-    border-radius: 10px;
-    background: #5865F2; /* Discord blurple */
+/* AI Toggle Buttons Specifics */
+/* Start with base .timer-btn styles */
+
+/* We need to target specific buttons based on text content or structure. */
+
+/* We need to target specific buttons based on text content or structure. 
+   Since we can't easily see text in CSS, we might need a small HTML tweak later. 
+   For now, let's style the AI "Off" button to be Orange when active if possible, 
+   or just make all active buttons Purple for consistency, 
+   UNLESS we see specific colors.
+   The image shows:
+   - Standard: Purple (Selected)
+   - Volume Run: Beige
+   - AI Off: Orange (Selected)
+   - AI On: Beige
+   - Timed Session Off: Beige
+   - Timed Session On: Purple (Selected)
+   - 5 min: Green (Selected)
+   
+   So we implement color variants.
+   Since I can't change HTML classes in this step easily for *each* button without losing context, 
+   I will add CSS rules that apply generally and maybe some specific overrides if I can.
+   Actually, I'll update the CSS to support these colors and then I'll do a quick pass on App.tsx to add the specific classes.
+*/
+
+.btn-purple.active {
+    background: #5865F2;
+    border-color: #4752c4;
+    box-shadow: 0 4px 0 #3c45a5;
     color: white;
+}
+
+.btn-orange.active {
+    background: #f97316;
+    border-color: #ea580c;
+    box-shadow: 0 4px 0 #c2410c;
+    color: #0f172a;
+}
+
+.btn-beige.active {
+    background: #fdf6e3;
+    border-color: #334155;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+    color: #1e293b;
+    transform: translateY(2px); /* Pushed down state */
+}
+
+.btn-green.active {
+    background: #22c55e;
+    border-color: #16a34a;
+    box-shadow: 0 4px 0 #15803d;
+    color: white;
+}
+
+
+.duration-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.duration-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #334155;
+    border-radius: 10px;
+    background: #fdf6e3;
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(88, 101, 242, 0.4);
-    margin-bottom: 12px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+}
+
+.duration-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0,0,0,0.15);
+}
+
+.duration-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+}
+
+.duration-btn.active {
+    background: #22c55e; /* Green for time */
+    border-color: #16a34a;
+    color: white;
+    box-shadow: 0 4px 0 #15803d;
+}
+
+.start-button {
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    position: relative;
+    display: block;
+    margin: 0 auto;
+    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
 }
 
 .start-button:hover {
-    background: #4752c4; /* Darker blurple */
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(88, 101, 242, 0.5);
+    transform: scale(1.05);
 }
 
 .start-button:active {
-    transform: translateY(0);
+    transform: scale(0.96);
+    opacity: 0.9;
 }
+
+.start-button-bg,
+.start-button-text {
+    display: block;
+    width: 100%;
+}
+
+.start-button-bg img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.start-button-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.start-button-text img {
+    width: min(220px, 70%);
+    height: auto;
+    display: block;
+}
+
+/* New button style specifically for Setup screen "Open Showroom" */
+.setup-action-button {
+    width: 100%;
+    padding: 16px;
+    border-radius: 16px;
+    background: #f97316; /* Orange */
+    color: #0f172a;
+    font-weight: 800;
+    font-size: 1.25rem;
+    border: 2px solid #0f172a;
+    box-shadow: 0 6px 0 #0f172a;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.setup-action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #0f172a;
+}
+
+.setup-action-button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #0f172a;
+}
+
+/* Hide the old image branding elements inside start button for setup screen if reused */
+/* Actually, the setup screen might use a different button or text. 
+   The design shows "Open Showroom" text button.
+   I need to make sure the start button in Setup uses this class style.
+*/
 
 .tips-button {
     width: 100%;
-    padding: 12px;
-    background: transparent;
-    color: #b9bbbe;
-    border: 1px solid #40444b;
-    display: flex;
+    padding: 11px 0;
+    border-radius: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
     justify-content: center;
-    border-radius: 8px;
+    gap: 8px;
     cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
 }
 
 .tips-button:hover {
-    background: #40444b;
-    border-color: #484c52;
-    color: #dcddde;
+    background: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
 }
 
 .secondary-button {
@@ -570,21 +968,40 @@ body {
 
 /* ========== Setup screen ========== */
 .setup-card {
-    max-width: 420px;
+    max-width: 440px;
+    background: #fdfdfd;
+    border: 4px solid #f97316; /* Orange border */
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    padding: 32px 28px;
+    color: #1e293b;
+    display: flex;
+    flex-direction: column;
+    width: 90%;
 }
 
 .setup-title {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #dcddde;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f172a;
     margin-bottom: 8px;
     margin-top: 0;
 }
 
 .setup-subtitle {
-    color: #b9bbbe;
-    font-size: 0.95rem;
+    color: #475569;
+    font-size: 1rem;
     margin-bottom: 28px;
+    font-weight: 500;
+}
+
+.setting-section h3 {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
 }
 
 /* ========== Stats overlay ========== */
@@ -693,7 +1110,34 @@ body {
     color: #991b1b;
 }
 
-/* Desktop panels container - side by side layout */
+.secondary-button {
+    width: 100%;
+    padding: 12px;
+    background: #fdf6e3;
+    color: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    margin-bottom: 24px; /* Space for footer */
+    box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+    margin-top: 12px;
+    text-align: center;
+}
+
+.secondary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0,0,0,0.15);
+    background: #fdf6e3;
+    color: #1e293b;
+}
+
+.secondary-button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+}
 .panels-container {
     display: none;
 }
@@ -729,16 +1173,16 @@ body {
         width: 380px;
         max-height: 80vh;
     }
-    
+
     .notes-panel {
         width: 280px;
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
-    
+
     .notes-panel .customer-notes {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
         border: 4px solid #e6dbb9 !important;
     }
 
@@ -1000,7 +1444,11 @@ body {
     border: none;
     border-radius: 10px;
     padding: 10px 12px;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    background: linear-gradient(
+        135deg,
+        var(--primary) 0%,
+        var(--primary-light) 100%
+    );
     color: white;
     font-weight: 600;
     cursor: pointer;
@@ -1140,7 +1588,7 @@ body {
         max-height: 80vh;
         border-radius: 16px;
     }
-    
+
     /* Standalone mode (not in container) */
     .side-panel:not(.in-container) {
         position: fixed;
@@ -1794,9 +2242,15 @@ body {
 }
 
 @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Results Modal */
@@ -1804,7 +2258,7 @@ body {
     background: linear-gradient(145deg, var(--bg-card) 0%, #0f172a 100%);
     border-color: var(--accent);
     box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9);
-    width:calc(100% - 32px);
+    width: calc(100% - 32px);
     max-width: 480px;
     padding: 40px;
 }
@@ -1933,7 +2387,7 @@ body {
 }
 
 .desk-top {
-    background: linear-gradient(145deg, #8B4513 0%, #654321 100%);
+    background: linear-gradient(145deg, #8b4513 0%, #654321 100%);
     height: 80px;
     border-radius: 10px;
     border: 4px solid #5c3a21;
@@ -1999,44 +2453,44 @@ body {
         padding: 8px 12px 6px 12px;
         min-height: 100px;
     }
-    
+
     .character-avatar {
         width: 40px;
         height: 40px;
         font-size: 1rem;
     }
-    
+
     .character-avatar.player-avatar {
         font-size: 0.6rem;
     }
-    
+
     .character-label {
         font-size: 0.7rem;
     }
-    
+
     .desk-surface {
         max-width: 160px;
         margin: 6px 0;
     }
-    
+
     .desk-top {
         height: 45px;
     }
-    
+
     .offer-paper {
         width: 70px;
         height: 50px;
         padding: 4px;
     }
-    
+
     .paper-header {
         font-size: 0.5rem;
     }
-    
+
     .paper-car {
         font-size: 0.45rem;
     }
-    
+
     .paper-price {
         font-size: 0.6rem;
     }
@@ -2052,5 +2506,7 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
