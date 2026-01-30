@@ -856,6 +856,27 @@ export function detectSentiment(text: string): Sentiment {
   return 'neutral';
 }
 
+function isDealRelatedText(text: string): boolean {
+  const dealKeywords = /\b(price|cost|deal|offer|budget|payment|monthly|apr|term|down payment|otd|out[- ]?the[- ]?door|msrp|numbers|sign|paperwork|loan|finance|sell(ing)? price|trade|interest rate|vehicle|car|suv|sedan|trim|model|mileage|vin)\b/i;
+  return dealKeywords.test(text);
+}
+
+type PersonalTone = 'super_positive' | 'positive' | 'neutral' | 'negative' | 'super_negative';
+
+function analyzePersonalTone(text: string): { tone: PersonalTone; isFlirty: boolean } {
+  const superPositive = /\b(love you|adore|amazing|incredible|wonderful|best ever|so kind|so sweet|you('?re)? the best|perfect|fantastic)\b/i;
+  const positive = /\b(nice|kind|sweet|thanks|appreciate|cool|great|lovely|funny)\b/i;
+  const superNegative = /\b(disgusting|creep|creepy|gross|pervert|harass|harassment|leave me alone|stop it|get away|hate you|worst)\b/i;
+  const negative = /\b(rude|annoying|awkward|uncomfortable|weird|no thanks|not appropriate)\b/i;
+  const flirty = /\b(cute|hot|handsome|beautiful|gorgeous|sexy|date|number|kiss|dinner|flirt|flirty)\b/i;
+
+  if (superNegative.test(text)) return { tone: 'super_negative', isFlirty: flirty.test(text) };
+  if (superPositive.test(text)) return { tone: 'super_positive', isFlirty: flirty.test(text) };
+  if (negative.test(text)) return { tone: 'negative', isFlirty: flirty.test(text) };
+  if (positive.test(text)) return { tone: 'positive', isFlirty: flirty.test(text) };
+  return { tone: 'neutral', isFlirty: flirty.test(text) };
+}
+
 // ============ MAIN RESPONSE GENERATOR ============
 
 export interface ResponseContext {
@@ -1645,6 +1666,24 @@ export async function getAIResponse(
       // Determine new phase if not already set
       if (!newPhase && /price|cost|numbers|how much|\$/i.test(aiResponse)) {
         newPhase = 'negotiation';
+      }
+    }
+
+    // Personal / general chat sentiment impact (non-deal related)
+    if (instructionType === 'personal_chat' || instructionType === 'general_chat') {
+      const dealRelated = isDealRelatedText(aiResponse);
+      if (!dealRelated) {
+        const { tone, isFlirty } = analyzePersonalTone(aiResponse);
+        if (isFlirty) {
+          // Flirting is risky: 50% chance to tank satisfaction
+          interestChange = Math.random() < 0.5 ? -25 : 20;
+        } else {
+          if (tone === 'super_positive') interestChange = 20;
+          else if (tone === 'positive') interestChange = 8;
+          else if (tone === 'negative') interestChange = -8;
+          else if (tone === 'super_negative') interestChange = -20;
+          else interestChange = 0;
+        }
       }
     }
 
