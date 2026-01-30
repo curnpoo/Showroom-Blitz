@@ -45,7 +45,7 @@ const AI_WARMUP_TIPS = [
   'Present the numbers clearly and walk through payments calmly.',
   'Explain why the price is fair by tying it to their needs.',
   'Ask for the close and guide them to the next step.',
-  'Build rapport throughout and stay helpful.'
+  'Build rapport throughout and stay helpful.',
   'Be nice but feel free to be honest ;)',
 ];
 
