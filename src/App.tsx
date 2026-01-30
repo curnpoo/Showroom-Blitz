@@ -2238,7 +2238,7 @@ function App() {
     setIsTyping(true);
 
     // Detect if this is a greeting
-    const isGreeting = /^(hi|hello|hey|howdy|greetings|good morning|good afternoon|good evening)/i.test(userMsg);
+    const isGreeting = /^(hi|hello|hey|howdy|greetings|good\s*morning|good\s*afternoon|good\s*evening)\b/i.test(userMsg);
     const messageType = isGreeting && selectedPerson.conversationPhase === 'greeting' 
       ? 'greeting' 
       : 'general';
@@ -2306,7 +2306,7 @@ function App() {
     }
     // Normal response flow
     else if (settings.useAI && (settings.apiKey || settings.provider === 'local')) {
-      const result = await getAIResponse(selectedPerson, userMsg, currentCar, settings);
+      const result = await getAIResponse(selectedPerson, userMsg, currentCar, settings, { messageType });
       response = result.response;
       interestChange = result.interestChange;
       newPhase = result.newPhase;

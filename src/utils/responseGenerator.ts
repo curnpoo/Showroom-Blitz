@@ -1349,6 +1349,7 @@ export async function getAIResponse(
     // Budget questions: "budget?", "how much", "what can you spend", etc.
     if (/\b(budget|spend|afford|pay|money|price|cost)\b.*\?|^budget\??$/i.test(message)) {
       customer.revealedPreferences.budget = true;
+      if (!instructionType) instructionType = 'ask_budget';
     }
     // Type questions: "type?", "what kind", "suv or sedan", etc.
     if (/\b(type|kind|style|suv|sedan|truck|looking for)\b.*\?|^type\??$/i.test(message)) {
@@ -1363,6 +1364,11 @@ export async function getAIResponse(
     if (/\b(model|brand|make|specific|car|vehicle)\b.*\?|^model\??$/i.test(message)) {
       customer.revealedPreferences.model = true;
     }
+  }
+
+  if (!instructionType && messageType === 'ask_budget') {
+    instructionType = 'ask_budget';
+    customer.revealedPreferences.budget = true;
   }
 
   // Check for needs/budget inquiry (legacy check - can remove or keep as fallback)
@@ -1426,7 +1432,11 @@ export async function getAIResponse(
   }
 
   // Detect simple greetings - customer should just greet back, not dump info
-  if (!instructionType && /^(hey|hi|hello|what'?s up|sup|yo|howdy|good (morning|afternoon|evening))[\s\!\?\.\,]*$/i.test(message.trim())) {
+  if (!instructionType && messageType === 'greeting') {
+    instructionType = 'greeting_response';
+  }
+
+  if (!instructionType && /^(hey|hi|hello|what'?s up|sup|yo|howdy|good\s*(morning|afternoon|evening))\b/i.test(message.trim())) {
     instructionType = 'greeting_response';
   }
 
@@ -1451,6 +1461,16 @@ export async function getAIResponse(
   const systemPrompt = useLitePrompt
     ? buildLiteSystemPrompt(customer, instructionType)
     : buildSystemPrompt(customer, currentCar, instructionType, scenarioData);
+
+  // For direct budget questions, force a clear numeric answer (AI sometimes hedges).
+  if (instructionType === 'ask_budget') {
+    const scripted = generateResponse({
+      customer,
+      currentCar,
+      messageType: 'ask_budget',
+    });
+    return { ...scripted, playerSentiment };
+  }
 
   try {
     let aiResponse = '';
@@ -1793,6 +1813,11 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
           : `$${customer.maxPayment}/month with $${customer.desiredDown.toLocaleString()} down`;
 
       switch (instructionType) {
+          case 'ask_budget':
+              instruction = customer.buyerType === 'cash'
+                ? `The salesperson asked your budget. State your exact cash budget (${budgetText}) clearly.`
+                : `The salesperson asked your budget. State your exact monthly payment and down payment (${budgetText}) clearly.`;
+              break;
           // Scenarios
           case 'take_it_success':
               instruction = "The salesperson gave you an ultimatum ('take it or leave it'). You have decided to ACCEPT it. Reluctantly agree to buy the car.";
@@ -1949,7 +1974,8 @@ RESPONSE FORMAT:
 - Answer the salesperson's question directly
 - No lists, no bullet points
 - Stay in character as ${customer.personality}
-- NEVER mention specific dollar amounts unless the salesperson told you a price
+- NEVER mention specific dollar amounts unless the salesperson told you a price OR asked for your budget/payment
+- If asked your budget/payment, state the exact amount from your preferences
 - Do NOT make up prices or say things like "$48k" unless they said it first
 - Do NOT ask for recommendations or other models unless the salesperson explicitly asked you to
 `;
