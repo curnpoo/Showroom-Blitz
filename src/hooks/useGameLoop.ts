@@ -23,6 +23,8 @@ export interface UseGameLoopParams {
   showInput: boolean;
   selectedPerson: Customer | null;
   spawnNewCustomer: () => void;
+  deskImageRef: MutableRefObject<HTMLImageElement | null>;
+  showroomCarsImageRef: MutableRefObject<HTMLImageElement | null>;
 }
 
 export function useGameLoop({
@@ -36,6 +38,8 @@ export function useGameLoop({
   showInput,
   selectedPerson,
   spawnNewCustomer,
+  deskImageRef,
+  showroomCarsImageRef: _showroomCarsImageRef,
 }: UseGameLoopParams): void {
   const animationRef = useRef<number | null>(null);
 
@@ -53,8 +57,7 @@ export function useGameLoop({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const deskImg = new Image();
-    deskImg.src = new URL('../../Assets/desk.png', import.meta.url).href;
+    const deskImg = deskImageRef.current;
 
     const animate = () => {
       const uiScale = isMobile ? 1.75 : 1;
@@ -136,7 +139,7 @@ export function useGameLoop({
 
 
       desksRef.current.forEach((desk) => {
-        if (deskImg.complete && deskImg.naturalWidth > 0) {
+        if (deskImg && deskImg.complete && deskImg.naturalWidth > 0) {
           ctx.drawImage(deskImg, desk.x, desk.y, desk.w, desk.h);
         } else {
           // Fallback rendering while loading - DEBUG RED

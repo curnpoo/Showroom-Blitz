@@ -101,28 +101,104 @@ const STEAL_INTERVAL_MIN = 20;
 const STEAL_INTERVAL_MAX = 45;
 const COWORKER_DEAL_MIN = 60;
 const COWORKER_DEAL_MAX = 120;
-const START_TITLE_IMAGE = new URL('../Assets/title_startscreen.png', import.meta.url).href;
-const START_DESCRIPTION_IMAGE = new URL('../Assets/description_startscreen.png', import.meta.url).href;
-const START_BUTTON_BG_IMAGE = new URL('../Assets/startbutton_bg.png', import.meta.url).href;
-const START_BUTTON_TEXT_IMAGE = new URL('../Assets/start_button_text.png', import.meta.url).href;
+const PLAYER_SPEED = 300; // pixels per second (approx. 5 px/frame at 60fps)
+const START_TITLE_IMAGE = new URL('../Assets/title_startscreen.webp', import.meta.url).href;
+const START_DESCRIPTION_IMAGE = new URL('../Assets/description_startscreen.webp', import.meta.url).href;
+const START_BUTTON_BG_IMAGE = new URL('../Assets/startbutton_bg.webp', import.meta.url).href;
+const START_BUTTON_TEXT_IMAGE = new URL('../Assets/start_button_text.webp', import.meta.url).href;
 const TRANSITION_VIDEO = new URL('../Assets/startscreen-to-menu_transition.mp4', import.meta.url).href;
+const PLAYER_COLLISION_RADIUS = 18;
+
+type CollisionBox = { x: number; y: number; w: number; h: number };
+
+const keepPointOutsideEnvironment = (
+  rawX: number,
+  rawY: number,
+  boxes: CollisionBox[]
+): { x: number; y: number } => {
+  let targetX = rawX;
+  let targetY = rawY;
+  const radius = PLAYER_COLLISION_RADIUS;
+
+  for (const box of boxes) {
+    const closestX = Math.max(box.x, Math.min(targetX, box.x + box.w));
+    const closestY = Math.max(box.y, Math.min(targetY, box.y + box.h));
+    const dx = targetX - closestX;
+    const dy = targetY - closestY;
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq >= radius * radius) continue;
+
+    if (distSq === 0) {
+      const centerX = box.x + box.w / 2;
+      const centerY = box.y + box.h / 2;
+      let dirX = targetX - centerX;
+      let dirY = targetY - centerY;
+      if (dirX === 0 && dirY === 0) {
+        dirX = 1;
+      }
+      const dirDist = Math.sqrt(dirX * dirX + dirY * dirY);
+      const pushDistance = Math.max(box.w, box.h) / 2 + radius + 2;
+      targetX = centerX + (dirX / dirDist) * pushDistance;
+      targetY = centerY + (dirY / dirDist) * pushDistance;
+    } else {
+      const dist = Math.sqrt(distSq);
+      targetX = closestX + (dx / dist) * radius;
+      targetY = closestY + (dy / dist) * radius;
+    }
+  }
+
+  return { x: targetX, y: targetY };
+};
 
 function App() {
   const deskImageRef = useRef<HTMLImageElement | null>(null);
   const showroomCarsImageRef = useRef<HTMLImageElement | null>(null);
 
-  // Load assets once
+  // Preload critical assets with progress tracking
   useEffect(() => {
-    const deskImg = new Image();
-    deskImg.src = new URL('../Assets/desk.png', import.meta.url).href;
-    deskImageRef.current = deskImg;
+    const criticalImages = [
+      { name: 'desk', url: new URL('../Assets/desk.webp', import.meta.url).href, ref: deskImageRef },
+      { name: 'showroom_cars', url: SHOWROOM_CARS_ASSET, ref: showroomCarsImageRef },
+      { name: 'showroom_bg', url: new URL('../Assets/showroom_bg.webp', import.meta.url).href, ref: null },
+      { name: 'menu_bg', url: new URL('../Assets/menu_bg.webp', import.meta.url).href, ref: null },
+      { name: 'desktop_startscreen_bg', url: new URL('../Assets/desktop_startscreen_bg.webp', import.meta.url).href, ref: null },
+      { name: 'mobile_startscreen_bg', url: new URL('../Assets/mobile_startscreen_bg.webp', import.meta.url).href, ref: null },
+      { name: 'title_startscreen', url: START_TITLE_IMAGE, ref: null },
+      { name: 'description_startscreen', url: START_DESCRIPTION_IMAGE, ref: null },
+    ];
 
-    const carsImg = new Image();
-    carsImg.src = SHOWROOM_CARS_ASSET;
-    showroomCarsImageRef.current = carsImg;
+    let loadedCount = 0;
+    const totalImages = criticalImages.length;
+
+    const updateProgress = () => {
+      loadedCount++;
+      const progress = (loadedCount / totalImages) * 100;
+      setImageLoadProgress(progress);
+
+      if (loadedCount === totalImages) {
+        setImagesLoaded(true);
+      }
+    };
+
+    criticalImages.forEach(({ url, ref }) => {
+      const img = new Image();
+      img.onload = updateProgress;
+      img.onerror = () => {
+        console.warn(`Failed to load image: ${url}`);
+        updateProgress(); // Still count as loaded to prevent blocking
+      };
+      img.src = url;
+
+      if (ref) {
+        ref.current = img;
+      }
+    });
   }, []);
 
-  const [gameState, setGameState] = useState<GameState>('intro');
+  const [gameState, setGameState] = useState<GameState>('preloading');
+  const [imageLoadProgress, setImageLoadProgress] = useState(0);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
@@ -266,6 +342,13 @@ function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Transition from preloading to intro when images are loaded
+  useEffect(() => {
+    if (imagesLoaded && gameState === 'preloading') {
+      setGameState('intro');
+    }
+  }, [imagesLoaded, gameState]);
 
   useEffect(() => {
     useAIRef.current = settings.useAI;
@@ -965,6 +1048,7 @@ function App() {
       
       const clickX = (clientX - rect.left) / scale;
       const clickY = (clientY - rect.top) / scale;
+      const environmentBoxes = isMobile ? MOBILE_COLLISION_AREAS : SHOWROOM_COLLISION_AREAS;
 
       // Check for button clicks on customers
       for (const customer of customersRef.current) {
@@ -1034,12 +1118,18 @@ function App() {
       }
 
       if (clickedPerson && 'type' in clickedPerson && clickedPerson.type === 'customer') {
-        playerRef.current.targetX = clickedPerson.x - 50;
-        playerRef.current.targetY = clickedPerson.y;
+        const narrowedTarget = keepPointOutsideEnvironment(
+          clickedPerson.x - 50,
+          clickedPerson.y,
+          environmentBoxes
+        );
+        playerRef.current.targetX = narrowedTarget.x;
+        playerRef.current.targetY = narrowedTarget.y;
         setSelectedPerson(clickedPerson as Customer);
       } else {
-        playerRef.current.targetX = clickX;
-        playerRef.current.targetY = clickY;
+        const safeTarget = keepPointOutsideEnvironment(clickX, clickY, environmentBoxes);
+        playerRef.current.targetX = safeTarget.x;
+        playerRef.current.targetY = safeTarget.y;
         setSelectedPerson(null);
         setShowInput(false);
       }
@@ -1048,25 +1138,13 @@ function App() {
     canvas.addEventListener('click', handleClick);
     canvas.addEventListener('touchstart', handleClick);
 
-    let lastTimestamp = 0; // Track previous frame time for deltaTime calculation
+    const FIXED_TIME_STEP = 1 / 60;
+    const MAX_FRAME_TIME = 0.25;
+    let lastTimestamp = 0;
+    let accumulator = 0;
 
-    const animate = (timestamp: number) => {
-      // Calculate real deltaTime in seconds
-      if (lastTimestamp === 0) {
-        lastTimestamp = timestamp;
-        animationRef.current = requestAnimationFrame(animate);
-        return; // Skip first frame
-      }
-
-      const deltaTime = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
-      lastTimestamp = timestamp;
-
-      // Scale UI elements for mobile readability
-      const uiScale = isMobile ? 1.75 : 1; 
-      
+    const updateSimulation = (deltaTime: number) => {
       const player = playerRef.current;
-      
-      // Collision avoidance between all entities (player, coworkers, active customers)
       const entities: any[] = [
         player,
         ...coworkersRef.current,
@@ -1086,16 +1164,12 @@ function App() {
             const overlap = minDist - dist;
             const nx = dx / (dist || 1);
             const ny = dy / (dist || 1);
-            
-            // Push away from each other
             const moveX = (nx * overlap) / 2;
             const moveY = (ny * overlap) / 2;
-            
-            // Coworkers are static at their desks
+
             const isE1Static = (e1 as any).type === 'coworker';
             const isE2Static = (e2 as any).type === 'coworker';
 
-            // EXCEPTION: If a coworker is walking to/with a customer they stole, ignore collision between them
             const c1 = e1 as any;
             const c2 = e2 as any;
             if (c1.type === 'coworker' && c2.type === 'customer' && c1.workingWithCustomerId === c2.id) continue;
@@ -1117,55 +1191,226 @@ function App() {
         }
       }
 
-      // Collision with showroom environment (Cars)
       const environmentBoxes = isMobile ? MOBILE_COLLISION_AREAS : SHOWROOM_COLLISION_AREAS;
+      let playerBlockedByEnvironment = false;
       entities.forEach(entity => {
         const isStaticCoworker = (entity as any).type === 'coworker' && !(entity as any).workingWithCustomerId;
-        if (isStaticCoworker) return; 
-        
+        if (isStaticCoworker) return;
+
         environmentBoxes.forEach(box => {
           const closestX = Math.max(box.x, Math.min(entity.x, box.x + box.w));
           const closestY = Math.max(box.y, Math.min(entity.y, box.y + box.h));
-          
           const edx = entity.x - closestX;
           const edy = entity.y - closestY;
           const distanceSq = edx * edx + edy * edy;
-          const radius = 18; // Entity radius for environment collision
-          
+          const radius = 18;
+
           if (distanceSq < radius * radius) {
             const distance = Math.sqrt(distanceSq) || 0.1;
             const overlap = radius - distance;
             entity.x += (edx / distance) * overlap;
             entity.y += (edy / distance) * overlap;
+            if (entity === player) {
+              playerBlockedByEnvironment = true;
+            }
           }
         });
       });
+
+      if (playerBlockedByEnvironment) {
+        player.targetX = player.x;
+        player.targetY = player.y;
+      }
 
       const dx = player.targetX - player.x;
       const dy = player.targetY - player.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      const PLAYER_SPEED = 300; // pixels per second (was 5 px/frame * 60fps)
-      if (dist > 2) {
-        player.x += (dx / dist) * PLAYER_SPEED * deltaTime;
-        player.y += (dy / dist) * PLAYER_SPEED * deltaTime;
+      if (dist > 0.5) {
+        const moveDistance = Math.min(dist, PLAYER_SPEED * deltaTime);
+        const directionX = dx / dist;
+        const directionY = dy / dist;
+        player.x += directionX * moveDistance;
+        player.y += directionY * moveDistance;
+      } else {
+        player.x = player.targetX;
+        player.y = player.targetY;
       }
 
-      // Clear canvas
+      customersRef.current.forEach(customer => {
+        if (!customer.active) return;
+        const isBeingHelped = customer.isStolen || customer.conversationPhase !== 'greeting';
+        if (!isBeingHelped) {
+          customer.unattendedTimer += deltaTime;
+          if (customer.unattendedTimer >= 60) {
+            customer.active = false;
+            customer.isLost = true;
+            customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
+          }
+        } else {
+          customer.unattendedTimer = 0;
+        }
+      });
+
+      const waitingCount = customersRef.current.filter(
+        (c) => c.active && !c.isStolen && c.conversationPhase === 'greeting'
+      ).length;
+      if (waitingCount < MIN_WAITING_CUSTOMERS && waitingCount < MAX_WAITING_CUSTOMERS) {
+        spawnNewCustomer();
+      }
+
+      const salesCoworkers = coworkersRef.current.filter((c) => c.department === 'sales');
+      salesCoworkers.forEach(coworker => {
+        if (coworker.nextStealTime === undefined) {
+          coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+        }
+        if (coworker.pendingCustomerSpawn !== undefined && coworker.pendingCustomerSpawn > 0) {
+          coworker.pendingCustomerSpawn -= deltaTime;
+          if (coworker.pendingCustomerSpawn <= 0) {
+            coworker.pendingCustomerSpawn = undefined;
+            spawnNewCustomer();
+          }
+        }
+        if (coworker.workingWithCustomerId !== undefined) {
+          const customer = customersRef.current.find((c) => c.id === coworker.workingWithCustomerId);
+          if (!customer || !customer.active) {
+            coworker.workingWithCustomerId = undefined;
+            coworker.workingTimer = 0;
+            coworker.stealPhase = undefined;
+            coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+            return;
+          }
+          if (customer) {
+            if (coworker.stealPhase === 'walking') {
+              const dx = customer.x - coworker.x;
+              const dy = customer.y - coworker.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              if (dist > 15) {
+                const COWORKER_SPEED = 150;
+                coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
+                coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
+                const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                if (isIntercepted || !customer.active || customer.isLost) {
+                  coworker.stealPhase = 'returning';
+                  coworker.workingWithCustomerId = undefined;
+                  coworker.nextStealTime = STEAL_INTERVAL_MIN;
+                  coworker.pendingCustomerSpawn = undefined;
+                }
+              } else {
+                const isIntercepted = showInput && selectedPerson?.id === customer.id;
+                if (isIntercepted) {
+                  coworker.stealPhase = 'returning';
+                  coworker.workingWithCustomerId = undefined;
+                  coworker.nextStealTime = STEAL_INTERVAL_MIN;
+                  coworker.pendingCustomerSpawn = undefined;
+                } else {
+                  customer.isStolen = true;
+                  customer.stolenByCoworkerId = coworker.id;
+                  customer.stolenDealTimer = 0;
+                  customer.stolenDealDuration = COWORKER_DEAL_MIN + Math.random() * (COWORKER_DEAL_MAX - COWORKER_DEAL_MIN);
+                  coworker.stealPhase = 'greeting';
+                  coworker.workingTimer = 0;
+                }
+              }
+            } else if (coworker.stealPhase === 'greeting') {
+              coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
+              if (coworker.workingTimer >= 1.5) {
+                coworker.stealPhase = 'returning';
+                coworker.workingTimer = 0;
+              }
+            } else if (coworker.stealPhase === 'returning') {
+              const targetX = coworker.originalX || 0;
+              const targetY = coworker.originalY || 0;
+              const dx = targetX - coworker.x;
+              const dy = targetY - coworker.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              if (dist > 5) {
+                const COWORKER_SPEED = 150;
+                coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
+                coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
+                const custTargetX = coworker.x;
+                const custTargetY = coworker.y + 45;
+                const cdx = custTargetX - customer.x;
+                const cdy = custTargetY - customer.y;
+                const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+                if (cdist > 5) {
+                  customer.x += (cdx / cdist) * COWORKER_SPEED * deltaTime;
+                  customer.y += (cdy / cdist) * COWORKER_SPEED * deltaTime;
+                }
+              } else {
+                coworker.x = targetX;
+                coworker.y = targetY;
+                customer.x = targetX;
+                customer.y = targetY - 55;
+                coworker.stealPhase = 'working';
+                coworker.workingTimer = 0;
+              }
+            } else if (coworker.stealPhase === 'working') {
+              coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
+              customer.x = (coworker.originalX || coworker.x);
+              customer.y = (coworker.originalY || coworker.y) - 55;
+              customer.stolenDealTimer = (customer.stolenDealTimer || 0) + deltaTime;
+              if (customer.stolenDealDuration && customer.stolenDealTimer >= customer.stolenDealDuration) {
+                const coinToss = Math.random();
+                if (coinToss >= 0.5) {
+                  customer.active = false;
+                  customer.dealStatus = 'closed';
+                  customer.conversationPhase = 'closed';
+                } else {
+                  customer.active = false;
+                  customer.isLost = true;
+                  customer.dealStatus = 'lost';
+                  customer.conversationPhase = 'closed';
+                }
+                coworker.workingWithCustomerId = undefined;
+                coworker.workingTimer = 0;
+                coworker.stealPhase = undefined;
+                coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+                customer.isStolen = false;
+                customer.stolenByCoworkerId = undefined;
+                customer.stolenDealTimer = undefined;
+                customer.stolenDealDuration = undefined;
+                customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
+              }
+            }
+          }
+        } else {
+          coworker.nextStealTime -= deltaTime;
+          if (coworker.nextStealTime <= 0) {
+            const availableCustomers = customersRef.current.filter(c =>
+              c.active &&
+              !c.isStolen &&
+              c.conversationPhase === 'greeting' &&
+              !(showInput && selectedPerson?.id === c.id)
+            );
+            if (availableCustomers.length > 0) {
+              const victim = availableCustomers[Math.floor(Math.random() * availableCustomers.length)];
+              coworker.workingWithCustomerId = victim.id;
+              coworker.workingTimer = 0;
+              coworker.stealPhase = 'walking';
+              coworker.pendingCustomerSpawn = 3 + Math.random() * 2;
+            } else {
+              coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
+            }
+          }
+        }
+      });
+    };
+
+    const renderScene = (uiScale: number) => {
       ctx.fillStyle = '#e8e8e8';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw entrance
       ctx.fillStyle = '#8b4513';
       const entranceX = isMobile ? (MOBILE_CANVAS_WIDTH / 2) - 30 : 380;
       ctx.fillRect(entranceX, 0, 60, 20);
-      ctx.fillStyle = '#666';
       ctx.fillStyle = '#666';
       ctx.font = `${12 * uiScale}px Arial`;
       ctx.textAlign = 'center';
       ctx.fillText('ENTRANCE', entranceX + 30, 35);
 
-      // Draw grid
       ctx.strokeStyle = '#ccc';
       ctx.lineWidth = 1;
       for (let i = 0; i < canvas.width; i += 50) {
@@ -1181,7 +1426,6 @@ function App() {
         ctx.stroke();
       }
 
-      // Draw Showroom Cars (Rendered on floor layer)
       const carsImg = showroomCarsImageRef.current;
       if (carsImg && carsImg.complete && carsImg.naturalWidth > 0) {
         if (isMobile) {
@@ -1191,13 +1435,11 @@ function App() {
         }
       }
 
-      // Draw desks
       desksRef.current.forEach(desk => {
         const deskImg = deskImageRef.current;
         if (deskImg && deskImg.complete && deskImg.naturalWidth > 0) {
           ctx.drawImage(deskImg, desk.x, desk.y, desk.w, desk.h);
         } else {
-          // Fallback rendering while loading
           ctx.fillStyle = '#8b7355';
           ctx.fillRect(desk.x, desk.y, desk.w, desk.h);
           ctx.strokeStyle = '#654321';
@@ -1206,11 +1448,10 @@ function App() {
         }
       });
 
-      // Draw coworkers
+      const player = playerRef.current;
       coworkersRef.current.forEach(coworker => {
-        // Check if this coworker is working with a stolen customer
         const isWorking = coworker.workingWithCustomerId !== undefined;
-        
+
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(coworker.x, coworker.y + 20, 12, 6, 0, 0, Math.PI * 2);
@@ -1221,7 +1462,6 @@ function App() {
         ctx.arc(coworker.x, coworker.y, 15, 0, Math.PI * 2);
         ctx.fill();
 
-        // Title badge (above name) - HIDE when working with customer
         if (!isWorking) {
           ctx.font = `bold ${9 * uiScale}px Arial`;
           const text = coworker.title;
@@ -1230,7 +1470,7 @@ function App() {
           const badgeHeight = 16;
           const badgeX = coworker.x - badgeWidth / 2;
           const badgeY = coworker.y - 52;
-          
+
           ctx.fillStyle = coworker.color;
           ctx.beginPath();
           if (ctx.roundRect) {
@@ -1239,20 +1479,36 @@ function App() {
             ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
           }
           ctx.fill();
-          
+
           ctx.fillStyle = '#fff';
           ctx.textAlign = 'center';
           ctx.fillText(text, coworker.x, badgeY + badgeHeight / 2 + 4);
         }
 
-        // First name only
         ctx.fillStyle = '#000';
         ctx.font = `bold ${11 * uiScale}px Arial`;
         ctx.textAlign = 'center';
         ctx.fillText(coworker.name, coworker.x, coworker.y - 22);
+
+        if (coworker.stealPhase === 'working') {
+          const pencilBob = Math.sin(Date.now() / 200) * 3;
+          ctx.save();
+          ctx.translate(coworker.originalX ?? coworker.x, (coworker.originalY ?? coworker.y) - 30 + pencilBob);
+          ctx.fillStyle = '#f1c40f';
+          ctx.fillRect(-3, -10, 6, 16);
+          ctx.fillStyle = '#e74c3c';
+          ctx.fillRect(-3, -10, 6, 4);
+          ctx.fillStyle = '#2c3e50';
+          ctx.beginPath();
+          ctx.moveTo(-3, 6);
+          ctx.lineTo(0, 12);
+          ctx.lineTo(3, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
       });
 
-      // Draw customers
       customersRef.current.forEach(customer => {
         if (!customer.active) return;
 
@@ -1263,19 +1519,16 @@ function App() {
         const isNearby = distToPlayer < 80;
         const isStolen = customer.isStolen;
 
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(customer.x, customer.y + 20, 12, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body - grayed out if stolen
         ctx.fillStyle = isStolen ? '#888' : customer.color;
         ctx.beginPath();
         ctx.arc(customer.x, customer.y, 15, 0, Math.PI * 2);
         ctx.fill();
 
-        // Interest bar - hidden if stolen
         if (!isStolen) {
           const barWidth = 30;
           const barHeight = 4;
@@ -1285,9 +1538,8 @@ function App() {
           ctx.fillRect(customer.x - barWidth / 2, customer.y + 25, (customer.interest / 100) * barWidth, barHeight);
         }
 
-        // Name - show first name + last initial only (e.g., "Marcus W.")
         const nameParts = customer.name.split(' ');
-        const displayName = nameParts.length > 1 
+        const displayName = nameParts.length > 1
           ? `${nameParts[0]} ${nameParts[1][0]}.`
           : nameParts[0];
         ctx.fillStyle = isStolen ? '#999' : '#000';
@@ -1295,7 +1547,6 @@ function App() {
         ctx.textAlign = 'center';
         ctx.fillText(displayName, customer.x, customer.y - 25);
 
-        // Buyer type badge OR stolen badge
         if (isStolen) {
           ctx.font = `bold ${9 * uiScale}px Arial`;
           const text = 'TAKEN';
@@ -1304,7 +1555,7 @@ function App() {
           const badgeHeight = 16;
           const badgeX = customer.x - badgeWidth / 2;
           const badgeY = customer.y - 55;
-          
+
           ctx.fillStyle = '#c0392b';
           ctx.beginPath();
           if (ctx.roundRect) {
@@ -1313,7 +1564,7 @@ function App() {
             ctx.arc(customer.x, customer.y - 53 + 7, 7, 0, Math.PI * 2);
           }
           ctx.fill();
-          
+
           ctx.fillStyle = '#fff';
           ctx.textAlign = 'center';
           ctx.fillText(text, customer.x, badgeY + badgeHeight / 2 + 4);
@@ -1334,27 +1585,23 @@ function App() {
             ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
           }
           ctx.fill();
-          
+
           ctx.fillStyle = '#fff';
           ctx.textAlign = 'center';
           ctx.fillText(text, customer.x, badgeY + badgeHeight / 2 + 4);
         }
 
-        // Talk button when nearby - hidden if stolen
         if (isNearby && !showInput && !isStolen) {
           const buttonX = customer.x - 30;
           const buttonY = customer.y + 35;
           const buttonW = 60 * uiScale;
           const buttonH = 20 * uiScale;
-
           customer.buttonBounds = { x: buttonX, y: buttonY, w: buttonW, h: buttonH };
-
           ctx.fillStyle = '#2ecc71';
           ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
           ctx.strokeStyle = '#27ae60';
           ctx.lineWidth = 2;
           ctx.strokeRect(buttonX, buttonY, buttonW, buttonH);
-
           ctx.fillStyle = '#fff';
           ctx.font = `bold ${11 * uiScale}px Arial`;
           ctx.fillText('TALK', customer.x, buttonY + (14 * uiScale));
@@ -1363,7 +1610,6 @@ function App() {
         }
       });
 
-      // Draw player
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
       ctx.ellipse(player.x, player.y + 20, 12, 6, 0, 0, Math.PI * 2);
@@ -1378,285 +1624,29 @@ function App() {
       ctx.font = `bold ${11 * uiScale}px Arial`;
       ctx.textAlign = 'center';
       ctx.fillText('YOU', player.x, player.y - 25);
+    };
 
-      // Proactive Coworker Steal Mechanic
-      // Sales coworkers steal less frequently to reduce pressure
-      const salesCoworkers = coworkersRef.current.filter(c => c.department === 'sales');
-
-      // Track unattended customers and despawn after 60 seconds
-      customersRef.current.forEach(customer => {
-        if (!customer.active) return;
-        
-        // Customer is considered "helped" if:
-        // 1. They're stolen by a coworker (isStolen)
-        // 2. They're past the greeting phase (conversation has started)
-        const isBeingHelped = 
-          customer.isStolen ||
-          customer.conversationPhase !== 'greeting';
-        
-        if (!isBeingHelped) {
-          // Increment unattended timer
-          customer.unattendedTimer += deltaTime;
-          
-          // Despawn after 60 seconds (1 minute)
-          if (customer.unattendedTimer >= 60) {
-            customer.active = false;
-            customer.isLost = true;
-            // Remove from customers array
-            customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
-          }
-        } else {
-          // Reset timer if being helped
-          customer.unattendedTimer = 0;
-        }
-      });
-
-      const waitingCount = customersRef.current.filter(c => 
-        c.active && !c.isStolen && c.conversationPhase === 'greeting'
-      ).length;
-      if (waitingCount < MIN_WAITING_CUSTOMERS && waitingCount < MAX_WAITING_CUSTOMERS) {
-        spawnNewCustomer();
+    const animate = (timestamp: number) => {
+      if (lastTimestamp === 0) {
+        lastTimestamp = timestamp;
+        animationRef.current = requestAnimationFrame(animate);
+        return;
       }
-      
-      salesCoworkers.forEach(coworker => {
-        // Initialize steal timer if not set
-        if (coworker.nextStealTime === undefined) {
-          coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
-        }
-        
-        // Handle pending customer spawn (delayed 3-5 seconds after steal)
-        if (coworker.pendingCustomerSpawn !== undefined && coworker.pendingCustomerSpawn > 0) {
-          coworker.pendingCustomerSpawn -= deltaTime;
-          if (coworker.pendingCustomerSpawn <= 0) {
-            coworker.pendingCustomerSpawn = undefined;
-            spawnNewCustomer();
-          }
-        }
-        
-        // If coworker is working with a stolen customer
-        if (coworker.workingWithCustomerId !== undefined) {
-          const customer = customersRef.current.find(c => c.id === coworker.workingWithCustomerId);
-          if (!customer || !customer.active) {
-            coworker.workingWithCustomerId = undefined;
-            coworker.workingTimer = 0;
-            coworker.stealPhase = undefined;
-            coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
-            return;
-          }
-          if (customer) {
-            
-              // PHASE 1: Walking to customer
-              if (coworker.stealPhase === 'walking') {
-                const dx = customer.x - coworker.x;
-                const dy = customer.y - coworker.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
 
-                if (dist > 15) {
-                  // Still walking to customer
-                  const COWORKER_SPEED = 150; // pixels per second (was 2.5 px/frame * 60fps)
-                  coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
-                  coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
+      let frameTime = (timestamp - lastTimestamp) / 1000;
+      if (frameTime > MAX_FRAME_TIME) {
+        frameTime = MAX_FRAME_TIME;
+      }
+      lastTimestamp = timestamp;
+      accumulator += frameTime;
 
-                  // CHECK FOR INTERCEPTION: If player talks to this customer while walking
-                  // Using specific customer reference since 'customer' variable in this scope is valid
-                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
-                  
-                  if (isIntercepted || !customer.active || customer.isLost) {
-                     // Abort steal!
-                     coworker.stealPhase = 'returning';
-                     coworker.workingWithCustomerId = undefined;
-                     coworker.nextStealTime = STEAL_INTERVAL_MIN;
-                     coworker.pendingCustomerSpawn = undefined;
-                  }
+      while (accumulator >= FIXED_TIME_STEP) {
+        updateSimulation(FIXED_TIME_STEP);
+        accumulator -= FIXED_TIME_STEP;
+      }
 
-                } else {
-                  // Arrived at customer! 
-                  // Final check - is player talking to them?
-                  const isIntercepted = showInput && selectedPerson?.id === customer.id;
-                  
-                  if (isIntercepted) {
-                     // Abort steal!
-                     coworker.stealPhase = 'returning';
-                     coworker.workingWithCustomerId = undefined;
-                     coworker.nextStealTime = STEAL_INTERVAL_MIN; 
-                     coworker.pendingCustomerSpawn = undefined;
-                  } else {
-                    // SUCCESSFUL STEAL
-                    customer.isStolen = true;
-                    customer.stolenByCoworkerId = coworker.id;
-                    // Set these now, not at start
-                    customer.stolenDealTimer = 0;
-                    customer.stolenDealDuration = COWORKER_DEAL_MIN + Math.random() * (COWORKER_DEAL_MAX - COWORKER_DEAL_MIN);
-
-                    coworker.stealPhase = 'greeting';
-                    coworker.workingTimer = 0; // Use workingTimer for greeting duration
-                  }
-                }
-              }
-              
-              // NEW PHASE: Greeting customer (pause for interaction)
-              else if (coworker.stealPhase === 'greeting') {
-                coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
-                
-                // Wait for 1.5 seconds before returning
-                if (coworker.workingTimer >= 1.5) {
-                  coworker.stealPhase = 'returning';
-                  coworker.workingTimer = 0;
-                }
-              }
-            
-            // PHASE 2: Returning to desk with customer
-            else if (coworker.stealPhase === 'returning') {
-              const targetX = coworker.originalX || 0;
-              const targetY = coworker.originalY || 0;
-              const dx = targetX - coworker.x;
-              const dy = targetY - coworker.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-
-              if (dist > 5) {
-                // Move coworker back to desk
-                const COWORKER_SPEED = 150; // pixels per second (was 2.5 px/frame * 60fps)
-                coworker.x += (dx / dist) * COWORKER_SPEED * deltaTime;
-                coworker.y += (dy / dist) * COWORKER_SPEED * deltaTime;
-
-                // Customer follows coworker (slightly behind)
-                const custTargetX = coworker.x;
-                const custTargetY = coworker.y + 45;
-                const cdx = custTargetX - customer.x;
-                const cdy = custTargetY - customer.y;
-                const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
-                if (cdist > 5) {
-                  customer.x += (cdx / cdist) * COWORKER_SPEED * deltaTime;
-                  customer.y += (cdy / cdist) * COWORKER_SPEED * deltaTime;
-                }
-              } else {
-                // Coworker arrived at desk! Position customer in front
-                coworker.x = targetX;
-                coworker.y = targetY;
-                customer.x = targetX;
-                customer.y = targetY - 55;
-                coworker.stealPhase = 'working';
-                coworker.workingTimer = 0;
-              }
-            }
-            
-            // PHASE 3: Working at desk
-            else if (coworker.stealPhase === 'working') {
-              // Increment working timer
-              coworker.workingTimer = (coworker.workingTimer || 0) + deltaTime;
-              
-              // Customer stays in front of desk
-              customer.x = (coworker.originalX || coworker.x);
-              customer.y = (coworker.originalY || coworker.y) - 55;
-              
-              // Increment deal timer
-              customer.stolenDealTimer = (customer.stolenDealTimer || 0) + deltaTime;
-              
-              // Check if deal time is up
-              if (customer.stolenDealDuration && customer.stolenDealTimer >= customer.stolenDealDuration) {
-                // Resolve the deal - 50/50 chance
-                const coinToss = Math.random();
-                
-                if (coinToss >= 0.5) {
-                  // Coworker makes the sale - but DON'T count towards player stats
-                  customer.active = false;
-                  customer.dealStatus = 'closed';
-                  customer.conversationPhase = 'closed';
-                  
-                  // Simulation only: inventory remains untouched for the player
-                  /* 
-                  if (settings.gameMode === 'volume') {
-                    const randomCar = inventoryRef.current[Math.floor(Math.random() * inventoryRef.current.length)];
-                    if (randomCar) {
-                      const carIndex = inventoryRef.current.findIndex(c => c.id === randomCar.id);
-                      if (carIndex > -1) {
-                        inventoryRef.current.splice(carIndex, 1);
-                      }
-                    }
-                  }
-                  */
-                } else {
-                  // Customer leaves (deal lost)
-                  customer.active = false;
-                  customer.isLost = true;
-                  customer.dealStatus = 'lost';
-                  customer.conversationPhase = 'closed';
-                }
-                
-                // Reset coworker state
-                coworker.workingWithCustomerId = undefined;
-                coworker.workingTimer = 0;
-                coworker.stealPhase = undefined;
-                coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
-                
-                // Reset customer stolen state
-                customer.isStolen = false;
-                customer.stolenByCoworkerId = undefined;
-                customer.stolenDealTimer = undefined;
-                customer.stolenDealDuration = undefined;
-                customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
-              }
-              
-              // Draw pencil/working animation on the coworker
-              const pencilBob = Math.sin(Date.now() / 200) * 3; // Bobbing animation
-              ctx.save();
-              ctx.translate(coworker.originalX || coworker.x, (coworker.originalY || coworker.y) - 30 + pencilBob);
-              
-              // Draw pencil icon
-              ctx.fillStyle = '#f1c40f';
-              ctx.fillRect(-3, -10, 6, 16); // Pencil body
-              ctx.fillStyle = '#e74c3c';
-              ctx.fillRect(-3, -10, 6, 4); // Eraser
-              ctx.fillStyle = '#2c3e50';
-              ctx.beginPath();
-              ctx.moveTo(-3, 6);
-              ctx.lineTo(0, 12);
-              ctx.lineTo(3, 6);
-              ctx.closePath();
-              ctx.fill(); // Pencil tip
-              
-              ctx.restore();
-            }
-          }
-        } else {
-          // Coworker is available to steal - decrement steal timer
-          coworker.nextStealTime -= deltaTime;
-          
-          if (coworker.nextStealTime <= 0) {
-            // Time to steal! Find an available customer
-            const availableCustomers = customersRef.current.filter(c => 
-              c.active && 
-              !c.isStolen && 
-              c.conversationPhase === 'greeting' &&
-              // Not currently being talked to by player
-              !(showInput && selectedPerson?.id === c.id)
-            );
-            
-            if (availableCustomers.length > 0) {
-              // Pick a random customer to steal
-              const victim = availableCustomers[Math.floor(Math.random() * availableCustomers.length)];
-              
-              // Mark customer as target (but NOT stolen yet)
-              // victim.isStolen = true; // CHANGED: Don't set this yet
-              // victim.stolenByCoworkerId = coworker.id; // CHANGED: Don't set this yet
-              // victim.stolenDealTimer = 0; // CHANGED: Don't set this yet
-              // victim.stolenDealDuration = 15 + Math.random() * 15; // CHANGED: Don't set this yet
-              
-              // Coworker starts walking to customer
-              coworker.workingWithCustomerId = victim.id;
-              coworker.workingTimer = 0;
-              coworker.stealPhase = 'walking';
-              
-              // Schedule a new customer to spawn after 3-5 second delay
-              coworker.pendingCustomerSpawn = 3 + Math.random() * 2;
-            } else {
-              // No customers to steal, try again later
-              coworker.nextStealTime = STEAL_INTERVAL_MIN + Math.random() * (STEAL_INTERVAL_MAX - STEAL_INTERVAL_MIN);
-            }
-          }
-        }
-      });
-
+      const uiScale = isMobile ? 1.75 : 1;
+      renderScene(uiScale);
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -2630,6 +2620,23 @@ function App() {
   );
 
 
+
+  // Preloading Screen (Asset Loading)
+  if (gameState === 'preloading') {
+    return (
+      <div className="loading-screen">
+        <div className="loading-card">
+          <h2>Loading Showroom Blitz</h2>
+          <div className="loading-bar">
+            <div className="loading-progress" style={{ width: `${imageLoadProgress}%` }} />
+          </div>
+          <p className="loading-text">
+            {imageLoadProgress < 100 ? `Loading assets... ${Math.round(imageLoadProgress)}%` : 'Ready!'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Main Render for Intro and Setup (handled together for transition continuity)
   if (gameState === 'intro' || gameState === 'setup') {

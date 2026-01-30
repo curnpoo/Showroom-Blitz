@@ -55,7 +55,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: url('../Assets/showroom_bg.png') center/cover no-repeat;
+    background: url('../Assets/showroom_bg.webp') center/cover no-repeat;
     position: relative;
     overflow: hidden;
 }
@@ -201,11 +201,11 @@ body {
 }
 
 .intro-screen.startscreen-page::before {
-    background: url("../Assets/desktop_startscreen_bg.png") center/cover no-repeat;
+    background: url("../Assets/desktop_startscreen_bg.webp") center/cover no-repeat;
 }
 
 .intro-screen.setup-page::before {
-    background: url('../Assets/menu_bg.png') center/cover no-repeat;
+    background: url('../Assets/menu_bg.webp') center/cover no-repeat;
 }
 
 .startscreen-overlay {
@@ -403,7 +403,7 @@ body {
 
 @media (max-width: 768px) {
     .intro-screen.startscreen-page {
-        background-image: url("../Assets/mobile_startscreen_bg.png");
+        background-image: url("../Assets/mobile_startscreen_bg.webp");
     }
 
     .startscreen-card {
@@ -2509,4 +2509,69 @@ body {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* ========== Loading Screen ========== */
+.loading-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    z-index: 9999;
+}
+
+.loading-card {
+    width: min(480px, 90%);
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    border-radius: 20px;
+    padding: 40px 32px;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+.loading-card h2 {
+    font-size: 1.75rem;
+    margin-bottom: 24px;
+    color: #f1f5f9;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.loading-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid rgba(51, 65, 85, 0.4);
+}
+
+.loading-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa, #93c5fd);
+    border-radius: 999px;
+    transition: width 0.3s ease-out;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.loading-text {
+    font-size: 1rem;
+    color: #cbd5e1;
+    font-weight: 500;
+    margin: 0;
 }

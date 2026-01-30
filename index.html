@@ -13,19 +13,22 @@
         <meta name="robots" content="index, follow" />
         
         <!-- Favicon -->
-        <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         
         <!-- Theme & Mobile -->
         <meta name="theme-color" content="#1e3a5f" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Showroom Blitz" />
-        <meta name="mobile-web-app-capable" content="yes" />
+
+        <!-- Preload critical images -->
+        <link rel="preload" as="image" href="/Assets/desk.webp" />
+        <link rel="preload" as="image" href="/Assets/showroom_cars.webp" />
         
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website" />

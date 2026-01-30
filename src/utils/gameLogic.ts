@@ -554,10 +554,10 @@ export function calculateOTDFromPayment(payment: number, downPayment: number, ap
 // Spawn locations - customers spawn in visible area BEFORE desks start (y < 340)
 // Keeping 60px+ from all edges for name visibility
 // Showroom Layout Asset Path
-export const SHOWROOM_CARS_ASSET = new URL('../../Assets/showroom_cars.png', import.meta.url).href;
+export const SHOWROOM_CARS_ASSET = new URL('../../Assets/showroom_cars.webp', import.meta.url).href;
 
 // Collision Areas for Showroom Cars (Right Side)
-// Optimized to match the specific car positions in showroom_cars.png
+// Optimized to match the specific car positions in showroom_cars.webp
 export const SHOWROOM_COLLISION_AREAS = [
   { x: 520, y: 105, w: 120, h: 60 },  // Top/Back car
   { x: 570, y: 155, w: 110, h: 60 },  // Middle/Right car

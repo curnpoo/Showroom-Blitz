@@ -133,7 +133,7 @@ export interface AIConversationMessage {
   content: string;
 }
 
-export type GameState = 'intro' | 'setup' | 'loading' | 'playing';
+export type GameState = 'preloading' | 'intro' | 'setup' | 'loading' | 'playing';
 export type OfferType = 'selling' | 'otd' | 'payment';
 
 export interface TimerSettings {
