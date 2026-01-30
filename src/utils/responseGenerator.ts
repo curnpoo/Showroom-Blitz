@@ -703,6 +703,18 @@ export function isCreditDenial(text: string): boolean {
   return denialKeywords.some(regex => regex.test(text));
 }
 
+function isPersonalQuestion(text: string): boolean {
+  const personalPatterns = [
+    /\b(are you|do you)\b.*\b(married|single|dating|kids|children|family)\b/i,
+    /\b(how old|age)\b/i,
+    /\b(where|what)\b.*\b(from|live|live in|hometown)\b/i,
+    /\b(what do you do|job|work|career)\b/i,
+    /\b(hobbies|free time|weekend|for fun)\b/i,
+    /\b(tell me about yourself|yourself)\b/i,
+  ];
+  return personalPatterns.some(regex => regex.test(text));
+}
+
 /** Player/salesperson is asking for final confirmation to close (e.g. "Does this look good?", "Ready to sign?") */
 export function isPlayerClosingAttempt(text: string): boolean {
   const lower = text.toLowerCase();
@@ -1397,6 +1409,11 @@ export async function getAIResponse(
     instructionType = 'greeting_response';
   }
 
+  // Personal/off-topic questions should be answered briefly in character
+  if (!instructionType && isPersonalQuestion(message)) {
+    instructionType = 'personal_chat';
+  }
+
   // General Chat Fallback
   if (!instructionType) {
       instructionType = 'general_chat';
@@ -1477,16 +1494,12 @@ export async function getAIResponse(
     aiResponse = aiResponse.replace(THINK_SECTION_REGEX, ' ').replace(/\s{2,}/g, ' ').trim();
 
     // Enforce buyer type language constraints (AI sometimes drifts)
-    if (customer.buyerType === 'cash') {
-      const mentionsPayment = /\b(month|monthly|\/mo|apr|term|months|down payment|down)\b/i.test(aiResponse);
-      if (mentionsPayment) {
-        aiResponse = pickRandom(WRONG_PAYMENT_TYPE.cash);
-      }
-    } else {
-      const mentionsTotalPrice = /\b(otd|out[- ]?the[- ]?door|total|selling price|full price|price)\b/i.test(aiResponse);
-      if (mentionsTotalPrice) {
-        aiResponse = pickRandom(WRONG_PAYMENT_TYPE.payment);
-      }
+    const mentionsPaymentTerms = /\b(monthly|per\s+month|\/mo|apr|loan\s+term|financ(?:e|ing|ed)?|lease|down\s*payment|\d+\s*months\b|months?\s+(term|payments?))\b/i.test(aiResponse);
+    const mentionsTotalPrice = /\b(otd|out[- ]?the[- ]?door|total\s+price|total\s+cost|selling\s+price|full\s+price)\b/i.test(aiResponse);
+    if (customer.buyerType === 'cash' && mentionsPaymentTerms) {
+      aiResponse = pickRandom(WRONG_PAYMENT_TYPE.cash);
+    } else if (customer.buyerType === 'payment' && mentionsTotalPrice) {
+      aiResponse = pickRandom(WRONG_PAYMENT_TYPE.payment);
     }
 
     // --- OUTCOME PROCESSING ---
@@ -1575,6 +1588,9 @@ export async function getAIResponse(
             dealAccepted = true;
             customer.strikes = 0;
             newPhase = 'closed';
+            break;
+        case 'personal_chat':
+            // Keep it neutral; just answer briefly in character
             break;
         case 'general_chat':
         default:
@@ -1782,6 +1798,10 @@ function buildSystemPrompt(customer: Customer, currentCar: Car | null, instructi
           
           case 'greeting_response':
               instruction = "The salesperson just said hello. Simply greet them back briefly. Do NOT volunteer your budget, preferences, or what car you want yet - wait to be asked.";
+              break;
+
+          case 'personal_chat':
+              instruction = "The salesperson asked a personal/off-topic question. Answer briefly in character with a small personal detail. Do not talk about prices or car preferences unless asked.";
               break;
 
           case 'general_chat':

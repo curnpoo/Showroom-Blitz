@@ -59,7 +59,7 @@ export function ChatInterface({
     selectedPerson.interest >= 40 ||
     selectedPerson.conversationPhase === 'closed'
   );
-  const customerAccepted = selectedPerson.conversationPhase === 'closed';
+  const customerAccepted = selectedPerson.dealStatus === 'accepted';
 
   return (
     <>

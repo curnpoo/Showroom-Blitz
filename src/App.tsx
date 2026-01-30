@@ -35,6 +35,8 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const MOBILE_CANVAS_WIDTH = 400;
 const MOBILE_CANVAS_HEIGHT = 800;
+const AI_COST_PER_MINUTE_USD = 0.01;
+const CHAT_START_TIP_KEY = 'showroom_chat_start_tip_dismissed_v1';
 
 const CATEGORY_UI_LABELS: Record<VehicleCategory, string> = {
   suv: '⛽️ SUV',
@@ -110,6 +112,7 @@ function App() {
   const [paymentAPR, setPaymentAPR] = useState(6.9);
   const [downPayment, setDownPayment] = useState(0);
   const currenServerModel = 'mistralai/Ministral-3-3B-Instruct-2512';
+  const [aiUsageSeconds, setAiUsageSeconds] = useState(0);
   const [settings, setSettings] = useState<GameSettings>(() => {
     const saved = localStorage.getItem('showroom_settings');
     const defaults = {
@@ -153,6 +156,7 @@ function App() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [showTimeUp, setShowTimeUp] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [showChatStartTip, setShowChatStartTip] = useState(false);
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     gross: 0,
     profit: 0,
@@ -162,6 +166,7 @@ function App() {
   const [aiLoadStartAt, setAiLoadStartAt] = useState<number | null>(null);
   const [aiPendingStart, setAiPendingStart] = useState(false);
   const [aiWarmupSuccess, setAiWarmupSuccess] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
@@ -169,10 +174,55 @@ function App() {
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupAttemptRef = useRef(0);
   const useAIRef = useRef(settings.useAI);
+  const isCurrenServer = settings.useAI && settings.provider === 'local' && settings.apiBaseUrl === '/api/ai';
+  const showTimerOverlay = (settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing';
+  const aiCostUSD = (aiUsageSeconds / 60) * AI_COST_PER_MINUTE_USD;
+  const aiCostDisplay = aiCostUSD < 1 ? aiCostUSD.toFixed(4) : aiCostUSD.toFixed(2);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     useAIRef.current = settings.useAI;
   }, [settings.useAI]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setShowChatStartTip(false);
+      return;
+    }
+    if (!showInput) {
+      setShowChatStartTip(false);
+      return;
+    }
+    if (conversation.length > 0) {
+      setShowChatStartTip(false);
+      return;
+    }
+    const dismissed = localStorage.getItem(CHAT_START_TIP_KEY) === 'true';
+    if (!dismissed) setShowChatStartTip(true);
+  }, [conversation.length, isMobile, showInput]);
+
+  const dismissChatStartTip = useCallback(() => {
+    setShowChatStartTip(false);
+    localStorage.setItem(CHAT_START_TIP_KEY, 'true');
+  }, []);
+
+  useEffect(() => {
+    if (!isCurrenServer) return;
+    if (gameState !== 'playing') return;
+
+    const interval = window.setInterval(() => {
+      setAiUsageSeconds(prev => prev + 1);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isCurrenServer, gameState]);
 
   const getModelsUrl = useCallback((base: string) => {
     let cleaned = base;
@@ -296,16 +346,6 @@ function App() {
     }
   };
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Update layout entities when mobile state changes
   useEffect(() => {
     if (isMobile) {
@@ -386,6 +426,7 @@ function App() {
   }, [settings.gameMode, settings.timer.enabled, settings.timer.duration]);
 
   const beginGameStart = useCallback(() => {
+    setAiUsageSeconds(0);
     if (settings.useAI) {
       setAiLoadProgress(0);
       setAiLoadStartAt(Date.now());
@@ -409,6 +450,14 @@ function App() {
     setAiWarmupSuccess(false);
     warmupAI('retry');
   }, [warmupAI]);
+
+  const resetAllStats = useCallback(() => {
+    setTotalSales(0);
+    setTotalProfit(0);
+    setLastSaleAmount(0);
+    setLastProfit(0);
+    setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
+  }, []);
 
   useEffect(() => {
     if (gameState !== 'loading') return;
@@ -660,6 +709,7 @@ function App() {
       } else {
         // Customer declines to look at alternatives - they leave
         realCustomer.isLost = true;
+        realCustomer.dealStatus = 'lost';
         realCustomer.conversationPhase = 'closed';
         setSelectedPerson({ ...realCustomer });
         const response = `I really had my heart set on the ${realCustomer.desiredModel}. I'll have to look elsewhere.`;
@@ -676,6 +726,7 @@ function App() {
 
     // Fallback: No cars in their budget at all - they leave
     realCustomer.isLost = true;
+    realCustomer.dealStatus = 'lost';
     realCustomer.conversationPhase = 'closed';
     setSelectedPerson({ ...realCustomer });
     const response = "I really can't find anything in my budget here. I'll have to look elsewhere.";
@@ -1263,6 +1314,7 @@ function App() {
                 if (coinToss >= 0.5) {
                   // Coworker makes the sale - but DON'T count towards player stats
                   customer.active = false;
+                  customer.dealStatus = 'closed';
                   customer.conversationPhase = 'closed';
                   
                   // Simulation only: inventory remains untouched for the player
@@ -1281,6 +1333,7 @@ function App() {
                   // Customer leaves (deal lost)
                   customer.active = false;
                   customer.isLost = true;
+                  customer.dealStatus = 'lost';
                   customer.conversationPhase = 'closed';
                 }
                 
@@ -1439,6 +1492,7 @@ function App() {
     // ZERO INTEREST = AUTO FAIL: Customer leaves immediately if interest hits 0
     if (realCustomer.interest === 0) {
       realCustomer.isLost = true;
+      realCustomer.dealStatus = 'lost';
       realCustomer.conversationPhase = 'closed';
       const frustrationResponses = {
         friendly: "I'm sorry, but I've completely lost interest. Good luck!",
@@ -1458,6 +1512,7 @@ function App() {
     // LOW INTEREST DEPARTURE: If interest drops below 5%, high chance they leave
     if (realCustomer.interest < 5 && Math.random() < 0.8) {
       realCustomer.isLost = true;
+      realCustomer.dealStatus = 'lost';
       realCustomer.conversationPhase = 'closed';
       const frustrationResponses = {
         friendly: "I'm sorry, but I don't think this is going to work out. Good luck!",
@@ -1587,6 +1642,7 @@ function App() {
     
     if (isLost) {
       selectedPerson.isLost = true;
+      selectedPerson.dealStatus = 'lost';
       selectedPerson.conversationPhase = 'closed';
       setTimeout(() => setShowLostDeal(true), 1000);
     }
@@ -1638,7 +1694,6 @@ function App() {
       isLost = !!result.isLost;
       if (!dealAccepted && hasCommitmentIntent(response)) {
         dealAccepted = true;
-        (selectedPerson as any).committedToBuy = true;
       }
       selectedPerson.conversationHistory.push(
         { role: 'user', content: offerText },
@@ -1652,7 +1707,6 @@ function App() {
       isLost = !!result.isLost;
       if (!dealAccepted && hasCommitmentIntent(response)) {
         dealAccepted = true;
-        (selectedPerson as any).committedToBuy = true;
       }
     }
 
@@ -1688,10 +1742,10 @@ function App() {
     if (dealAccepted) {
       setAgreedPrice(price);
       setAgreedType(type);
-      // Don't auto-close! Wait for player to click Close Deal button
-      // But we can give a hint in the response or trust the "dealAccepted" flag for internal logic if needed
+      selectedPerson.dealStatus = 'accepted';
     } else if (isLost) {
       selectedPerson.isLost = true;
+      selectedPerson.dealStatus = 'lost';
       selectedPerson.conversationPhase = 'closed';
       setTimeout(() => setShowLostDeal(true), 1000);
     } else {
@@ -1747,24 +1801,25 @@ function App() {
   const attemptCloseDeal = () => {
     if (!selectedPerson || !currentCar) return;
 
-    // If customer already accepted, just finalize the deal immediately
-    if (selectedPerson.conversationPhase === 'closed') {
+    const isCommitted = selectedPerson.dealStatus === 'accepted';
+
+    // If customer already accepted or closed, finalize immediately
+    if (selectedPerson.dealStatus === 'accepted' || selectedPerson.dealStatus === 'closed') {
       // Set agreed price/type if not set
       if (agreedPrice === 0) {
         setAgreedPrice(customSellingPrice);
         setAgreedType('selling');
       }
       setShowDealClosed(true);
+      selectedPerson.dealStatus = 'closed';
       return;
     }
+    if (selectedPerson.dealStatus === 'lost') return;
 
     // Increment close attempts
     selectedPerson.closeAttempts = (selectedPerson.closeAttempts || 0) + 1;
 
     const priceForEvaluation = agreedPrice || customSellingPrice;
-
-    // Check if customer already committed via "take it or leave it" or explicit agreement
-    const isCommitted = (selectedPerson as any).committedToBuy === true;
 
     // FIRST: Check if customer likes the car AND the price
     const likesTheCar = isCommitted || customerLikesTheCar(selectedPerson, currentCar);
@@ -1847,6 +1902,7 @@ function App() {
 
         if (isLeaving) {
           selectedPerson.isLost = true;
+          selectedPerson.dealStatus = 'lost';
           selectedPerson.conversationPhase = 'closed';
           setTimeout(() => setShowLostDeal(true), 1000);
         } else {
@@ -1933,6 +1989,7 @@ function App() {
         }]);
 
         selectedPerson.conversationPhase = 'closed';
+        selectedPerson.dealStatus = 'closed';
         // Set agreed price/type if not set (default to current offer or list price)
         if (agreedPrice === 0) {
            setAgreedPrice(customSellingPrice);
@@ -1992,6 +2049,7 @@ function App() {
 
         if (isLeaving) {
           selectedPerson.isLost = true;
+          selectedPerson.dealStatus = 'lost';
           selectedPerson.conversationPhase = 'closed';
           setTimeout(() => setShowLostDeal(true), 1000);
         } else {
@@ -2007,6 +2065,7 @@ function App() {
     if (!selectedPerson || !currentCar) return;
 
     selectedPerson.active = false;
+    selectedPerson.dealStatus = 'closed';
     
     // Remove customer from the showroom
     customersRef.current = customersRef.current.filter(c => c.id !== selectedPerson.id);
@@ -2252,14 +2311,13 @@ function App() {
     
     if (dealAccepted) {
       // Customer is committed to buying! But don't auto-close.
-      // Set a flag so they auto-accept when user clicks "Close Deal" (if price is right)
-      (selectedPerson as any).committedToBuy = true;
-      selectedPerson.conversationPhase = 'closed';
+      selectedPerson.dealStatus = 'accepted';
       // Don't return early - continue to show the response
     }
 
     if (isLost) {
       selectedPerson.isLost = true;
+      selectedPerson.dealStatus = 'lost';
       selectedPerson.conversationPhase = 'closed';
       setTimeout(() => setShowLostDeal(true), 1000);
     }
@@ -2452,7 +2510,7 @@ function App() {
               </div>
               <div className="mode-description">
                 <div className={`mode-info ${settings.useAI ? 'visible' : 'hidden'}`}>
-                  Uses Curren&apos;s server by default
+                  Uses Curren&apos;s server by default • Costs money (${AI_COST_PER_MINUTE_USD.toFixed(2)}/min)
                 </div>
                 <div className={`mode-info ${!settings.useAI ? 'visible' : 'hidden'}`}>
                   Smart scripted responses (offline)
@@ -2624,25 +2682,35 @@ function App() {
           </div>
         )}
 
-        {/* Timer display */}
-        {(settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing' && (
-          <div className={`timer-overlay ${timeLeft < 30 && settings.gameMode !== 'volume' ? 'urgent' : ''}`}>
-             {settings.gameMode === 'volume' 
-               ? `⏱️ ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`
-               : `⏱️ ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`
-             }
-             {settings.gameMode === 'volume' && (
-                <div style={{ fontSize: '1rem', color: '#c0392b', marginTop: '4px', fontWeight: 'bold' }}>
-                  {inventoryRef.current.length}/10 Cars Left
-                </div>
-             )}
+        <div className="hud-top-right">
+          {/* Settings button */}
+          <button className="settings-btn" onClick={() => setShowSettings(true)}>
+            <Settings size={20} />
+          </button>
+
+          {/* Timer display */}
+          {(settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing' && (
+            <div className={`timer-overlay ${timeLeft < 30 && settings.gameMode !== 'volume' ? 'urgent' : ''}`}>
+               {settings.gameMode === 'volume' 
+                 ? `⏱️ ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`
+                 : `⏱️ ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`
+               }
+               {settings.gameMode === 'volume' && (
+                  <div style={{ fontSize: '1rem', color: '#c0392b', marginTop: '4px', fontWeight: 'bold' }}>
+                    {inventoryRef.current.length}/10 Cars Left
+                  </div>
+               )}
+            </div>
+          )}
+        </div>
+
+        {isCurrenServer && gameState === 'playing' && (
+          <div className={`ai-cost-overlay ${showTimerOverlay ? 'with-timer' : ''}`}>
+            <div className="label">Curren&apos;s Server Cost</div>
+            <div className="value">${aiCostDisplay}</div>
+            <div className="rate">Rate: ${AI_COST_PER_MINUTE_USD.toFixed(2)}/min</div>
           </div>
         )}
-
-        {/* Settings button */}
-        <button className="settings-btn" onClick={() => setShowSettings(true)}>
-          <Settings size={20} />
-        </button>
 
         {/* Deal closed modal */}
         {showDealClosed && currentCar && (
@@ -2838,6 +2906,28 @@ function App() {
                   useAI={settings.useAI}
                   hasPerfectMatch={hasPerfectMatch}
                 />
+                {showChatStartTip && (
+                  <div className="chat-start-tip-overlay" onClick={dismissChatStartTip}>
+                    <div className="chat-start-tip" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+                      <div className="chat-start-tip-title">Start the Conversation</div>
+                      <div className="chat-start-tip-body">
+                        {settings.useAI ? (
+                          <>
+                            <div>Tap the text box to type.</div>
+                            <div>Press Return/Enter to send.</div>
+                            <div>Ask about needs (type, features, budget) to track what they want.</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>Tap a quick reply to start.</div>
+                            <div>Use the buttons to ask about needs and track what they want.</div>
+                          </>
+                        )}
+                      </div>
+                      <button className="chat-start-tip-btn" onClick={dismissChatStartTip}>Got it</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -2976,6 +3066,9 @@ function App() {
                           <div style={{ fontSize: '0.8rem', color: '#666' }}>
                             Using Curren&apos;s private server proxy.
                           </div>
+                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
+                            Estimated cost: ${AI_COST_PER_MINUTE_USD.toFixed(2)}/min while AI is enabled.
+                          </div>
                         </div>
                         <div className="ai-field">
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -3106,16 +3199,28 @@ function App() {
                   style={{ background: 'var(--danger)', marginTop: '0', fontSize: '0.9rem', opacity: 0.9 }}
                   onClick={() => {
                     if (confirm('Are you sure you want to reset all sales stats?')) {
-                      setTotalSales(0);
-                      setTotalProfit(0);
-                      setLastSaleAmount(0);
-                      setLastProfit(0);
+                      resetAllStats();
                     }
                   }}
                 >
                   Reset All Stats
                 </button>
               </div>
+
+              <button
+                className="close-btn"
+                style={{ background: '#1f2937', marginTop: '12px', border: '1px solid var(--border)' }}
+                onClick={() => {
+                  if (confirm('Return to menu and reset all stats?')) {
+                    resetAllStats();
+                    setShowTimeUp(false);
+                    setShowSettings(false);
+                    setGameState('intro');
+                  }
+                }}
+              >
+                Back to Menu (Reset Stats)
+              </button>
 
               <button className="close-btn" onClick={() => setShowSettings(false)}>
                 Done

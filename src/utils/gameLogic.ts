@@ -523,6 +523,7 @@ export function generateCustomer(id: number, x: number, y: number): Customer {
     openToAlternative,
     offerCount: 0,
     closeAttempts: 0,
+    dealStatus: 'negotiating',
   };
 }
 

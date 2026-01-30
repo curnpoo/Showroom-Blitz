@@ -10,6 +10,8 @@ export type ConversationPhase =
 // Deal done
   | 'closed';
 
+export type DealStatus = 'negotiating' | 'accepted' | 'closed' | 'lost';
+
 export type Sentiment = 'happy' | 'mad' | 'disinterested' | 'neutral';
 
 export type DesiredFeature = 'sporty' | 'fuel_efficient' | 'luxury' | 'family' | 'affordable' | 'tech' | 'spacious';
@@ -66,6 +68,7 @@ export interface Customer {
   openToAlternative: boolean;
   offerCount: number; // For "attrition" logic (repeatedly offering same deal)
   closeAttempts: number; // Tracks how many times the player has tried to close the deal
+  dealStatus: DealStatus;
 }
 
 export interface Coworker {

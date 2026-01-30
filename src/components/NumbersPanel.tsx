@@ -115,6 +115,7 @@ export function NumbersPanel({
                     customOTDPrice={customOTDPrice}
                     setCustomOTDPrice={setCustomOTDPrice}
                     makeOffer={makeOffer}
+                    onOfferMade={onClose}
                     showDealClosed={showDealClosed}
                     signDeal={signDeal}
                     downPayment={downPayment}
@@ -148,6 +149,7 @@ export function NumbersPanel({
                  customOTDPrice={customOTDPrice}
                  setCustomOTDPrice={setCustomOTDPrice}
                  makeOffer={makeOffer}
+                 onOfferMade={undefined}
                  showDealClosed={showDealClosed}
                  signDeal={signDeal}
                  downPayment={downPayment}
@@ -167,7 +169,7 @@ export function NumbersPanel({
 }
 
 // Internal component to share the form logic
-function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMobile'> & { currentCar: Car }) {
+function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMobile'> & { currentCar: Car; onOfferMade?: () => void }) {
     const {
         currentCar,
         customSellingPrice,
@@ -175,6 +177,7 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
         customOTDPrice,
         setCustomOTDPrice,
         makeOffer,
+        onOfferMade,
         showDealClosed,
         signDeal,
         downPayment,
@@ -343,7 +346,13 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                           setCustomSellingPrice(sellingPrice);
                         }}
                       />
-                      <button className="green" onClick={() => makeOffer(customOTDPrice, 'otd')}>
+                      <button
+                        className="green"
+                        onClick={() => {
+                          makeOffer(customOTDPrice, 'otd');
+                          onOfferMade?.();
+                        }}
+                      >
                         Offer
                       </button>
                     </div>
@@ -523,7 +532,10 @@ function NumbersForm(props: Omit<NumbersPanelProps, 'isOpen' | 'onClose' | 'isMo
                       />
                       <button 
                         className="purple" 
-                        onClick={() => makeOffer(customPayment, 'payment')}
+                        onClick={() => {
+                          makeOffer(customPayment, 'payment');
+                          onOfferMade?.();
+                        }}
                         disabled={!customer || customer.buyerType !== 'payment' || !customer.creditRevealed}
                         style={{ 
                           opacity: !customer || customer.buyerType !== 'payment' || !customer.creditRevealed ? 0.5 : 1, 
