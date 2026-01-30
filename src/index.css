@@ -275,12 +275,12 @@ body {
 .intro-screen.startscreen-page .made-by-footer {
     color: rgba(255, 255, 255, 0.9);
     font-size: 0.7rem;
-    margin-top: 32px;
-    margin-bottom: -16px;
+    margin-top: 10px;
+    margin-bottom: 45px;
     background: rgba(0, 0, 0, 0.3);
     padding: 6px 12px;
     border-radius: 999px;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(2px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     display: inline-block;
     transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
