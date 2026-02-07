@@ -38,6 +38,16 @@ html, body {
     overflow: hidden;
 }
 
+/* Extend #root behind the iOS home indicator bar.
+   bottom:0 stops at the safe-area boundary on iOS standalone PWAs,
+   so we push past it by the exact safe-area-inset-bottom amount.
+   On devices without a home indicator env() resolves to 0px — no-op. */
+@supports (bottom: env(safe-area-inset-bottom)) {
+    #root {
+        bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+    }
+}
+
 body {
     font-family:
         -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
