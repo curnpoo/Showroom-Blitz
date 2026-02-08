@@ -34,6 +34,9 @@ import { generateResponse, getAIResponse, isTakeItOrLeaveIt, isInventoryAdmissio
 import { NumbersPanel } from './components/NumbersPanel';
 import { CustomerNotes } from './components/CustomerNotes';
 import { ChatInterface } from './components/ChatInterface';
+import { LeaderboardPanel } from './components/LeaderboardPanel';
+import { useFirebaseAuth } from './contexts/FirebaseAuthContext';
+import type { LeaderboardEntry, PlayerSummary } from './types/leaderboard';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
@@ -108,6 +111,7 @@ const START_BUTTON_BG_IMAGE = new URL('../Assets/startbutton_bg.webp', import.me
 const START_BUTTON_TEXT_IMAGE = new URL('../Assets/start_button_text.webp', import.meta.url).href;
 const TRANSITION_VIDEO = new URL('../Assets/startscreen-to-menu_transition.mp4', import.meta.url).href;
 const PLAYER_COLLISION_RADIUS = 18;
+const LEADERBOARD_LIMIT = 10;
 
 type CollisionBox = { x: number; y: number; w: number; h: number };
 
@@ -285,6 +289,14 @@ function App() {
     profit: 0,
     salesCount: 0,
   });
+  const { user, login, logout, loading: authLoading, error: authError, getIdToken, updateDisplayName } = useFirebaseAuth();
+  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardMe, setLeaderboardMe] = useState<PlayerSummary | null>(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameSaveError, setNameSaveError] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
   const [aiLoadProgress, setAiLoadProgress] = useState(0);
   const [aiLoadStartAt, setAiLoadStartAt] = useState<number | null>(null);
   const [aiPendingStart, setAiPendingStart] = useState(false);
@@ -660,6 +672,8 @@ function App() {
     } else {
       inventoryRef.current = generateInventory(100);
     }
+    sessionStartRef.current = Date.now();
+    sessionStatsSubmittedRef.current = false;
   }, [settings.gameMode, settings.timer.enabled, settings.timer.duration, isMobile]);
 
   const beginGameStart = useCallback(() => {
@@ -700,6 +714,85 @@ function App() {
     setLastProfit(0);
     setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
   }, []);
+
+  const fetchLeaderboardTop = useCallback(async (options?: { quiet?: boolean }) => {
+    const quiet = options?.quiet ?? false;
+    if (!quiet) setLeaderboardLoading(true);
+    setLeaderboardError(null);
+    try {
+      const response = await fetch(`/api/leaderboard/top?limit=${LEADERBOARD_LIMIT}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? 'Unable to load leaderboard');
+      }
+      setLeaderboardRows(payload?.leaderboard ?? []);
+    } catch (err) {
+      setLeaderboardRows([]);
+      setLeaderboardError(err instanceof Error ? err.message : 'Unable to load leaderboard');
+    } finally {
+      if (!quiet) setLeaderboardLoading(false);
+    }
+  }, []);
+
+  const fetchMyProfile = useCallback(async () => {
+    if (!user || !getIdToken) {
+      setLeaderboardMe(null);
+      return;
+    }
+    try {
+      const token = await getIdToken();
+      if (!token) {
+        setLeaderboardMe(null);
+        return;
+      }
+      const response = await fetch('/api/leaderboard/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (response.status === 404) {
+          setLeaderboardMe(null);
+          return;
+        }
+        throw new Error(payload?.error?.message ?? 'Unable to load profile');
+      }
+      setLeaderboardMe(payload?.me ?? null);
+    } catch (err) {
+      console.error(err);
+      setLeaderboardMe(null);
+    }
+  }, [getIdToken, user]);
+
+  const handleDisplayNameSubmit = useCallback(async () => {
+    if (!user) return;
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      setNameSaveError('Display name cannot be empty.');
+      return;
+    }
+    setNameSaving(true);
+    setNameSaveError(null);
+    try {
+      await updateDisplayName(trimmed);
+    } catch (err) {
+      console.error(err);
+      setNameSaveError(err instanceof Error ? err.message : 'Unable to save display name');
+    } finally {
+      setNameSaving(false);
+    }
+  }, [nameDraft, updateDisplayName, user]);
+
+  useEffect(() => {
+    fetchLeaderboardTop();
+  }, [fetchLeaderboardTop]);
+
+  useEffect(() => {
+    fetchMyProfile();
+  }, [fetchMyProfile]);
+
+  useEffect(() => {
+    setNameDraft(user?.displayName ?? '');
+  }, [user?.displayName]);
 
   useEffect(() => {
     if (gameState !== 'loading') return;
@@ -757,6 +850,8 @@ function App() {
   });
 
   const inventoryRef = useRef<CarType[]>(generateInventory(100));
+  const sessionStartRef = useRef<number | null>(null);
+  const sessionStatsSubmittedRef = useRef(false);
   
   // Initial customers at positions appropriate for initial screen size
   const customersRef = useRef<Customer[]>(
@@ -1017,6 +1112,74 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [gameState, settings.timer.enabled, timeLeft]);
+
+  useEffect(() => {
+    if (!showTimeUp) return;
+    if (sessionStatsSubmittedRef.current) return;
+
+    const sendSession = async () => {
+      setLeaderboardLoading(true);
+      setLeaderboardError(null);
+      const durationSec = sessionStartRef.current
+        ? Math.max(0, Math.round((Date.now() - sessionStartRef.current) / 1000))
+        : 0;
+      const timerMinutes = settings.timer.enabled ? settings.timer.duration : 0;
+      const shouldSendStats = sessionStats.salesCount > 0 || sessionStats.profit !== 0 || sessionStats.gross !== 0;
+
+      try {
+        if (!shouldSendStats) {
+          await fetchLeaderboardTop({ quiet: true });
+          return;
+        }
+        if (!user || !getIdToken) {
+          await fetchLeaderboardTop({ quiet: true });
+          return;
+        }
+        const token = await getIdToken();
+        if (!token) {
+          await fetchLeaderboardTop({ quiet: true });
+          return;
+        }
+        const payload = {
+          sessionStats,
+          mode: settings.gameMode,
+          durationSec,
+          timerMinutes,
+        };
+        const response = await fetch('/api/leaderboard/session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error?.message ?? 'Failed to sync leaderboard');
+        }
+        setLeaderboardRows(data?.leaderboard ?? []);
+        setLeaderboardMe(data?.me ?? null);
+      } catch (err) {
+        setLeaderboardError(err instanceof Error ? err.message : 'Failed to sync leaderboard');
+        await fetchLeaderboardTop({ quiet: true });
+      } finally {
+        setLeaderboardLoading(false);
+        sessionStatsSubmittedRef.current = true;
+      }
+    };
+
+    sendSession();
+  }, [
+    showTimeUp,
+    sessionStats,
+    settings.gameMode,
+    settings.timer.duration,
+    settings.timer.enabled,
+    user,
+    getIdToken,
+    fetchLeaderboardTop,
+  ]);
 
   // Initialize game
   useEffect(() => {
@@ -2813,6 +2976,13 @@ function App() {
                 )}
               </div>
 
+              <LeaderboardPanel
+                entries={leaderboardRows}
+                me={leaderboardMe}
+                loading={leaderboardLoading}
+                error={leaderboardError}
+              />
+
               <button
                 className="setup-action-button"
                 onClick={beginGameStart}
@@ -3024,6 +3194,12 @@ function App() {
                 <span>${sessionStats.profit.toLocaleString()}</span>
               </div>
             </div>
+            <LeaderboardPanel
+              entries={leaderboardRows}
+              me={leaderboardMe}
+              loading={leaderboardLoading}
+              error={leaderboardError}
+            />
             <button onClick={() => { setShowTimeUp(false); setGameState('intro'); }}>Back to Menu</button>
           </div>
         )}
@@ -3450,6 +3626,63 @@ function App() {
                       : 'Using local model on your hardware'
                   : 'Using smart scripted responses (works offline)'}
               </p>
+              <div className="account-section">
+                <h3>Player Account</h3>
+                {authLoading ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Checking login status...</p>
+                ) : user ? (
+                  <>
+                    <p style={{ fontWeight: 600 }}>{user.displayName || user.email || 'Logged in player'}</p>
+                    <label htmlFor="display-name-input" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Display Name</label>
+                    <input
+                      id="display-name-input"
+                      type="text"
+                      value={nameDraft}
+                      onChange={(e) => {
+                        setNameDraft(e.target.value);
+                        setNameSaveError(null);
+                      }}
+                      placeholder="Salespro Name"
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-dark)',
+                        color: 'var(--text-primary)',
+                      }}
+                    />
+                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        className="ai-warmup-btn primary"
+                        onClick={handleDisplayNameSubmit}
+                        disabled={nameSaving || !nameDraft.trim()}
+                        type="button"
+                      >
+                        {nameSaving ? 'Saving…' : 'Save Name'}
+                      </button>
+                      <button
+                        className="ai-warmup-btn secondary"
+                        onClick={logout}
+                        type="button"
+                      >
+                        Log Out
+                      </button>
+                    </div>
+                    {nameSaveError && <p className="leaderboard-error">{nameSaveError}</p>}
+                  </>
+                ) : (
+                  <button
+                    className="ai-warmup-btn primary"
+                    onClick={login}
+                    type="button"
+                    disabled={authLoading}
+                  >
+                    Sign in with Google
+                  </button>
+                )}
+                {authError && <p className="leaderboard-error">{authError}</p>}
+              </div>
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                 <button 
                   className="close-btn" 

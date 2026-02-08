@@ -85,6 +85,36 @@ Showroom Blitz supports advanced AI for customer interactions. To enable this:
 > Using a local LLM via LM Studio is a great way to play with high-quality AI
 > responses for free!
 
+## 🔐 Firebase Leaderboard & Accounts
+
+Showroom Blitz now tracks signed-in players on a global leaderboard using Firebase Auth and Firestore. To wire it up:
+
+1. Create a Firebase project, enable **Email/Google Auth** (or at least Google), and add a Firestore database (in production mode).
+2. Generate a service account key and store the following values in `.env.local` (created at the repo root):
+
+   ```env
+   FIREBASE_PROJECT_ID=your-project
+   FIREBASE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+   ```
+
+   Make sure the private key retains the literal `\n` sequences if you copy/paste it directly from the service account JSON.
+
+3. Expose the same Firebase config on the front end by also setting `VITE_FIREBASE_*` variables in `.env.local`, for example:
+
+   ```env
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=your-project
+   VITE_FIREBASE_APP_ID=...
+   VITE_FIREBASE_MEASUREMENT_ID=...  # optional
+   ```
+
+   These values are available in the Firebase console under Project Settings → General.
+
+4. After saving the new env vars, restart the server (`npm run dev:server`) and rerun `npm install` if needed so the new Firebase dependencies are installed.
+5. Players can now log in from the settings panel inside the app and their session stats will sync to Firestore. Check `/api/leaderboard` routes for session submissions (`POST /api/leaderboard/session`) and browsing the top players (`GET /api/leaderboard/top` or `/api/leaderboard/me`).
+
 ## 🛠️ Tech Stack
 
 - **Framework**: [React 19](https://react.dev/)

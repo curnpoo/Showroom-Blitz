@@ -1,0 +1,66 @@
+import type { LeaderboardEntry, PlayerSummary } from '../types/leaderboard';
+
+type LeaderboardPanelProps = {
+  title?: string;
+  entries: LeaderboardEntry[];
+  me: PlayerSummary | null;
+  loading?: boolean;
+  error?: string | null;
+};
+
+export function LeaderboardPanel({
+  title = 'Global Leaderboard',
+  entries,
+  me,
+  loading = false,
+  error = null,
+}: LeaderboardPanelProps) {
+  return (
+    <section className="leaderboard-panel">
+      <div className="leaderboard-panel-header">
+        <div className="leaderboard-title">{title}</div>
+        {me && (
+          <div className="leaderboard-subtitle">Your Rank #{me.rank}</div>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="leaderboard-status">Loading leaderboard…</p>
+      ) : error ? (
+        <p className="leaderboard-error">{error}</p>
+      ) : (
+        <div className="leaderboard-table">
+          <div className="leaderboard-row leaderboard-row--head">
+            <span>#</span>
+            <span>Name</span>
+            <span>Profit</span>
+            <span>Sales</span>
+          </div>
+          {entries.length === 0 && (
+            <div className="leaderboard-row leaderboard-row--empty">No leaderboard data yet.</div>
+          )}
+          {entries.map((entry, index) => (
+            <div
+              key={entry.uid}
+              className={`leaderboard-row ${entry.uid === me?.uid ? 'leaderboard-row--self' : ''}`}
+            >
+              <span className="leaderboard-rank">{entry.rank ?? index + 1}</span>
+              <span className="leaderboard-name">{entry.displayName}</span>
+              <span className="leaderboard-profit">${entry.totalProfit.toLocaleString()}</span>
+              <span className="leaderboard-sales">{entry.salesCount} deals</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {me && me.lastSessionProfit !== undefined && (
+        <div className="leaderboard-footer">
+          <p>
+            Last session: {me.lastSessionSales ?? '0'} deals • ${me.lastSessionProfit.toLocaleString()}
+            {me.lastSessionAt && ` • ${new Date(me.lastSessionAt).toLocaleDateString()}`}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}

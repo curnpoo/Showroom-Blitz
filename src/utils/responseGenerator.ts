@@ -11,6 +11,7 @@ const KNOWN_MODEL_NAMES = new Set(
 );
 
 const AI_RESPONSE_MAX_TOKENS = 512;
+const AI_MAX_HISTORY_MESSAGES = 10; // Keep last 10 messages (5 exchanges) to limit input tokens
 
 // ============ VEHICLE CATEGORY LABELS ============
 const CATEGORY_LABELS: Record<VehicleCategory, string> = {
@@ -1538,6 +1539,11 @@ export async function getAIResponse(
     return { ...scripted, playerSentiment };
   }
 
+  // Trim conversation history to last N messages to prevent token creep
+  const recentHistory = customer.conversationHistory.length > AI_MAX_HISTORY_MESSAGES
+    ? customer.conversationHistory.slice(-AI_MAX_HISTORY_MESSAGES)
+    : customer.conversationHistory;
+
   try {
     let aiResponse = '';
 
@@ -1555,7 +1561,7 @@ export async function getAIResponse(
           max_tokens: AI_RESPONSE_MAX_TOKENS,
           system: systemPrompt,
           messages: [
-            ...customer.conversationHistory.map((msg: AIConversationMessage) => ({
+            ...recentHistory.map((msg: AIConversationMessage) => ({
               role: msg.role,
               content: msg.content,
             })),
@@ -1590,7 +1596,7 @@ export async function getAIResponse(
           model: settings.modelName || 'local-model',
           messages: [
             { role: 'system', content: systemPrompt },
-            ...customer.conversationHistory.map((msg: AIConversationMessage) => ({
+            ...recentHistory.map((msg: AIConversationMessage) => ({
               role: msg.role,
               content: msg.content,
             })),
