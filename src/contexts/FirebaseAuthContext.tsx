@@ -12,6 +12,7 @@ import {
   getRedirectResult,
   getAuth,
   GoogleAuthProvider,
+  onAuthStateChanged,
   setPersistence,
   signInWithRedirect,
   signOut as firebaseSignOut,
@@ -63,6 +64,7 @@ export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<AuthError>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [serverAuthEnabled, setServerAuthEnabled] = useState(false);
+  const [sessionRecovered, setSessionRecovered] = useState(false);
 
   const clientAuthEnabled = hasFirebaseClientConfig();
 
@@ -160,6 +162,7 @@ export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(true);
         setError(null);
         await exchangeIdTokenForSession(result.user);
+        setSessionRecovered(true);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Unable to sign in');
@@ -177,6 +180,38 @@ export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
       cancelled = true;
     };
   }, [auth, clientAuthEnabled, exchangeIdTokenForSession]);
+
+  useEffect(() => {
+    if (!auth || !clientAuthEnabled || sessionRecovered) return;
+
+    let cancelled = false;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser || cancelled || user) {
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await exchangeIdTokenForSession(firebaseUser);
+        if (!cancelled) {
+          setSessionRecovered(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Unable to sign in');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [auth, clientAuthEnabled, exchangeIdTokenForSession, sessionRecovered, user]);
 
   const login = useCallback(async () => {
     if (!auth || !clientAuthEnabled) {
