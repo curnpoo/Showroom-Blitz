@@ -73,6 +73,7 @@ Recommended production posture:
 - Keep Admin credentials server-side only
 - Use the App Check site key plus an allowlist in `ALLOWED_WEB_ORIGINS`
 - Prefer `VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN` only for local debugging, never production
+- Make sure the Firebase Admin service account can use the target Google Cloud project. For Vercel session-cookie auth, grant it `Service Usage Consumer` on the project used by `identitytoolkit.googleapis.com`.
 
 ## Disable Password Protection
 

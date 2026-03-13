@@ -34,6 +34,7 @@ type MeResponse = {
   csrfToken?: string;
   user?: AppUser | null;
   error?: {
+    code?: string;
     message?: string;
   };
 };

@@ -62,12 +62,30 @@ const parseServiceAccountJson = () => {
   }
 };
 
+const parsedServiceAccount = parseServiceAccountJson();
+const serviceAccountProjectId = typeof parsedServiceAccount?.project_id === 'string'
+  ? parsedServiceAccount.project_id
+  : null;
+const serviceAccountEmail = typeof parsedServiceAccount?.client_email === 'string'
+  ? parsedServiceAccount.client_email
+  : null;
+
+const warnProjectMismatch = () => {
+  if (!serviceAccountProjectId || !FIREBASE_PROJECT_ID || serviceAccountProjectId === FIREBASE_PROJECT_ID) {
+    return;
+  }
+
+  console.warn(
+    `[auth] FIREBASE_PROJECT_ID (${FIREBASE_PROJECT_ID}) does not match FIREBASE_SERVICE_ACCOUNT_JSON.project_id (${serviceAccountProjectId}). Auth session creation can fail until both point to the same Firebase project.`,
+  );
+};
+
 const resolveFirebaseCredential = () => {
-  const serviceAccountJson = parseServiceAccountJson();
-  if (serviceAccountJson?.client_email && serviceAccountJson?.private_key) {
+  if (parsedServiceAccount?.client_email && parsedServiceAccount?.private_key) {
     return {
-      credential: cert(serviceAccountJson),
-      projectId: serviceAccountJson.project_id || FIREBASE_PROJECT_ID,
+      credential: cert(parsedServiceAccount),
+      projectId: parsedServiceAccount.project_id || FIREBASE_PROJECT_ID,
+      source: 'service_account_json',
     };
   }
 
@@ -79,6 +97,7 @@ const resolveFirebaseCredential = () => {
         privateKey: FIREBASE_PRIVATE_KEY,
       }),
       projectId: FIREBASE_PROJECT_ID,
+      source: 'inline_service_account',
     };
   }
 
@@ -86,6 +105,7 @@ const resolveFirebaseCredential = () => {
     return {
       credential: applicationDefault(),
       projectId: FIREBASE_PROJECT_ID,
+      source: 'application_default',
     };
   }
 
@@ -93,6 +113,8 @@ const resolveFirebaseCredential = () => {
 };
 
 const firebaseCredential = resolveFirebaseCredential();
+
+warnProjectMismatch();
 
 if (firebaseCredential) {
   firebaseApp = getApps()[0]
@@ -237,6 +259,130 @@ const isAllowedDevOrigin = (origin) => {
 };
 
 const asNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+const parseJson = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const extractRawServerResponse = (message) => {
+  if (typeof message !== 'string') return null;
+
+  const match = message.match(/Raw server response:\s*(.+)$/s);
+  if (!match) return null;
+
+  const raw = match[1].trim();
+  const parsed = parseJson(raw);
+  if (parsed && typeof parsed === 'object') {
+    return parsed;
+  }
+  if (typeof parsed === 'string') {
+    const nested = parseJson(parsed);
+    if (nested && typeof nested === 'object') {
+      return nested;
+    }
+  }
+
+  return null;
+};
+
+const getFirebaseErrorCode = (error) => {
+  if (typeof error?.errorInfo?.code === 'string') return error.errorInfo.code;
+  if (typeof error?.code === 'string') return error.code;
+  return null;
+};
+
+const getGoogleApiError = (error) => {
+  const firebaseMessage = typeof error?.errorInfo?.message === 'string'
+    ? error.errorInfo.message
+    : (error instanceof Error ? error.message : '');
+  const parsed = extractRawServerResponse(firebaseMessage);
+  const apiError = parsed?.error;
+  if (!apiError || typeof apiError !== 'object') {
+    return null;
+  }
+
+  const errorInfo = Array.isArray(apiError.details)
+    ? apiError.details.find((detail) => detail?.['@type'] === 'type.googleapis.com/google.rpc.ErrorInfo')
+    : null;
+
+  return {
+    apiError,
+    errorInfo,
+  };
+};
+
+const describeSessionCreationFailure = (error) => {
+  const firebaseCode = getFirebaseErrorCode(error);
+  const googleApiError = getGoogleApiError(error);
+  const googleMessage = typeof googleApiError?.apiError?.message === 'string'
+    ? googleApiError.apiError.message
+    : '';
+  const googleService = googleApiError?.errorInfo?.metadata?.service || null;
+  const targetProject = googleApiError?.errorInfo?.metadata?.consumer
+    ? String(googleApiError.errorInfo.metadata.consumer).replace(/^projects\//, '')
+    : (googleApiError?.errorInfo?.metadata?.containerInfo || serviceAccountProjectId || FIREBASE_PROJECT_ID || null);
+
+  if (
+    googleApiError?.apiError?.status === 'PERMISSION_DENIED'
+    && (
+      googleApiError?.errorInfo?.reason === 'USER_PROJECT_DENIED'
+      || googleMessage.includes('roles/serviceusage.serviceUsageConsumer')
+      || googleMessage.includes('serviceusage.services.use')
+    )
+  ) {
+    return {
+      status: 503,
+      code: 'auth/project-access-denied',
+      message: targetProject
+        ? `Server sign-in is blocked because the Firebase Admin service account cannot use the Google project "${targetProject}". Grant that service account the Service Usage Consumer role in Google Cloud IAM, then retry.`
+        : 'Server sign-in is blocked because the Firebase Admin service account lacks Google Cloud project access. Grant it the Service Usage Consumer role in Google Cloud IAM, then retry.',
+      logContext: {
+        firebaseCode,
+        googleStatus: googleApiError.apiError.status,
+        googleReason: googleApiError.errorInfo?.reason || null,
+        googleService,
+        targetProject,
+        credentialSource: firebaseCredential?.source || null,
+        envProjectId: FIREBASE_PROJECT_ID || null,
+        serviceAccountProjectId,
+        serviceAccountEmail,
+      },
+    };
+  }
+
+  if (firebaseCode === 'auth/invalid-id-token' || firebaseCode === 'auth/id-token-expired') {
+    return {
+      status: 401,
+      code: 'auth/invalid-id-token',
+      message: 'The Google sign-in token could not be verified by the backend. Make sure the deployed app and backend use the same Firebase project, then sign in again.',
+      logContext: {
+        firebaseCode,
+        credentialSource: firebaseCredential?.source || null,
+        envProjectId: FIREBASE_PROJECT_ID || null,
+        serviceAccountProjectId,
+      },
+    };
+  }
+
+  return {
+    status: 401,
+    code: firebaseCode || 'auth/session-create-failed',
+    message: 'Unable to create session',
+    logContext: {
+      firebaseCode,
+      googleService,
+      credentialSource: firebaseCredential?.source || null,
+      envProjectId: FIREBASE_PROJECT_ID || null,
+      serviceAccountProjectId,
+      serviceAccountEmail,
+    },
+  };
+};
 
 const toISO = (value) => {
   if (!value) return null;
@@ -529,8 +675,14 @@ export const handleAuthSession = async (req, res) => {
     const user = await buildUserSummary(decodedToken.uid, decodedToken);
     sendJson(res, 200, { csrfToken, user });
   } catch (error) {
-    console.error('[auth] Failed to create session', error);
-    sendJson(res, 401, { error: { message: 'Unable to create session' } });
+    const failure = describeSessionCreationFailure(error);
+    console.error('[auth] Failed to create session', failure.logContext, error);
+    sendJson(res, failure.status, {
+      error: {
+        code: failure.code,
+        message: failure.message,
+      },
+    });
   }
 };
 
