@@ -55,11 +55,24 @@ When sharing your local server with others:
 
 ## Important Security Notes
 
-⚠️ **This is basic protection, not enterprise-grade security**
+⚠️ **The Vite password gate is only a convenience layer for local sharing**
 - Use HTTPS in production
 - Don't use this password anywhere else
 - Change the password regularly
 - The password is sent in plaintext over HTTP (fine for local network)
+
+## Firebase Auth Security
+
+The app now expects:
+- Firebase Admin credentials on the server for session-cookie verification
+- Firebase App Check for sign-in/profile/session-write routes
+- Firestore access to be denied directly from clients via `firestore.rules`
+
+Recommended production posture:
+- Keep `VITE_FIREBASE_*` client config in env vars only
+- Keep Admin credentials server-side only
+- Use the App Check site key plus an allowlist in `ALLOWED_WEB_ORIGINS`
+- Prefer `VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN` only for local debugging, never production
 
 ## Disable Password Protection
 

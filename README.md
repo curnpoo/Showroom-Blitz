@@ -11,109 +11,44 @@ eager to close the sale as you are!
 
 ## 🌟 Key Features
 
-- **Dynamic Showroom Floor**: Watch customers walk in and engage them before
-  they get "stolen" by your coworkers.
-- **Deep Negotiation Mechanics**: Discuss selling price, monthly payments, APR,
-  and down payments. Every customer has a different "heat" level and buyer
-  profile.
-- **AI-Powered Conversations**: Optionally integrate with Anthropic (Claude) or
-  local LLMs (via LM Studio) for realistic, unpredictable customer interactions.
-- **Progressive Gameplay**: Track your gross profit and sales count. Strive to
-  be the top seller in the dealership.
-- **Responsive Design**: Works beautifully on both desktop and mobile devices.
-  Install it as a PWA for the full experience.
-- **Game Modes**: Choose between _Standard_ mode or the high-pressure _Volume_
-  mode.
+- **Walk the Showroom**: Move through the dealership floor, intercept shoppers,
+  and stay ahead of the sales team around you.
+- **Sell Cars**: Match customers with the right vehicle, desk the deal, and
+  push for strong front-end gross without losing the customer.
+- **Talk to AI Buyers**: Hold real conversations with AI-driven customers who
+  bring different personalities, objections, budgets, and buying signals.
+- **Work a Live Inventory**: Browse available cars, compare options, and land
+  the right fit for each deal.
+- **Sign In and Make It Yours**: Use Google sign-in, set your username, and
+  build a player identity that carries across sessions.
+- **Climb the Leaderboard**: Stack total sales, gross, profit, and best volume
+  performances against everyone else through a dedicated leaderboard view from
+  the main menu.
+- **Play Your Way**: Jump into standard sessions or chase aggressive numbers in
+  Volume Mode.
+- **Play Anywhere**: Designed to feel good on both desktop and mobile.
 
-## 🚀 Getting Started
+## 🎮 What The Game Feels Like
 
-### Prerequisites
+Showroom Blitz is built around the pressure of a real sales floor. Customers
+walk in, coworkers compete for the same ups, and every conversation can turn
+into a deal or a miss.
 
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [npm](https://www.npmjs.com/)
+You are not just clicking through menus. You are moving through the showroom,
+starting conversations, qualifying buyers, picking inventory, presenting
+numbers, and trying to close before the opportunity disappears.
 
-### Installation
+## 🏁 Progression
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/showroom-blitz.git
-   cd showroom-blitz
-   ```
+Every strong run adds to the bigger picture:
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
-
-4. **Build for production**:
-   ```bash
-   npm run build
-   ```
-
-## 🎮 How to Play
-
-1. **Greet Customers**: Click on customers walking into the showroom. Move close
-   to them and hit the **TALK** button to start a conversation.
-2. **Qualify the Buyer**: Determine if they are a cash buyer or need financing.
-   Listen to their needs and preferences.
-3. **Select a Vehicle**: Browse your inventory to find the right car for their
-   budget and style.
-4. **Close the Deal**: Use the **Numbers Panel** to present an offer. Be
-   careful—if your offer is too high, their interest will drop. If it's too low,
-   you lose profit!
-5. **Watch the Competition**: Don't leave customers unattended for too long, or
-   your coworkers will swoop in and steal the deal.
-
-## 🧠 AI Configuration
-
-Showroom Blitz supports advanced AI for customer interactions. To enable this:
-
-1. Go to **Settings** (gear icon).
-2. Toggle **Use AI Responses**.
-3. Choose your provider:
-   - **Anthropic**: Provide your API key to use Claude 3 models.
-   - **LM Studio / OpenAI Compatible**: Use a local LLM running on your machine.
-4. Set the **API Base URL** (default for LM Studio is
-   `http://localhost:1234/v1`).
-
-> [!TIP]
-> Using a local LLM via LM Studio is a great way to play with high-quality AI
-> responses for free!
-
-## 🔐 Firebase Leaderboard & Accounts
-
-Showroom Blitz now tracks signed-in players on a global leaderboard using Firebase Auth and Firestore. To wire it up:
-
-1. Create a Firebase project, enable **Email/Google Auth** (or at least Google), and add a Firestore database (in production mode).
-2. Generate a service account key and store the following values in `.env.local` (created at the repo root):
-
-   ```env
-   FIREBASE_PROJECT_ID=your-project
-   FIREBASE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-   ```
-
-   Make sure the private key retains the literal `\n` sequences if you copy/paste it directly from the service account JSON.
-
-3. Expose the same Firebase config on the front end by also setting `VITE_FIREBASE_*` variables in `.env.local`, for example:
-
-   ```env
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=your-project
-   VITE_FIREBASE_APP_ID=...
-   VITE_FIREBASE_MEASUREMENT_ID=...  # optional
-   ```
-
-   These values are available in the Firebase console under Project Settings → General.
-
-4. After saving the new env vars, restart the server (`npm run dev:server`) and rerun `npm install` if needed so the new Firebase dependencies are installed.
-5. Players can now log in from the settings panel inside the app and their session stats will sync to Firestore. Check `/api/leaderboard` routes for session submissions (`POST /api/leaderboard/session`) and browsing the top players (`GET /api/leaderboard/top` or `/api/leaderboard/me`).
+- Close more deals
+- Increase total gross
+- Grow total profit
+- Post your best Volume Mode performance
+- Keep persistent career stats under your account
+- Reset session stats between runs without wiping long-term progression
+- Hold a spot on the leaderboard under your username
 
 ## 🛠️ Tech Stack
 

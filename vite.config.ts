@@ -115,7 +115,15 @@ export default defineConfig({
       '/api/ai': {
         target: 'http://127.0.0.1:5174',
         changeOrigin: true,
-      }
+      },
+      '/api/auth': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+      },
+      '/api/leaderboard': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+      },
     }
   }
 })

@@ -1,94 +1,297 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, updateProfile, type User } from 'firebase/auth';
-import { initializeFirebaseApp } from '../firebase/client';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  getRedirectResult,
+  getAuth,
+  GoogleAuthProvider,
+  inMemoryPersistence,
+  setPersistence,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut as firebaseSignOut,
+  type User as FirebaseUser,
+} from 'firebase/auth';
+
+import {
+  getFirebaseAppCheckToken,
+  hasFirebaseClientConfig,
+  initializeFirebaseApp,
+  initializeFirebaseAppCheck,
+} from '../firebase/client';
+import type { AppUser } from '../types/auth';
 
 type AuthError = string | null;
 
+type MeResponse = {
+  authEnabled?: boolean;
+  csrfToken?: string;
+  user?: AppUser | null;
+  error?: {
+    message?: string;
+  };
+};
+
 type FirebaseAuthContextValue = {
-  user: User | null;
+  user: AppUser | null;
   loading: boolean;
   error: AuthError;
+  csrfToken: string | null;
+  authEnabled: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
-  getIdToken: () => Promise<string | null>;
+  refreshMe: () => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
 };
 
 const FirebaseAuthContext = createContext<FirebaseAuthContextValue | undefined>(undefined);
 
+const readPayload = async (response: Response): Promise<MeResponse> => {
+  return response.json().catch(() => ({}));
+};
+
+const isMobileAuthFlow = () => {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia('(pointer: coarse)').matches) return true;
+  return /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
+};
+
 export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
   const firebaseApp = useMemo(() => initializeFirebaseApp(), []);
   const auth = useMemo(() => (firebaseApp ? getAuth(firebaseApp) : null), [firebaseApp]);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [serverAuthEnabled, setServerAuthEnabled] = useState(false);
+
+  const clientAuthEnabled = hasFirebaseClientConfig();
+
+  const refreshMe = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include',
+      });
+      const payload = await readPayload(response);
+      setCsrfToken(payload.csrfToken ?? null);
+      setServerAuthEnabled(Boolean(payload.authEnabled));
+      setUser(payload.user ?? null);
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? 'Unable to load auth state');
+      }
+      setError(null);
+    } catch (err) {
+      setUser(null);
+      setServerAuthEnabled(false);
+      setError(err instanceof Error ? err.message : 'Unable to load auth state');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (firebaseUser) => {
-        setUser(firebaseUser);
-        setLoading(false);
-      },
-      (firebaseError) => {
-        setError(firebaseError.message);
-        setLoading(false);
+    void refreshMe();
+  }, [refreshMe]);
+
+  useEffect(() => {
+    initializeFirebaseAppCheck();
+  }, []);
+
+  const exchangeIdTokenForSession = useCallback(
+    async (firebaseUser: FirebaseUser) => {
+      if (!auth) {
+        throw new Error('Firebase auth is not initialized.');
       }
-    );
-    return () => unsubscribe();
-  }, [auth]);
+
+      if (!csrfToken) {
+        await refreshMe();
+      }
+
+      const csrf = csrfToken || (await (async () => {
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const payload = await readPayload(response);
+        setCsrfToken(payload.csrfToken ?? null);
+        setServerAuthEnabled(Boolean(payload.authEnabled));
+        return payload.csrfToken ?? null;
+      })());
+
+      if (!csrf) {
+        throw new Error('Unable to establish CSRF protection.');
+      }
+
+      const idToken = await firebaseUser.getIdToken(true);
+      const appCheckToken = await getFirebaseAppCheckToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf,
+      };
+      if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
+
+      const response = await fetch('/api/auth/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ idToken }),
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? 'Unable to sign in');
+      }
+      setCsrfToken(payload.csrfToken ?? null);
+      setUser(payload.user ?? null);
+      setServerAuthEnabled(true);
+      setError(null);
+
+      await firebaseSignOut(auth).catch(() => undefined);
+    },
+    [auth, csrfToken, refreshMe],
+  );
+
+  useEffect(() => {
+    if (!auth || !clientAuthEnabled) return;
+
+    let cancelled = false;
+    const completeRedirectSignIn = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (!result?.user || cancelled) return;
+        setLoading(true);
+        setError(null);
+        await exchangeIdTokenForSession(result.user);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Unable to sign in');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void completeRedirectSignIn();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, clientAuthEnabled, exchangeIdTokenForSession]);
 
   const login = useCallback(async () => {
-    if (!auth) {
-      setError('Firebase has not been configured');
+    if (!auth || !clientAuthEnabled) {
+      setError('Firebase sign-in is not fully configured.');
       return;
     }
+
     setLoading(true);
     setError(null);
+
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await setPersistence(auth, inMemoryPersistence);
+      const provider = new GoogleAuthProvider();
+      if (isMobileAuthFlow()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      try {
+        const result = await signInWithPopup(auth, provider);
+        await exchangeIdTokenForSession(result.user);
+      } catch (err) {
+        const code = err instanceof Error && 'code' in err ? String((err as { code?: string }).code) : '';
+        if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw err;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in');
     } finally {
       setLoading(false);
     }
-  }, [auth]);
+  }, [auth, clientAuthEnabled, exchangeIdTokenForSession]);
 
   const logout = useCallback(async () => {
-    if (!auth) return;
+    if (!csrfToken) {
+      setError('Unable to verify logout request.');
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     try {
-      await firebaseSignOut(auth);
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? 'Unable to log out');
+      }
+      setCsrfToken(payload.csrfToken ?? null);
+      setUser(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to log out');
     } finally {
       setLoading(false);
     }
-  }, [auth]);
-
-  const getIdToken = useCallback(async () => {
-    if (!auth) return null;
-    const currentUser = auth.currentUser;
-    if (!currentUser) return null;
-    return currentUser.getIdToken();
-  }, [auth]);
+  }, [csrfToken]);
 
   const updateDisplayName = useCallback(
     async (name: string) => {
-      if (!auth) throw new Error('Firebase has not been configured');
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('No authenticated user');
-      await updateProfile(currentUser, { displayName: name });
-      setUser({ ...currentUser });
+      if (!csrfToken) {
+        throw new Error('Unable to verify profile update.');
+      }
+
+      const appCheckToken = await getFirebaseAppCheckToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      };
+      if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
+
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ displayName: name }),
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? 'Unable to save display name');
+      }
+      setUser(payload.user ?? null);
+      setError(null);
     },
-    [auth]
+    [csrfToken],
   );
 
   return (
     <FirebaseAuthContext.Provider
-      value={{ user, loading, error, login, logout, getIdToken, updateDisplayName }}
+      value={{
+        user,
+        loading,
+        error,
+        csrfToken,
+        authEnabled: clientAuthEnabled && serverAuthEnabled,
+        login,
+        logout,
+        refreshMe,
+        updateDisplayName,
+      }}
     >
       {children}
     </FirebaseAuthContext.Provider>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Settings, HelpCircle } from 'lucide-react';
 import { TipsModal } from './components/TipsModal';
+import { AccountSettingsCard } from './components/AccountSettingsCard';
 import type { 
   Customer, 
   Coworker, 
@@ -35,6 +36,7 @@ import { NumbersPanel } from './components/NumbersPanel';
 import { CustomerNotes } from './components/CustomerNotes';
 import { ChatInterface } from './components/ChatInterface';
 import { LeaderboardPanel } from './components/LeaderboardPanel';
+import { getFirebaseAppCheckToken } from './firebase/client';
 import { useFirebaseAuth } from './contexts/FirebaseAuthContext';
 import type { LeaderboardEntry, PlayerSummary } from './types/leaderboard';
 
@@ -108,10 +110,9 @@ const PLAYER_SPEED = 300; // pixels per second (approx. 5 px/frame at 60fps)
 const START_TITLE_IMAGE = new URL('../Assets/title_startscreen.webp', import.meta.url).href;
 const START_DESCRIPTION_IMAGE = new URL('../Assets/description_startscreen.webp', import.meta.url).href;
 const START_BUTTON_BG_IMAGE = new URL('../Assets/startbutton_bg.webp', import.meta.url).href;
-const START_BUTTON_TEXT_IMAGE = new URL('../Assets/start_button_text.webp', import.meta.url).href;
 const TRANSITION_VIDEO = new URL('../Assets/startscreen-to-menu_transition.mp4', import.meta.url).href;
 const PLAYER_COLLISION_RADIUS = 18;
-const LEADERBOARD_LIMIT = 10;
+const LEADERBOARD_LIMIT = 25;
 
 type CollisionBox = { x: number; y: number; w: number; h: number };
 
@@ -216,6 +217,7 @@ function App() {
   const [showInventory, setShowInventory] = useState(false);
   const [showNumbers, setShowNumbers] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLeaderboardDrawer, setShowLeaderboardDrawer] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [totalSales, setTotalSales] = useState(0);
   const [lastSaleAmount, setLastSaleAmount] = useState(0);
@@ -284,12 +286,23 @@ function App() {
   const [showTimeUp, setShowTimeUp] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [showChatStartTip, setShowChatStartTip] = useState(false);
+  const [sessionEnding, setSessionEnding] = useState(false);
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     gross: 0,
     profit: 0,
     salesCount: 0,
   });
-  const { user, login, logout, loading: authLoading, error: authError, getIdToken, updateDisplayName } = useFirebaseAuth();
+  const {
+    user,
+    login,
+    logout,
+    loading: authLoading,
+    error: authError,
+    csrfToken,
+    authEnabled,
+    refreshMe,
+    updateDisplayName,
+  } = useFirebaseAuth();
   const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardEntry[]>([]);
   const [leaderboardMe, setLeaderboardMe] = useState<PlayerSummary | null>(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
@@ -309,6 +322,8 @@ function App() {
   const [aiWarmupMessage, setAiWarmupMessage] = useState('');
   const aiWarmupAttemptRef = useRef(0);
   const pendingWarmupRef = useRef(false);
+  const sessionStatsRef = useRef(sessionStats);
+  const submittingSessionRef = useRef<Promise<void> | null>(null);
   const useAIRef = useRef(settings.useAI);
   const isCurrenServer = settings.useAI && settings.provider === 'local' && settings.apiBaseUrl === '/api/ai';
   const showTimerOverlay = (settings.timer.enabled || settings.gameMode === 'volume') && gameState === 'playing';
@@ -316,8 +331,9 @@ function App() {
   const aiCostDisplay = aiCostUSD < 1 ? aiCostUSD.toFixed(4) : aiCostUSD.toFixed(2);
   const [draftSettings, setDraftSettings] = useState<GameSettings | null>(null);
   const panelSettings = draftSettings || settings;
+  const signedInLabel = user?.displayName || user?.email || 'Signed in player';
 
-  const handleStartClick = () => {
+  const handleIntroStart = () => {
     setIsTransitioning(true);
     setShowVideo(true);
   };
@@ -399,6 +415,16 @@ function App() {
       setDraftSettings(null);
     }
   }, [showSettings, settings]);
+
+  useEffect(() => {
+    sessionStatsRef.current = sessionStats;
+  }, [sessionStats]);
+
+  useEffect(() => {
+    if (gameState !== 'setup') {
+      setShowLeaderboardDrawer(false);
+    }
+  }, [gameState]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -638,6 +664,14 @@ function App() {
     };
   }, [gameState]);
 
+  const resetSessionStats = useCallback(() => {
+    setTotalSales(0);
+    setTotalProfit(0);
+    setLastSaleAmount(0);
+    setLastProfit(0);
+    setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
+  }, []);
+
   const resetPlayerToDesk = useCallback(() => {
     const desks = desksRef.current;
     if (desks.length >= 6) {
@@ -652,6 +686,7 @@ function App() {
 
   const startShowroom = useCallback(() => {
     setShowDealClosed(false);
+    setShowTimeUp(false);
     customersRef.current.forEach(c => c.active = true);
     
     // Reset entities to their default positions/roles
@@ -661,20 +696,19 @@ function App() {
     // Reset player to their desk
     resetPlayerToDesk();
 
+    resetSessionStats();
     if (settings.gameMode === 'volume') {
       inventoryRef.current = generateInventory(10);
       setTimeLeft(0);
-      setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
     } else if (settings.timer.enabled) {
       inventoryRef.current = generateInventory(100);
       setTimeLeft(settings.timer.duration * 60);
-      setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
     } else {
       inventoryRef.current = generateInventory(100);
     }
     sessionStartRef.current = Date.now();
     sessionStatsSubmittedRef.current = false;
-  }, [settings.gameMode, settings.timer.enabled, settings.timer.duration, isMobile]);
+  }, [settings.gameMode, settings.timer.enabled, settings.timer.duration, isMobile, resetSessionStats]);
 
   const beginGameStart = useCallback(() => {
     setAiUsageSeconds(0);
@@ -707,14 +741,6 @@ function App() {
     warmupAI('retry');
   }, [warmupAI]);
 
-  const resetAllStats = useCallback(() => {
-    setTotalSales(0);
-    setTotalProfit(0);
-    setLastSaleAmount(0);
-    setLastProfit(0);
-    setSessionStats({ gross: 0, profit: 0, salesCount: 0 });
-  }, []);
-
   const fetchLeaderboardTop = useCallback(async (options?: { quiet?: boolean }) => {
     const quiet = options?.quiet ?? false;
     if (!quiet) setLeaderboardLoading(true);
@@ -735,18 +761,13 @@ function App() {
   }, []);
 
   const fetchMyProfile = useCallback(async () => {
-    if (!user || !getIdToken) {
+    if (!user) {
       setLeaderboardMe(null);
       return;
     }
     try {
-      const token = await getIdToken();
-      if (!token) {
-        setLeaderboardMe(null);
-        return;
-      }
       const response = await fetch('/api/leaderboard/me', {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -761,7 +782,101 @@ function App() {
       console.error(err);
       setLeaderboardMe(null);
     }
-  }, [getIdToken, user]);
+  }, [user]);
+
+  const submitSessionIfNeeded = useCallback(async () => {
+    if (sessionStatsSubmittedRef.current) return;
+    if (submittingSessionRef.current) {
+      await submittingSessionRef.current;
+      return;
+    }
+
+    const task = (async () => {
+      setLeaderboardLoading(true);
+      setLeaderboardError(null);
+      const latestSessionStats = sessionStatsRef.current;
+      const durationSec = sessionStartRef.current
+        ? Math.max(0, Math.round((Date.now() - sessionStartRef.current) / 1000))
+        : 0;
+      const timerMinutes = settings.timer.enabled ? settings.timer.duration : 0;
+      const shouldSendStats =
+        latestSessionStats.salesCount > 0
+        || latestSessionStats.profit !== 0
+        || latestSessionStats.gross !== 0;
+
+      try {
+        if (!shouldSendStats || !user) {
+          await fetchLeaderboardTop({ quiet: true });
+          return;
+        }
+
+        if (!csrfToken) {
+          throw new Error('Missing CSRF token');
+        }
+
+        const appCheckToken = await getFirebaseAppCheckToken();
+
+        const payload = {
+          sessionStats: latestSessionStats,
+          mode: settings.gameMode,
+          durationSec,
+          timerMinutes,
+        };
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        };
+        if (appCheckToken) {
+          headers['X-Firebase-AppCheck'] = appCheckToken;
+        }
+        const response = await fetch('/api/leaderboard/session', {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error?.message ?? 'Failed to sync leaderboard');
+        }
+        setLeaderboardRows(data?.leaderboard ?? []);
+        setLeaderboardMe(data?.me ?? null);
+      } catch (err) {
+        setLeaderboardError(err instanceof Error ? err.message : 'Failed to sync leaderboard');
+        await fetchLeaderboardTop({ quiet: true });
+      } finally {
+        setLeaderboardLoading(false);
+        sessionStatsSubmittedRef.current = true;
+        submittingSessionRef.current = null;
+      }
+    })();
+
+    submittingSessionRef.current = task;
+    await task;
+  }, [csrfToken, fetchLeaderboardTop, settings.gameMode, settings.timer.duration, settings.timer.enabled, user]);
+
+  const returnToMenu = useCallback(async () => {
+    setSessionEnding(true);
+    try {
+      await submitSessionIfNeeded();
+    } finally {
+      setShowDealClosed(false);
+      setShowLostDeal(false);
+      setShowInput(false);
+      setShowNumbers(false);
+      setShowInventory(false);
+      setShowSettings(false);
+      setShowTimeUp(false);
+      setSelectedPerson(null);
+      setConversation([]);
+      setCurrentCar(null);
+      setInputMessage('');
+      setAiUsageSeconds(0);
+      resetSessionStats();
+      setGameState('intro');
+      setSessionEnding(false);
+    }
+  }, [resetSessionStats, submitSessionIfNeeded]);
 
   const handleDisplayNameSubmit = useCallback(async () => {
     if (!user) return;
@@ -774,13 +889,16 @@ function App() {
     setNameSaveError(null);
     try {
       await updateDisplayName(trimmed);
+      await refreshMe();
+      await fetchMyProfile();
+      await fetchLeaderboardTop({ quiet: true });
     } catch (err) {
       console.error(err);
       setNameSaveError(err instanceof Error ? err.message : 'Unable to save display name');
     } finally {
       setNameSaving(false);
     }
-  }, [nameDraft, updateDisplayName, user]);
+  }, [fetchLeaderboardTop, fetchMyProfile, nameDraft, refreshMe, updateDisplayName, user]);
 
   useEffect(() => {
     fetchLeaderboardTop();
@@ -1116,70 +1234,8 @@ function App() {
   useEffect(() => {
     if (!showTimeUp) return;
     if (sessionStatsSubmittedRef.current) return;
-
-    const sendSession = async () => {
-      setLeaderboardLoading(true);
-      setLeaderboardError(null);
-      const durationSec = sessionStartRef.current
-        ? Math.max(0, Math.round((Date.now() - sessionStartRef.current) / 1000))
-        : 0;
-      const timerMinutes = settings.timer.enabled ? settings.timer.duration : 0;
-      const shouldSendStats = sessionStats.salesCount > 0 || sessionStats.profit !== 0 || sessionStats.gross !== 0;
-
-      try {
-        if (!shouldSendStats) {
-          await fetchLeaderboardTop({ quiet: true });
-          return;
-        }
-        if (!user || !getIdToken) {
-          await fetchLeaderboardTop({ quiet: true });
-          return;
-        }
-        const token = await getIdToken();
-        if (!token) {
-          await fetchLeaderboardTop({ quiet: true });
-          return;
-        }
-        const payload = {
-          sessionStats,
-          mode: settings.gameMode,
-          durationSec,
-          timerMinutes,
-        };
-        const response = await fetch('/api/leaderboard/session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(data?.error?.message ?? 'Failed to sync leaderboard');
-        }
-        setLeaderboardRows(data?.leaderboard ?? []);
-        setLeaderboardMe(data?.me ?? null);
-      } catch (err) {
-        setLeaderboardError(err instanceof Error ? err.message : 'Failed to sync leaderboard');
-        await fetchLeaderboardTop({ quiet: true });
-      } finally {
-        setLeaderboardLoading(false);
-        sessionStatsSubmittedRef.current = true;
-      }
-    };
-
-    sendSession();
-  }, [
-    showTimeUp,
-    sessionStats,
-    settings.gameMode,
-    settings.timer.duration,
-    settings.timer.enabled,
-    user,
-    getIdToken,
-    fetchLeaderboardTop,
-  ]);
+    void submitSessionIfNeeded();
+  }, [showTimeUp, submitSessionIfNeeded]);
 
   // Initialize game
   useEffect(() => {
@@ -2525,14 +2581,12 @@ function App() {
     setLastProfit(profit);
     setTotalProfit(prev => prev + profit);
     setTotalSales(prev => prev + saleAmount);
-    
-    if (settings.timer.enabled || settings.gameMode === 'volume') {
-      setSessionStats(prev => ({
-        gross: prev.gross + saleAmount,
-        profit: prev.profit + profit,
-        salesCount: prev.salesCount + 1
-      }));
-    }
+
+    setSessionStats(prev => ({
+      gross: prev.gross + saleAmount,
+      profit: prev.profit + profit,
+      salesCount: prev.salesCount + 1,
+    }));
 
     // Win condition for Volume Mode
     if (settings.gameMode === 'volume') {
@@ -2782,6 +2836,262 @@ function App() {
     </div>
   );
 
+  const applyDraftSettingsAndClose = useCallback(() => {
+    if (draftSettings) {
+      const shouldWarmup =
+        gameState === 'playing'
+        && draftSettings.useAI
+        && draftSettings.provider === 'local'
+        && draftSettings.apiBaseUrl === '/api/ai';
+      const needsModelFix =
+        draftSettings.provider === 'local'
+        && draftSettings.apiBaseUrl === '/api/ai'
+        && (!draftSettings.modelName || draftSettings.modelName === 'local-model');
+      const nextSettings = needsModelFix
+        ? { ...draftSettings, modelName: currenServerModel }
+        : draftSettings;
+      if (shouldWarmup) {
+        pendingWarmupRef.current = true;
+      }
+      setSettings(nextSettings);
+    }
+    setShowSettings(false);
+  }, [currenServerModel, draftSettings, gameState]);
+
+  const renderSettingsPanel = () => {
+    if (!showSettings) return null;
+
+    return (
+      <>
+        <div className="panel-backdrop" onClick={() => setShowSettings(false)} />
+        <div className="settings-panel">
+          <h3>{gameState === 'playing' ? '⚙️ Settings' : '⚙️ Menu & Profile'}</h3>
+          <div className="settings-option">
+            <label>
+              <input
+                type="checkbox"
+                checked={panelSettings.useAI}
+                onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), useAI: e.target.checked }))}
+              />
+              Enable AI Conversations
+            </label>
+
+            {panelSettings.useAI && (
+              <div className="ai-settings">
+                <div className="ai-field">
+                  <label>AI Provider</label>
+                  <select
+                    value={panelSettings.provider === 'local' && panelSettings.apiBaseUrl === '/api/ai' ? 'proxy' : panelSettings.provider === 'local' ? 'local' : panelSettings.provider}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'proxy') {
+                        setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: '/api/ai' }));
+                      } else if (val === 'local') {
+                        setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: 'http://localhost:1234/v1' }));
+                      } else {
+                        setDraftSettings(prev => ({ ...(prev || settings), provider: val as GameSettings['provider'] }));
+                      }
+                    }}
+                  >
+                    <option value="proxy">Curren&apos;s Server</option>
+                    <option value="local">Local Model</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                  </select>
+                </div>
+
+                {panelSettings.provider === 'anthropic' ? (
+                  <div className="ai-field">
+                    <label>Anthropic API Key</label>
+                    <input
+                      type="password"
+                      placeholder="sk-ant-..."
+                      value={panelSettings.apiKey}
+                      onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiKey: e.target.value }))}
+                    />
+                  </div>
+                ) : panelSettings.apiBaseUrl === '/api/ai' ? (
+                  <>
+                    <div className="ai-field">
+                      <label>AI Server</label>
+                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                        Using Curren&apos;s private server proxy.
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
+                        Estimated cost: ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min) while AI is enabled.
+                      </div>
+                    </div>
+                    <div className="ai-field">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ margin: 0 }}>Connection Test</label>
+                        {testStatus !== 'idle' && (
+                          <span
+                            style={{
+                              fontSize: '0.75rem',
+                              color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12',
+                            }}
+                          >
+                            {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => testConnection(panelSettings)}
+                        disabled={testStatus === 'testing'}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: testStatus === 'success' ? '#2ecc71' : '#3498db',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: testStatus === 'testing' ? 'not-allowed' : 'pointer',
+                          opacity: testStatus === 'testing' ? 0.7 : 1,
+                          marginBottom: '8px',
+                        }}
+                      >
+                        {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
+                      </button>
+                      {testMessage && (
+                        <div
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                            color: testStatus === 'success' ? '#27ae60' : '#c0392b',
+                            border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`,
+                          }}
+                        >
+                          {testMessage}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="ai-field">
+                      <label>Local Server URL</label>
+                      <input
+                        type="text"
+                        placeholder="http://localhost:1234/v1"
+                        value={panelSettings.apiBaseUrl}
+                        onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiBaseUrl: e.target.value }))}
+                      />
+                      <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
+                        OpenAI-compatible endpoint (LM Studio, Ollama, etc.)
+                      </div>
+                    </div>
+                    <div className="ai-field">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ margin: 0 }}>Connection Test</label>
+                        {testStatus !== 'idle' && (
+                          <span
+                            style={{
+                              fontSize: '0.75rem',
+                              color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12',
+                            }}
+                          >
+                            {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => testConnection(panelSettings)}
+                        disabled={testStatus === 'testing' || !panelSettings.apiBaseUrl}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          background: testStatus === 'success' ? '#2ecc71' : '#3498db',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: testStatus === 'testing' || !panelSettings.apiBaseUrl ? 'not-allowed' : 'pointer',
+                          opacity: testStatus === 'testing' || !panelSettings.apiBaseUrl ? 0.7 : 1,
+                          marginBottom: '8px',
+                        }}
+                      >
+                        {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
+                      </button>
+                      {testMessage && (
+                        <div
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                            color: testStatus === 'success' ? '#27ae60' : '#c0392b',
+                            border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`,
+                          }}
+                        >
+                          {testMessage}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="ai-field">
+                      <label>Model Name (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="local-model"
+                        value={panelSettings.modelName}
+                        onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), modelName: e.target.value }))}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            {panelSettings.useAI
+              ? panelSettings.provider === 'anthropic'
+                ? 'Using Claude for dynamic conversations'
+                : panelSettings.apiBaseUrl === '/api/ai'
+                  ? 'Using Curren\'s private AI server'
+                  : 'Using local model on your hardware'
+              : 'Using smart scripted responses (works offline)'}
+          </p>
+
+          <AccountSettingsCard
+            user={user}
+            authEnabled={authEnabled}
+            authLoading={authLoading}
+            authError={authError}
+            nameDraft={nameDraft}
+            nameSaving={nameSaving}
+            nameSaveError={nameSaveError}
+            onNameChange={(value) => {
+              setNameDraft(value);
+              setNameSaveError(null);
+            }}
+            onSaveName={handleDisplayNameSubmit}
+            onLogin={login}
+            onLogout={logout}
+          />
+
+          {gameState === 'playing' && (
+            <button
+              className="close-btn"
+              style={{ background: '#1f2937', marginTop: '18px', border: '1px solid var(--border)' }}
+              onClick={() => void returnToMenu()}
+              disabled={sessionEnding}
+            >
+              {sessionEnding ? 'Saving Session…' : 'Back to Menu'}
+            </button>
+          )}
+
+          <button
+            className="close-btn"
+            onClick={applyDraftSettingsAndClose}
+          >
+            Done
+          </button>
+        </div>
+      </>
+    );
+  };
+
 
 
   // Preloading Screen (Asset Loading)
@@ -2834,18 +3144,35 @@ function App() {
                   />
                 </div>
                 <div className={`startscreen-actions ${isTransitioning ? 'exiting-down' : ''}`}>
+                  {user && (
+                    <div className="startscreen-account-summary">
+                      Logged in as <strong>{signedInLabel}</strong>
+                    </div>
+                  )}
                   <button
                     className="start-button"
-                    onClick={handleStartClick}
+                    onClick={user ? handleIntroStart : login}
                     type="button"
+                    disabled={!user && (!authEnabled || authLoading)}
                   >
                     <span className="start-button-bg">
                       <img src={START_BUTTON_BG_IMAGE} alt="" aria-hidden="true" loading="lazy" />
                     </span>
                     <span className="start-button-text">
-                      <img src={START_BUTTON_TEXT_IMAGE} alt="Start" loading="lazy" />
+                      <span className="start-button-label">
+                        {user ? 'Start' : authLoading ? 'Checking Sign-In…' : authEnabled ? 'Sign in with Google' : 'Sign-in unavailable'}
+                      </span>
                     </span>
                   </button>
+                  {!user && (
+                    <button
+                      className="secondary-button startscreen-secondary-button"
+                      onClick={handleIntroStart}
+                      type="button"
+                    >
+                      Continue as Guest
+                    </button>
+                  )}
                   <button
                     className="tips-button"
                     onClick={() => setShowTips(true)}
@@ -2853,6 +3180,14 @@ function App() {
                   >
                     <HelpCircle size={18} /> How to Play
                   </button>
+                  <button
+                    className="tips-button"
+                    onClick={() => setShowSettings(true)}
+                    type="button"
+                  >
+                    <Settings size={18} /> Settings
+                  </button>
+                  {authError && <p className="startscreen-auth-error">{authError}</p>}
                 </div>
 
                 <p className={`made-by-footer ${isTransitioning ? 'exiting-down' : ''}`}>Made by Curren</p>
@@ -2865,6 +3200,46 @@ function App() {
         {/* Setup Screen Content */}
         {gameState === 'setup' && (
           <div className={`intro-screen setup-page ${isTransitioning ? 'transparent-bg' : ''}`}>
+            <button
+              className={`setup-leaderboard-tab ${showLeaderboardDrawer ? 'is-open' : ''}`}
+              onClick={() => setShowLeaderboardDrawer(true)}
+              type="button"
+            >
+              Leaderboard
+            </button>
+
+            {showLeaderboardDrawer && (
+              <>
+                <div
+                  className="leaderboard-drawer-backdrop"
+                  onClick={() => setShowLeaderboardDrawer(false)}
+                />
+                <aside className="leaderboard-drawer">
+                  <div className="leaderboard-drawer-header">
+                    <div>
+                      <h3>Career Leaderboard</h3>
+                      <p>Persistent stats for signed-in players.</p>
+                    </div>
+                    <button
+                      className="leaderboard-drawer-close"
+                      onClick={() => setShowLeaderboardDrawer(false)}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <LeaderboardPanel
+                    className="leaderboard-panel--overlay"
+                    title="Top Showroom Closers"
+                    entries={leaderboardRows}
+                    me={leaderboardMe}
+                    loading={leaderboardLoading}
+                    error={leaderboardError}
+                  />
+                </aside>
+              </>
+            )}
+
             <div className={`intro-card setup-card ${isTransitioning ? 'fade-in' : ''}`}>
               <h2 className="setup-title">Game Setup</h2>
               <p className="setup-subtitle">Choose your game mode and settings</p>
@@ -2976,13 +3351,6 @@ function App() {
                 )}
               </div>
 
-              <LeaderboardPanel
-                entries={leaderboardRows}
-                me={leaderboardMe}
-                loading={leaderboardLoading}
-                error={leaderboardError}
-              />
-
               <button
                 className="setup-action-button"
                 onClick={beginGameStart}
@@ -3002,6 +3370,7 @@ function App() {
             {showTips && <TipsModal onClose={() => setShowTips(false)} />}
           </div>
         )}
+        {renderSettingsPanel()}
       </>
     );
   }
@@ -3020,14 +3389,14 @@ function App() {
             {isReady ? 'Loading into the showroom...' : 'This can take a few minutes the first time'}
           </p>
 
-          <div className="loading-progress">
-            <div className="loading-progress-bar">
+          <div className="ai-loading-progress">
+            <div className="ai-loading-progress-bar">
               <div
-                className="loading-progress-fill"
+                className="ai-loading-progress-fill"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <div className="loading-progress-text">
+            <div className="ai-loading-progress-text">
               {isReady ? 'Ready!' : `${progressPercent}%`}
             </div>
           </div>
@@ -3098,11 +3467,11 @@ function App() {
         {lastSaleAmount > 0 && (
           <div className="stats-overlay">
             <div className={`profit ${lastProfit < 0 ? 'loss' : ''}`}>
-              {lastProfit < 0 ? '-' : ''}${Math.abs(lastProfit).toLocaleString()} Profit
+              {lastProfit < 0 ? '-' : ''}${Math.abs(lastProfit).toLocaleString()} Last Profit
             </div>
-            <div className="total">Total Sales: ${totalSales.toLocaleString()}</div>
+            <div className="total">Session Gross: ${totalSales.toLocaleString()}</div>
             <div className={`profit ${totalProfit < 0 ? 'loss' : ''}`}>
-              Total Profit: {totalProfit < 0 ? '-' : ''}${Math.abs(totalProfit).toLocaleString()}
+              Session Profit: {totalProfit < 0 ? '-' : ''}${Math.abs(totalProfit).toLocaleString()}
             </div>
           </div>
         )}
@@ -3200,7 +3569,9 @@ function App() {
               loading={leaderboardLoading}
               error={leaderboardError}
             />
-            <button onClick={() => { setShowTimeUp(false); setGameState('intro'); }}>Back to Menu</button>
+            <button onClick={() => void returnToMenu()} disabled={sessionEnding}>
+              {sessionEnding ? 'Saving Session…' : 'Back to Menu'}
+            </button>
           </div>
         )}
 
@@ -3442,303 +3813,7 @@ function App() {
                if (selectedPerson?.id === updatedCustomer.id) setSelectedPerson(updatedCustomer);
             }}
         />
-
-        {/* Settings panel */}
-        {showSettings && (
-          <>
-            <div className="panel-backdrop" onClick={() => setShowSettings(false)} />
-            <div className="settings-panel">
-              <h3>⚙️ Settings</h3>
-              <div className="settings-option">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={panelSettings.useAI}
-                    onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), useAI: e.target.checked }))}
-                  />
-                  Enable AI Conversations
-                </label>
-                
-                {panelSettings.useAI && (
-                  <div className="ai-settings">
-                    <div className="ai-field">
-                      <label>AI Provider</label>
-                      <select
-                        value={panelSettings.provider === 'local' && panelSettings.apiBaseUrl === '/api/ai' ? 'proxy' : panelSettings.provider === 'local' ? 'local' : panelSettings.provider}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === 'proxy') {
-                            setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: '/api/ai' }));
-                          } else if (val === 'local') {
-                            setDraftSettings(prev => ({ ...(prev || settings), provider: 'local', apiBaseUrl: 'http://localhost:1234/v1' }));
-                          } else {
-                            setDraftSettings(prev => ({ ...(prev || settings), provider: val as any }));
-                          }
-                        }}
-                      >
-                        <option value="proxy">Curren&apos;s Server</option>
-                        <option value="local">Local Model</option>
-                        <option value="anthropic">Anthropic (Claude)</option>
-                      </select>
-                    </div>
-
-                    {panelSettings.provider === 'anthropic' ? (
-                      <div className="ai-field">
-                        <label>Anthropic API Key</label>
-                        <input
-                          type="password"
-                          placeholder="sk-ant-..."
-                          value={panelSettings.apiKey}
-                          onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiKey: e.target.value }))}
-                        />
-                      </div>
-                    ) : panelSettings.apiBaseUrl === '/api/ai' ? (
-                      <>
-                        <div className="ai-field">
-                          <label>AI Server</label>
-                          <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                            Using Curren&apos;s private server proxy.
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
-                            Estimated cost: ${AI_COST_PER_GPU_HOUR_USD.toFixed(2)}/GPU-hour (~${AI_COST_PER_MINUTE_USD.toFixed(3)}/min) while AI is enabled.
-                          </div>
-                        </div>
-                        <div className="ai-field">
-                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                             <label style={{ margin: 0 }}>Connection Test</label>
-                             {testStatus !== 'idle' && (
-                               <span style={{
-                                 fontSize: '0.75rem',
-                                 color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12'
-                               }}>
-                                 {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
-                               </span>
-                             )}
-                           </div>
-                           <button
-                             onClick={() => testConnection(panelSettings)}
-                             disabled={testStatus === 'testing'}
-                             style={{
-                               width: '100%',
-                               padding: '8px',
-                               background: testStatus === 'success' ? '#2ecc71' : '#3498db',
-                               color: 'white',
-                               border: 'none',
-                               borderRadius: '6px',
-                               cursor: testStatus === 'testing' ? 'not-allowed' : 'pointer',
-                               opacity: testStatus === 'testing' ? 0.7 : 1,
-                               marginBottom: '8px'
-                             }}
-                           >
-                             {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
-                           </button>
-                           {testMessage && (
-                             <div style={{
-                               fontSize: '0.75rem',
-                               padding: '8px',
-                               borderRadius: '4px',
-                               background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-                               color: testStatus === 'success' ? '#27ae60' : '#c0392b',
-                               border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`
-                             }}>
-                               {testMessage}
-                             </div>
-                           )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="ai-field">
-                          <label>Local Server URL</label>
-                          <input
-                            type="text"
-                            placeholder="http://localhost:1234/v1"
-                            value={panelSettings.apiBaseUrl}
-                            onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), apiBaseUrl: e.target.value }))}
-                          />
-                          <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
-                            OpenAI-compatible endpoint (LM Studio, Ollama, etc.)
-                          </div>
-                        </div>
-                        <div className="ai-field">
-                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                             <label style={{ margin: 0 }}>Connection Test</label>
-                             {testStatus !== 'idle' && (
-                               <span style={{ 
-                                 fontSize: '0.75rem', 
-                                 color: testStatus === 'success' ? '#2ecc71' : testStatus === 'error' ? '#e74c3c' : '#f39c12' 
-                               }}>
-                                 {testStatus === 'testing' ? 'Testing...' : testStatus === 'success' ? 'Connected!' : 'Failed'}
-                               </span>
-                             )}
-                           </div>
-                           <button
-                             onClick={() => testConnection(panelSettings)}
-                             disabled={testStatus === 'testing' || !panelSettings.apiBaseUrl}
-                             style={{
-                               width: '100%',
-                               padding: '8px',
-                               background: testStatus === 'success' ? '#2ecc71' : '#3498db',
-                               color: 'white',
-                               border: 'none',
-                               borderRadius: '6px',
-                               cursor: testStatus === 'testing' || !settings.apiBaseUrl ? 'not-allowed' : 'pointer',
-                               opacity: testStatus === 'testing' || !settings.apiBaseUrl ? 0.7 : 1,
-                               marginBottom: '8px'
-                             }}
-                           >
-                             {testStatus === 'testing' ? 'Connecting...' : 'Test Connection'}
-                           </button>
-                           {testMessage && (
-                             <div style={{ 
-                               fontSize: '0.75rem', 
-                               padding: '8px', 
-                               borderRadius: '4px',
-                               background: testStatus === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-                               color: testStatus === 'success' ? '#27ae60' : '#c0392b',
-                               border: `1px solid ${testStatus === 'success' ? '#2ecc71' : '#e74c3c'}`
-                             }}>
-                               {testMessage}
-                             </div>
-                           )}
-                        </div>
-
-                        <div className="ai-field">
-                          <label>Model Name (Optional)</label>
-                          <input
-                            type="text"
-                            placeholder="local-model"
-                            value={panelSettings.modelName}
-                            onChange={(e) => setDraftSettings(prev => ({ ...(prev || settings), modelName: e.target.value }))}
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                {panelSettings.useAI
-                  ? panelSettings.provider === 'anthropic'
-                    ? 'Using Claude for dynamic conversations'
-                    : panelSettings.apiBaseUrl === '/api/ai'
-                      ? 'Using Curren\'s private AI server'
-                      : 'Using local model on your hardware'
-                  : 'Using smart scripted responses (works offline)'}
-              </p>
-              <div className="account-section">
-                <h3>Player Account</h3>
-                {authLoading ? (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Checking login status...</p>
-                ) : user ? (
-                  <>
-                    <p style={{ fontWeight: 600 }}>{user.displayName || user.email || 'Logged in player'}</p>
-                    <label htmlFor="display-name-input" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Display Name</label>
-                    <input
-                      id="display-name-input"
-                      type="text"
-                      value={nameDraft}
-                      onChange={(e) => {
-                        setNameDraft(e.target.value);
-                        setNameSaveError(null);
-                      }}
-                      placeholder="Salespro Name"
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg-dark)',
-                        color: 'var(--text-primary)',
-                      }}
-                    />
-                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        className="ai-warmup-btn primary"
-                        onClick={handleDisplayNameSubmit}
-                        disabled={nameSaving || !nameDraft.trim()}
-                        type="button"
-                      >
-                        {nameSaving ? 'Saving…' : 'Save Name'}
-                      </button>
-                      <button
-                        className="ai-warmup-btn secondary"
-                        onClick={logout}
-                        type="button"
-                      >
-                        Log Out
-                      </button>
-                    </div>
-                    {nameSaveError && <p className="leaderboard-error">{nameSaveError}</p>}
-                  </>
-                ) : (
-                  <button
-                    className="ai-warmup-btn primary"
-                    onClick={login}
-                    type="button"
-                    disabled={authLoading}
-                  >
-                    Sign in with Google
-                  </button>
-                )}
-                {authError && <p className="leaderboard-error">{authError}</p>}
-              </div>
-              <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                <button 
-                  className="close-btn" 
-                  style={{ background: 'var(--danger)', marginTop: '0', fontSize: '0.9rem', opacity: 0.9 }}
-                  onClick={() => {
-                    if (confirm('Are you sure you want to reset all sales stats?')) {
-                      resetAllStats();
-                    }
-                  }}
-                >
-                  Reset All Stats
-                </button>
-              </div>
-
-              <button
-                className="close-btn"
-                style={{ background: '#1f2937', marginTop: '12px', border: '1px solid var(--border)' }}
-                onClick={() => {
-                  if (confirm('Return to menu and reset all stats?')) {
-                    resetAllStats();
-                    setShowTimeUp(false);
-                    setShowSettings(false);
-                    setGameState('intro');
-                  }
-                }}
-              >
-                Back to Menu (Reset Stats)
-              </button>
-
-              <button
-                className="close-btn"
-                onClick={() => {
-                  if (draftSettings) {
-                    const shouldWarmup =
-                      gameState === 'playing' &&
-                      draftSettings.useAI &&
-                      draftSettings.provider === 'local' &&
-                      draftSettings.apiBaseUrl === '/api/ai';
-                    const needsModelFix =
-                      draftSettings.provider === 'local' &&
-                      draftSettings.apiBaseUrl === '/api/ai' &&
-                      (!draftSettings.modelName || draftSettings.modelName === 'local-model');
-                    const nextSettings = needsModelFix
-                      ? { ...draftSettings, modelName: currenServerModel }
-                      : draftSettings;
-                    if (shouldWarmup) pendingWarmupRef.current = true;
-                    setSettings(nextSettings);
-                  }
-                  setShowSettings(false);
-                }}
-              >
-                Done
-              </button>
-            </div>
-          </>
-        )}
+        {renderSettingsPanel()}
       </div>
     </div>
   );

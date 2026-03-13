@@ -12,9 +12,23 @@ dist
 dist-ssr
 *.local
 
-# Environment variables (contains passwords)
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
+*.pem
+*.p12
+*service-account*.json
+*firebase-admin*.json
+
+# Local tooling artifacts
+.codex/
+progress.md
+intro-screen.png
+setup-leaderboard.png
+game-screen.png
 
 # Editor directories and files
 .vscode/*

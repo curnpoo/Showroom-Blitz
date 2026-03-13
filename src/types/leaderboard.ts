@@ -1,11 +1,10 @@
 export interface LeaderboardEntry {
   uid: string;
   displayName: string;
-  email: string | null;
   totalProfit: number;
   totalGross: number;
   salesCount: number;
-  bestSessionProfit?: number;
+  bestVolumeProfit: number;
   lastSessionProfit?: number;
   lastSessionGross?: number;
   lastSessionSales?: number;

@@ -31,6 +31,7 @@ html, body {
     height: 100%;
     width: 100%;
     overflow: hidden;
+    background: var(--bg-dark);
 }
 
 #root {
@@ -56,12 +57,14 @@ body {
 
 /* ========== Game container & canvas ========== */
 .game-container {
+    position: fixed;
+    inset: 0;
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
-    position: relative;
     overflow: hidden;
+    background: var(--bg-dark);
 }
 
 /* Canvas wrapper for responsive scaling */
@@ -83,8 +86,7 @@ body {
     touch-action: none;
     border-radius: 8px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    margin-top: 0;
-    margin-bottom: 0;
+    margin: 0;
 }
 
 /* ========== AI warmup overlay ========== */
@@ -193,8 +195,13 @@ body {
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 16px;
-    margin-top: 1.5rem;
     max-width: 100%;
+}
+
+.leaderboard-panel--overlay {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .leaderboard-panel-header {
@@ -214,19 +221,26 @@ body {
     color: var(--text-secondary);
 }
 
+.leaderboard-table-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 .leaderboard-table {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 260px;
+    max-height: min(62vh, 620px);
     overflow-y: auto;
+    min-width: 760px;
+    padding-right: 4px;
 }
 
 .leaderboard-row {
     display: grid;
-    grid-template-columns: 36px 1fr 110px 70px;
+    grid-template-columns: 48px minmax(180px, 1.3fr) 110px 140px 140px 140px;
     gap: 8px;
-    padding: 6px 8px;
+    padding: 10px 12px;
     border-radius: 12px;
     font-size: 0.85rem;
     background: rgba(255, 255, 255, 0.02);
@@ -259,16 +273,18 @@ body {
 }
 
 .leaderboard-name {
-    font-weight: 500;
+    font-weight: 600;
 }
 
+.leaderboard-gross,
 .leaderboard-profit {
     color: var(--cash-color);
     font-weight: 600;
     text-align: right;
 }
 
-.leaderboard-sales {
+.leaderboard-sales,
+.leaderboard-volume {
     color: var(--text-secondary);
     text-align: right;
 }
@@ -286,21 +302,106 @@ body {
     color: var(--text-secondary);
 }
 
-.account-section {
+.account-settings-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 16px;
-    margin-top: 1.25rem;
 }
 
-.account-section p {
-    margin-bottom: 8px;
+.account-settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.account-settings-label {
     font-size: 0.95rem;
+    font-weight: 700;
 }
 
-.account-section button {
-    margin-top: 8px;
+.account-settings-subtitle,
+.account-settings-note {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.account-settings-identity {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.account-settings-chip {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(56, 178, 172, 0.14);
+    border: 1px solid rgba(56, 178, 172, 0.35);
+    color: #4fd1c5;
+    font-weight: 700;
+}
+
+.account-settings-input-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.account-settings-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #0f172a;
+    color: var(--text-primary);
+}
+
+.account-settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.account-settings-button {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-weight: 700;
+    transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.account-settings-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.account-settings-button.primary {
+    background: #38b2ac;
+    color: #0b1b1b;
+    box-shadow: 0 10px 20px rgba(56, 178, 172, 0.25);
+}
+
+.account-settings-button.secondary {
+    background: transparent;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+.account-settings-error {
+    margin-top: 10px;
+    color: #fca5a5;
+    font-size: 0.82rem;
 }
 
 /* ========== Intro screen ========== */
@@ -406,6 +507,23 @@ body {
     transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
 }
 
+.startscreen-account-summary {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.52);
+    color: #fff;
+    font-size: 0.82rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(8px);
+}
+
+.startscreen-auth-error {
+    margin: 0;
+    color: #fee2e2;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
 .intro-screen.startscreen-page .made-by-footer {
     color: rgba(255, 255, 255, 0.9);
     font-size: 0.7rem;
@@ -468,6 +586,90 @@ body {
 .startscreen-page.transparent-bg {
     background: transparent !important;
     box-shadow: none !important;
+}
+
+.setup-leaderboard-tab {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 16px 10px;
+    border-radius: 18px 0 0 18px;
+    border: 1px solid rgba(15, 23, 42, 0.3);
+    border-right: none;
+    background: rgba(15, 23, 42, 0.78);
+    color: #f8fafc;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: -10px 14px 30px rgba(15, 23, 42, 0.25);
+}
+
+.setup-leaderboard-tab.is-open {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.leaderboard-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(6px);
+    z-index: 8;
+}
+
+.leaderboard-drawer {
+    position: absolute;
+    inset: 0;
+    z-index: 9;
+    padding: clamp(20px, 4vw, 40px);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+    transform: translateX(100%);
+    animation: leaderboardDrawerIn 0.28s ease forwards;
+    display: flex;
+    flex-direction: column;
+}
+
+.leaderboard-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.leaderboard-drawer-header h3 {
+    margin: 0 0 4px;
+    color: #f8fafc;
+    font-size: clamp(1.4rem, 2.6vw, 2rem);
+}
+
+.leaderboard-drawer-header p {
+    margin: 0;
+    color: #94a3b8;
+}
+
+.leaderboard-drawer-close {
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f8fafc;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@keyframes leaderboardDrawerIn {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
 }
 
 .fade-in {
@@ -546,17 +748,49 @@ body {
         min-height: 65vh;
         min-height: 65dvh;
     }
+
+    .startscreen-actions {
+        max-width: 320px;
+    }
+
+    .start-button-label {
+        font-size: 0.95rem;
+        width: min(240px, 76%);
+    }
+
+    .setup-leaderboard-tab {
+        top: auto;
+        bottom: 24px;
+        right: 20px;
+        transform: none;
+        writing-mode: horizontal-tb;
+        border-radius: 999px;
+        border-right: 1px solid rgba(15, 23, 42, 0.3);
+        padding: 10px 16px;
+    }
+
+    .leaderboard-drawer {
+        padding: 18px 14px;
+    }
+
+    .leaderboard-drawer-header {
+        flex-direction: column;
+    }
 }
 
 .loading-card {
     max-width: 520px;
 }
 
-.loading-progress {
+.setup-card.loading-card .setup-title {
+    color: #0f172a;
+}
+
+.ai-loading-progress {
     margin: 18px 0 24px;
 }
 
-.loading-progress-bar {
+.ai-loading-progress-bar {
     width: 100%;
     height: 12px;
     background: #1f2227;
@@ -565,14 +799,14 @@ body {
     overflow: hidden;
 }
 
-.loading-progress-fill {
+.ai-loading-progress-fill {
     height: 100%;
     width: 0%;
     background: linear-gradient(90deg, #f97316, #fb923c); /* Orange gradient */
     transition: width 0.25s ease;
 }
 
-.loading-progress-text {
+.ai-loading-progress-text {
     margin-top: 10px;
     font-size: 0.9rem;
     color: #334155; /* Dark gray */
@@ -984,8 +1218,17 @@ body {
     transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
 }
 
+.start-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
 .start-button:hover {
     transform: scale(1.05);
+}
+
+.start-button:disabled:hover {
+    transform: none;
 }
 
 .start-button:active {
@@ -1018,6 +1261,29 @@ body {
     width: min(220px, 70%);
     height: auto;
     display: block;
+}
+
+.start-button-label {
+    width: min(260px, 76%);
+    padding: 12px 18px;
+    text-align: center;
+    font-size: clamp(1rem, 3vw, 1.3rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fffef5;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    line-height: 1.1;
+}
+
+.startscreen-secondary-button {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(15, 23, 42, 0.35);
+}
+
+.startscreen-secondary-button:hover {
+    background: rgba(15, 23, 42, 0.55);
 }
 
 /* New button style specifically for Setup screen "Open Showroom" */
@@ -1341,6 +1607,7 @@ body {
         max-height: 85vh;
         border-radius: 20px 20px 0 0;
         z-index: 50;
+        padding-bottom: var(--safe-area-bottom);
     }
 }
 
@@ -1754,6 +2021,7 @@ body {
         max-height: 80vh;
         border-radius: 20px 20px 0 0;
         z-index: 70;
+        padding-bottom: var(--safe-area-bottom);
     }
 
     /* Inventory as centered modal — does not fill the screen */
@@ -2176,6 +2444,8 @@ body {
     padding: 32px;
     width: 90%;
     max-width: 450px;
+    max-height: min(86vh, 780px);
+    overflow-y: auto;
     z-index: 100;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     animation: popIn 0.3s ease;
@@ -2275,6 +2545,11 @@ body {
     cursor: pointer;
     margin-top: 16px;
     transition: background 0.2s;
+}
+
+.settings-panel .close-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 /* Scrollbar styling */

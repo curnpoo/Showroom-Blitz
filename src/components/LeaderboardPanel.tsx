@@ -6,6 +6,7 @@ type LeaderboardPanelProps = {
   me: PlayerSummary | null;
   loading?: boolean;
   error?: string | null;
+  className?: string;
 };
 
 export function LeaderboardPanel({
@@ -14,9 +15,10 @@ export function LeaderboardPanel({
   me,
   loading = false,
   error = null,
+  className = '',
 }: LeaderboardPanelProps) {
   return (
-    <section className="leaderboard-panel">
+    <section className={`leaderboard-panel ${className}`.trim()}>
       <div className="leaderboard-panel-header">
         <div className="leaderboard-title">{title}</div>
         {me && (
@@ -29,27 +31,35 @@ export function LeaderboardPanel({
       ) : error ? (
         <p className="leaderboard-error">{error}</p>
       ) : (
-        <div className="leaderboard-table">
-          <div className="leaderboard-row leaderboard-row--head">
-            <span>#</span>
-            <span>Name</span>
-            <span>Profit</span>
-            <span>Sales</span>
-          </div>
-          {entries.length === 0 && (
-            <div className="leaderboard-row leaderboard-row--empty">No leaderboard data yet.</div>
-          )}
-          {entries.map((entry, index) => (
-            <div
-              key={entry.uid}
-              className={`leaderboard-row ${entry.uid === me?.uid ? 'leaderboard-row--self' : ''}`}
-            >
-              <span className="leaderboard-rank">{entry.rank ?? index + 1}</span>
-              <span className="leaderboard-name">{entry.displayName}</span>
-              <span className="leaderboard-profit">${entry.totalProfit.toLocaleString()}</span>
-              <span className="leaderboard-sales">{entry.salesCount} deals</span>
+        <div className="leaderboard-table-scroll">
+          <div className="leaderboard-table">
+            <div className="leaderboard-row leaderboard-row--head">
+              <span>#</span>
+              <span>Name</span>
+              <span>Deals</span>
+              <span>Gross</span>
+              <span>Profit</span>
+              <span>Best Volume</span>
             </div>
-          ))}
+            {entries.length === 0 && (
+              <div className="leaderboard-row leaderboard-row--empty">No leaderboard data yet.</div>
+            )}
+            {entries.map((entry, index) => (
+              <div
+                key={entry.uid}
+                className={`leaderboard-row ${entry.uid === me?.uid ? 'leaderboard-row--self' : ''}`}
+              >
+                <span className="leaderboard-rank">{entry.rank ?? index + 1}</span>
+                <span className="leaderboard-name">{entry.displayName}</span>
+                <span className="leaderboard-sales">{entry.salesCount}</span>
+                <span className="leaderboard-gross">${entry.totalGross.toLocaleString()}</span>
+                <span className="leaderboard-profit">${entry.totalProfit.toLocaleString()}</span>
+                <span className="leaderboard-volume">
+                  {entry.bestVolumeProfit > 0 ? `$${entry.bestVolumeProfit.toLocaleString()}` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

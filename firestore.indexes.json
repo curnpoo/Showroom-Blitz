@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "leaderboard_players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "totalProfit",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "totalGross",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "salesCount",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
