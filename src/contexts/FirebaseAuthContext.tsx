@@ -13,7 +13,6 @@ import {
   GoogleAuthProvider,
   inMemoryPersistence,
   setPersistence,
-  signInWithPopup,
   signInWithRedirect,
   signOut as firebaseSignOut,
   type User as FirebaseUser,
@@ -54,12 +53,6 @@ const FirebaseAuthContext = createContext<FirebaseAuthContextValue | undefined>(
 
 const readPayload = async (response: Response): Promise<MeResponse> => {
   return response.json().catch(() => ({}));
-};
-
-const isMobileAuthFlow = () => {
-  if (typeof window === 'undefined') return false;
-  if (window.matchMedia('(pointer: coarse)').matches) return true;
-  return /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
 };
 
 export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
@@ -197,21 +190,9 @@ export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await setPersistence(auth, inMemoryPersistence);
       const provider = new GoogleAuthProvider();
-      if (isMobileAuthFlow()) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-      try {
-        const result = await signInWithPopup(auth, provider);
-        await exchangeIdTokenForSession(result.user);
-      } catch (err) {
-        const code = err instanceof Error && 'code' in err ? String((err as { code?: string }).code) : '';
-        if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
-          await signInWithRedirect(auth, provider);
-          return;
-        }
-        throw err;
-      }
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithRedirect(auth, provider);
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in');
     } finally {
