@@ -8,10 +8,10 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  browserSessionPersistence,
   getRedirectResult,
   getAuth,
   GoogleAuthProvider,
-  inMemoryPersistence,
   setPersistence,
   signInWithRedirect,
   signOut as firebaseSignOut,
@@ -188,7 +188,8 @@ export const FirebaseAuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      await setPersistence(auth, inMemoryPersistence);
+      // Redirect auth needs state to survive the full-page round trip.
+      await setPersistence(auth, browserSessionPersistence);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithRedirect(auth, provider);
